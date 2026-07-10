@@ -24,10 +24,12 @@
     "title": "Blog",
     "read_more": "Citește mai mult",
     "no_posts": "Momentan nu există articole.",
-    "share": "Distribuie"
+    "share": "Distribuie",
+    "back": "Înapoi la blog"
   },
   "events": {
     "title": "Evenimente",
+    "subtitle": "Participă la următoarele evenimente",
     "free": "Gratuit",
     "spots_left": "locuri rămase",
     "register_free": "Participă Gratuit",
@@ -45,6 +47,7 @@
   },
   "testimonials": {
     "title": "Testimoniale",
+    "subtitle": "Ce spun participanții",
     "from_event": "Evenimentul",
     "video": "Video",
     "text": "Text",

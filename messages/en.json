@@ -24,10 +24,12 @@
     "title": "Blog",
     "read_more": "Read more",
     "no_posts": "No posts yet.",
-    "share": "Share"
+    "share": "Share",
+    "back": "Back to blog"
   },
   "events": {
     "title": "Events",
+    "subtitle": "Join our upcoming events",
     "free": "Free",
     "spots_left": "spots left",
     "register_free": "Join Free",
@@ -45,6 +47,7 @@
   },
   "testimonials": {
     "title": "Testimonials",
+    "subtitle": "What participants say",
     "from_event": "Event",
     "video": "Video",
     "text": "Text",

@@ -5,7 +5,7 @@ import { Button } from "./button";
 
 interface ShareButtonProps {
   title: string;
-  text: string;
+  text?: string;
   url?: string;
 }
 
@@ -15,7 +15,7 @@ export function ShareButton({ title, text, url }: ShareButtonProps) {
 
     if (navigator.share) {
       try {
-        await navigator.share({ title, text, url: shareUrl });
+        await navigator.share({ title, text: text || title, url: shareUrl });
       } catch {
         // User cancelled
       }

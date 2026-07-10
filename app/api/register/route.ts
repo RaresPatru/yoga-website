@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
   try {
-    const { eventId, fullName, email, phone } = await req.json();
+    const { eventId, fullName, email, phone, paymentStatus } = await req.json();
 
     const supabase = createAdminClient();
 
@@ -12,13 +12,10 @@ export async function POST(req: Request) {
       full_name: fullName,
       email,
       phone,
-      payment_status: "free",
+      payment_status: paymentStatus || "free",
     });
 
     if (error) throw error;
-
-    // Send confirmation email (configured later)
-    // await resend.emails.send({ ... });
 
     return NextResponse.json({ success: true });
   } catch (error) {

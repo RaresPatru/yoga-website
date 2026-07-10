@@ -1,13 +1,80 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Link } from "@/i18n/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { formatDate, formatTime } from "@/lib/utils";
+import { ArrowRight, Calendar, Clock, Star } from "lucide-react";
+
+interface Post {
+  id: string;
+  slug: string;
+  title_ro: string;
+  title_en: string | null;
+  created_at: string;
+}
+
+interface Event {
+  id: string;
+  slug: string;
+  title_ro: string;
+  title_en: string | null;
+  date: string;
+  time: string;
+  price: number;
+}
+
+interface Testimonial {
+  id: string;
+  content: string;
+}
 
 export default function HomePage() {
   const t = useTranslations("home");
+  const [locale, setLocale] = useState("ro");
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+
+  useEffect(() => {
+    setLocale(document.documentElement.lang || "ro");
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const today = new Date().toISOString().split("T")[0];
+
+    supabase
+      .from("blog_posts")
+      .select("id, slug, title_ro, title_en, created_at")
+      .eq("published", true)
+      .order("created_at", { ascending: false })
+      .limit(3)
+      .then(({ data }) => { if (data) setPosts(data); });
+
+    supabase
+      .from("events")
+      .select("id, slug, title_ro, title_en, date, time, price")
+      .eq("published", true)
+      .gte("date", today)
+      .order("date", { ascending: true })
+      .limit(3)
+      .then(({ data }) => { if (data) setEvents(data); });
+
+    supabase
+      .from("testimonials")
+      .select("id, content")
+      .eq("approved", true)
+      .order("created_at", { ascending: false })
+      .limit(6)
+      .then(({ data }) => { if (data) setTestimonials(data); });
+  }, []);
+
+  const lt = (ro: string, en: string) => locale === "ro" ? ro : en;
 
   return (
     <div className="flex flex-col">
@@ -86,38 +153,106 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-20">
-        <div className="mx-auto max-w-7xl px-4">
-          <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-            {t("blog_title")}
-          </h2>
-          <p className="mt-2 text-center text-charcoal-light">
-            Blog posts coming soon...
-          </p>
-        </div>
-      </section>
+      {posts.length > 0 && (
+        <section className="py-20">
+          <div className="mx-auto max-w-7xl px-4">
+            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+              {t("blog_title")}
+            </h2>
+            <div className="mt-8 grid gap-6 sm:grid-cols-3">
+              {posts.map((post) => (
+                <Link key={post.id} href={`/blog/${post.slug}`}>
+                  <GlassCard className="h-full transition-transform hover:scale-[1.02]">
+                    <h3 className="font-serif text-lg text-charcoal">
+                      {lt(post.title_ro, post.title_en || post.title_ro)}
+                    </h3>
+                    <p className="mt-2 text-sm text-charcoal-light">
+                      {formatDate(post.created_at, locale)}
+                    </p>
+                  </GlassCard>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <Link href="/blog">
+                <Button variant="secondary">
+                  {lt("Vezi toate articolele", "View all posts")} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
-      <section className="bg-white/40 py-20 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4">
-          <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-            {t("events_title")}
-          </h2>
-          <p className="mt-2 text-center text-charcoal-light">
-            Evenimente disponibile în curând...
-          </p>
-        </div>
-      </section>
+      {events.length > 0 && (
+        <section className="bg-white/40 py-20 backdrop-blur-sm">
+          <div className="mx-auto max-w-7xl px-4">
+            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+              {t("events_title")}
+            </h2>
+            <div className="mt-8 grid gap-6 sm:grid-cols-3">
+              {events.map((event) => (
+                <Link key={event.id} href={`/events/${event.slug}`}>
+                  <GlassCard className="h-full transition-transform hover:scale-[1.02]">
+                    <h3 className="font-serif text-lg text-charcoal">
+                      {lt(event.title_ro, event.title_en || event.title_ro)}
+                    </h3>
+                    <div className="mt-3 flex flex-wrap gap-3 text-sm text-charcoal-light">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" /> {formatDate(event.date, locale)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" /> {formatTime(event.time)}
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <span className="rounded-full bg-rose/10 px-3 py-1 text-sm font-medium text-rose">
+                        {event.price === 0 ? "Gratuit" : `${event.price} RON`}
+                      </span>
+                    </div>
+                  </GlassCard>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <Link href="/events">
+                <Button variant="secondary">
+                  {lt("Vezi toate evenimentele", "View all events")} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
-      <section className="py-20">
-        <div className="mx-auto max-w-7xl px-4">
-          <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-            {t("testimonials_title")}
-          </h2>
-          <p className="mt-2 text-center text-charcoal-light">
-            Testimonialele apar după primele evenimente...
-          </p>
-        </div>
-      </section>
+      {testimonials.length > 0 && (
+        <section className="py-20">
+          <div className="mx-auto max-w-7xl px-4">
+            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+              {t("testimonials_title")}
+            </h2>
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {testimonials.map((t) => (
+                <GlassCard key={t.id}>
+                  <div className="mb-3 flex gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="h-4 w-4 fill-rose text-rose" />
+                    ))}
+                  </div>
+                  <p className="text-charcoal">&ldquo;{t.content}&rdquo;</p>
+                </GlassCard>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <Link href="/testimonials">
+                <Button variant="secondary">
+                  {lt("Vezi toate testimonialele", "View all testimonials")} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
