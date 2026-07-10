@@ -1,0 +1,89 @@
+{
+  "nav": {
+    "home": "Acasă",
+    "blog": "Blog",
+    "events": "Evenimente",
+    "testimonials": "Testimoniale",
+    "contact": "Contact",
+    "admin": "Admin"
+  },
+  "home": {
+    "hero_title": "Îți ghidez călătoria către echilibru",
+    "hero_subtitle": "Yoga pentru corp, minte și suflet",
+    "cta": "Explorează",
+    "mission_title": "Misiunea mea",
+    "mission_text": "Cred că yoga este pentru toată lumea. Prin practică atentă și ghidare personalizată, te ajut să-ți descoperi puterea interioară și echilibrul.",
+    "years_label": "Ani de experiență",
+    "classes_label": "Clase susținute",
+    "students_label": "Studenți ghidați",
+    "blog_title": "Din Blog",
+    "events_title": "Evenimente Viitoare",
+    "testimonials_title": "Ce Spun Participanții"
+  },
+  "blog": {
+    "title": "Blog",
+    "read_more": "Citește mai mult",
+    "no_posts": "Momentan nu există articole.",
+    "share": "Distribuie"
+  },
+  "events": {
+    "title": "Evenimente",
+    "free": "Gratuit",
+    "spots_left": "locuri rămase",
+    "register_free": "Participă Gratuit",
+    "register_paid": "Participă și Plătește",
+    "full_name": "Nume Complet",
+    "email": "Email",
+    "phone": "Telefon",
+    "submit": "Înscrie-te",
+    "share": "Distribuie",
+    "add_calendar": "Adaugă în Calendar",
+    "no_events": "Momentan nu există evenimente.",
+    "success_title": "Înscriere reușită!",
+    "success_text": "Veți primi un email cu confirmarea și linkul către grupul de WhatsApp.",
+    "payment_title": "Redirectare către plată..."
+  },
+  "testimonials": {
+    "title": "Testimoniale",
+    "from_event": "Evenimentul",
+    "video": "Video",
+    "text": "Text",
+    "no_testimonials": "Momentan nu există testimoniale.",
+    "leave_title": "Lasă un testimonial",
+    "leave_text": "Selectează tipul și scrie sau înregistrează experiența ta.",
+    "record_video": "Înregistrează Video",
+    "write_text": "Scrie un mesaj"
+  },
+  "contact": {
+    "title": "Contact",
+    "subtitle": "Pentru colaborări și întrebări",
+    "name": "Nume",
+    "email": "Email",
+    "subject": "Subiect",
+    "message": "Mesaj",
+    "send": "Trimite",
+    "success": "Mesajul a fost trimis cu succes!"
+  },
+  "footer": {
+    "rights": "Toate drepturile rezervate.",
+    "follow": "Urmărește-mă"
+  },
+  "language": {
+    "ro": "Română",
+    "en": "English"
+  },
+  "admin": {
+    "login_title": "Autentificare Admin",
+    "email": "Email",
+    "password": "Parolă",
+    "login": "Autentificare",
+    "dashboard": "Panou de Control",
+    "blog": "Articole",
+    "events": "Evenimente",
+    "registrations": "Înscrieri",
+    "testimonials": "Testimoniale",
+    "emails": "Email-uri",
+    "messages": "Mesaje",
+    "logout": "Deconectare"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "nav": {
+    "home": "Home",
+    "blog": "Blog",
+    "events": "Events",
+    "testimonials": "Testimonials",
+    "contact": "Contact",
+    "admin": "Admin"
+  },
+  "home": {
+    "hero_title": "I guide your journey to balance",
+    "hero_subtitle": "Yoga for body, mind and soul",
+    "cta": "Explore",
+    "mission_title": "My Mission",
+    "mission_text": "I believe yoga is for everyone. Through mindful practice and personalized guidance, I help you discover your inner strength and balance.",
+    "years_label": "Years of experience",
+    "classes_label": "Classes taught",
+    "students_label": "Students guided",
+    "blog_title": "From the Blog",
+    "events_title": "Upcoming Events",
+    "testimonials_title": "What Participants Say"
+  },
+  "blog": {
+    "title": "Blog",
+    "read_more": "Read more",
+    "no_posts": "No posts yet.",
+    "share": "Share"
+  },
+  "events": {
+    "title": "Events",
+    "free": "Free",
+    "spots_left": "spots left",
+    "register_free": "Join Free",
+    "register_paid": "Register & Pay",
+    "full_name": "Full Name",
+    "email": "Email",
+    "phone": "Phone",
+    "submit": "Register",
+    "share": "Share",
+    "add_calendar": "Add to Calendar",
+    "no_events": "No events yet.",
+    "success_title": "Registration successful!",
+    "success_text": "You will receive an email with the confirmation and the WhatsApp group link.",
+    "payment_title": "Redirecting to payment..."
+  },
+  "testimonials": {
+    "title": "Testimonials",
+    "from_event": "Event",
+    "video": "Video",
+    "text": "Text",
+    "no_testimonials": "No testimonials yet.",
+    "leave_title": "Leave a testimonial",
+    "leave_text": "Select the type and write or record your experience.",
+    "record_video": "Record Video",
+    "write_text": "Write a message"
+  },
+  "contact": {
+    "title": "Contact",
+    "subtitle": "For collaborations and questions",
+    "name": "Name",
+    "email": "Email",
+    "subject": "Subject",
+    "message": "Message",
+    "send": "Send",
+    "success": "Message sent successfully!"
+  },
+  "footer": {
+    "rights": "All rights reserved.",
+    "follow": "Follow me"
+  },
+  "language": {
+    "ro": "Română",
+    "en": "English"
+  },
+  "admin": {
+    "login_title": "Admin Login",
+    "email": "Email",
+    "password": "Password",
+    "login": "Login",
+    "dashboard": "Dashboard",
+    "blog": "Blog Posts",
+    "events": "Events",
+    "registrations": "Registrations",
+    "testimonials": "Testimonials",
+    "emails": "Emails",
+    "messages": "Messages",
+    "logout": "Logout"
+  }
+}
