@@ -39,7 +39,13 @@ export default function AdminLayout({
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const isLoginPage = pathname === "/admin/login";
+
   useEffect(() => {
+    if (isLoginPage) {
+      setLoading(false);
+      return;
+    }
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
@@ -48,7 +54,7 @@ export default function AdminLayout({
         setLoading(false);
       }
     });
-  }, [router]);
+  }, [router, isLoginPage]);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -62,6 +68,10 @@ export default function AdminLayout({
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
       </div>
     );
+  }
+
+  if (isLoginPage) {
+    return <>{children}</>;
   }
 
   return (
