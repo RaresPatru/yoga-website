@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
+import { Suspense } from "react";
+import { PostHogProvider } from "@/components/providers/posthog-provider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -26,7 +28,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ro" className={`${fraunces.variable} ${inter.variable}`}>
-      <body className="min-h-screen flex flex-col antialiased">{children}</body>
+      <body className="min-h-screen flex flex-col antialiased">
+        <Suspense fallback={null}>
+          <PostHogProvider>{children}</PostHogProvider>
+        </Suspense>
+      </body>
     </html>
   );
 }
