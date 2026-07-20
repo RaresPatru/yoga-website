@@ -22,15 +22,25 @@ export function AdminLocaleProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Messages>({});
 
   useEffect(() => {
-    const saved = localStorage.getItem("admin-locale") as Locale | null;
-    if (saved === "ro" || saved === "en") {
-      setLocaleState(saved);
+    try {
+      const saved = localStorage.getItem("admin-locale") as Locale | null;
+      if (saved === "ro" || saved === "en") {
+        setLocaleState(saved);
+      }
+    } catch {
+      console.warn("localStorage not available");
     }
   }, []);
 
   useEffect(() => {
-    import(`../../messages/${locale}.json`).then((mod) => setMessages(mod.default));
-    localStorage.setItem("admin-locale", locale);
+    import(`../../messages/${locale}.json`)
+      .then((mod) => setMessages(mod.default))
+      .catch((err) => console.error("Failed to load locale messages:", err));
+    try {
+      localStorage.setItem("admin-locale", locale);
+    } catch {
+      console.warn("localStorage not available");
+    }
   }, [locale]);
 
   const setLocale = useCallback((l: Locale) => setLocaleState(l), []);

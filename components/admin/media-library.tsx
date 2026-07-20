@@ -53,9 +53,10 @@ function getMediaType(file: MediaFile): MediaType {
   return "image";
 }
 
+const storageClient = createClient();
+
 function getPublicUrl(bucket: string, path: string) {
-  const supabase = createClient();
-  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  return storageClient.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
 interface MediaLibraryProps {
@@ -131,7 +132,13 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bucket, fileName }),
     });
-    if (res.ok) setFiles((prev) => prev.filter((f) => f.name !== fileName));
+    if (res.ok) {
+      setFiles((prev) => prev.filter((f) => f.name !== fileName));
+    } else {
+      const text = await res.text().catch(() => "");
+      console.error("Delete error:", text || `HTTP ${res.status}`);
+      alert(text || t("admin.media_upload_error"));
+    }
   };
 
   const filtered = files.filter((f) => {

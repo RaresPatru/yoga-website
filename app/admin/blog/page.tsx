@@ -104,7 +104,6 @@ function BlogEditor({
 }) {
   const { t } = useAdminLocale();
   const [titleRo, setTitleRo] = useState(post?.title_ro || "");
-  const [titleEn, setTitleEn] = useState(post?.title_en || "");
   const [slug, setSlug] = useState(post?.slug || "");
   const [published, setPublished] = useState(post?.published || false);
   const [hidden, setHidden] = useState(post?.hidden || false);
@@ -156,7 +155,7 @@ function BlogEditor({
       id: post?.id,
       slug,
       title_ro: titleRo,
-      title_en: titleEn || null,
+      title_en: post?.title_en || null,
       content_ro: editor?.getHTML() || null,
       content_en: post?.content_en || null,
       published,
@@ -236,10 +235,7 @@ function BlogEditor({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Input label={t("admin.title_ro")} value={titleRo} onChange={(e) => setTitleRo(e.target.value)} />
-        <Input label={t("admin.title_en")} value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />
-      </div>
+      <Input label={t("admin.title_ro")} value={titleRo} onChange={(e) => setTitleRo(e.target.value)} />
 
       <Input label={t("admin.slug")} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="nume-articol" />
 
