@@ -22,6 +22,7 @@ export default async function BlogPostPage({
     .select("*")
     .eq("slug", slug)
     .eq("published", true)
+    .eq("hidden", false)
     .single();
 
   if (!post) notFound();
@@ -49,7 +50,7 @@ export default async function BlogPostPage({
 
         {content && (
           <div
-            className="prose prose-sage mt-8 max-w-none"
+            className="prose prose-sage blog-content mt-8 max-w-none"
             dangerouslySetInnerHTML={{ __html: content }}
           />
         )}

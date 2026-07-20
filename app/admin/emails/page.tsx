@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAdminLocale } from "@/components/admin/locale-provider";
 
 interface Template {
   id: string;
@@ -15,13 +16,14 @@ interface Template {
   body_en: string | null;
 }
 
-const typeLabels: Record<string, string> = {
-  registration_confirmation: "Confirmare înscriere",
-  payment_confirmation: "Confirmare plată",
-  testimonial_request: "Cerere testimonial",
+const typeLabelKey: Record<string, string> = {
+  registration_confirmation: "admin.registration_confirmation",
+  payment_confirmation: "admin.payment_confirmation",
+  testimonial_request: "admin.testimonial_request",
 };
 
 export default function AdminEmailsPage() {
+  const { t } = useAdminLocale();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ subject_ro: "", subject_en: "", body_ro: "", body_en: "" });
@@ -36,9 +38,9 @@ export default function AdminEmailsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleEdit = (t: Template) => {
-    setEditing(t.id);
-    setForm({ subject_ro: t.subject_ro, subject_en: t.subject_en || "", body_ro: t.body_ro, body_en: t.body_en || "" });
+  const handleEdit = (tpl: Template) => {
+    setEditing(tpl.id);
+    setForm({ subject_ro: tpl.subject_ro, subject_en: tpl.subject_en || "", body_ro: tpl.body_ro, body_en: tpl.body_en || "" });
   };
 
   const handleSave = async (type: string) => {
@@ -50,9 +52,9 @@ export default function AdminEmailsPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-charcoal">Template-uri Email</h1>
+      <h1 className="font-serif text-2xl text-charcoal">{t("admin.email_templates")}</h1>
       <p className="mt-2 text-sm text-charcoal-light">
-        Variabile disponibile: <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}user_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_date{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_time{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_location{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}whatsapp_link{'}'}{'}'}</code>
+        {t("admin.available_variables")} <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}user_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_date{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_time{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_location{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}whatsapp_link{'}'}{'}'}</code>
       </p>
 
       {loading ? (
@@ -61,11 +63,11 @@ export default function AdminEmailsPage() {
         </div>
       ) : (
         <div className="mt-6 space-y-4">
-          {templates.map((t) => (
-            <GlassCard key={t.id} hover={false}>
-              {editing === t.id ? (
+          {templates.map((tpl) => (
+            <GlassCard key={tpl.id} hover={false}>
+              {editing === tpl.id ? (
                 <div className="space-y-4">
-                  <h3 className="font-serif text-lg text-charcoal">{typeLabels[t.type]}</h3>
+                  <h3 className="font-serif text-lg text-charcoal">{t(typeLabelKey[tpl.type])}</h3>
                   <Input label="Subiect (RO)" value={form.subject_ro} onChange={(e) => setForm({...form, subject_ro: e.target.value})} />
                   <Input label="Subject (EN)" value={form.subject_en} onChange={(e) => setForm({...form, subject_en: e.target.value})} />
                   <div>
@@ -87,17 +89,17 @@ export default function AdminEmailsPage() {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={() => handleSave(t.type)}>Salvează</Button>
-                    <Button variant="ghost" onClick={() => setEditing(null)}>Anulează</Button>
+                    <Button onClick={() => handleSave(tpl.type)}>{t("admin.save")}</Button>
+                    <Button variant="ghost" onClick={() => setEditing(null)}>{t("admin.cancel")}</Button>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-charcoal">{typeLabels[t.type]}</h3>
-                    <p className="mt-1 text-sm text-charcoal-light">{t.subject_ro}</p>
+                    <h3 className="font-medium text-charcoal">{t(typeLabelKey[tpl.type])}</h3>
+                    <p className="mt-1 text-sm text-charcoal-light">{tpl.subject_ro}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleEdit(t)}>Editează</Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleEdit(tpl)}>{t("admin.edit")}</Button>
                 </div>
               )}
             </GlassCard>

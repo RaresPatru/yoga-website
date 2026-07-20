@@ -1,15 +1,24 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, Trash2, Eye } from "lucide-react";
+import { Plus, Edit2, Trash2, EyeOff, ChevronDown } from "lucide-react";
+import {
+  Bold, Italic, List, ListOrdered, TextQuote, Code2,
+  Image, PlaySquare, Link2, Undo2, Redo2, Minus, Pilcrow,
+  Heading1, Heading2, Heading3, Languages,
+} from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import ImageExtension from "@tiptap/extension-image";
 import LinkExtension from "@tiptap/extension-link";
+import { MediaLibrary, VideoUrlDialog } from "@/components/admin/media-library";
+import { LinkDialog } from "@/components/admin/link-dialog";
+import { Iframe } from "@/lib/tiptap-iframe";
+import { useAdminLocale } from "@/components/admin/locale-provider";
 
 interface BlogPost {
   id: string;
@@ -19,7 +28,69 @@ interface BlogPost {
   content_ro: string | null;
   content_en: string | null;
   published: boolean;
+  hidden: boolean;
   created_at: string;
+}
+
+type SpellcheckLang = "ro" | "en" | "off";
+
+const headingLevels = [
+  { level: 0, label: "Paragraph", icon: Pilcrow },
+  { level: 1, label: "Heading 1", icon: Heading1 },
+  { level: 2, label: "Heading 2", icon: Heading2 },
+  { level: 3, label: "Heading 3", icon: Heading3 },
+] as const;
+
+function ToolbarButton({
+  onClick,
+  active,
+  children,
+  title,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+  title?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`flex items-center justify-center rounded-lg p-2 text-sm transition-all duration-150 ${
+        active
+          ? "bg-rose/15 text-rose shadow-sm"
+          : "text-charcoal-light hover:scale-105 hover:bg-rose/5 hover:text-charcoal active:scale-95"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DropdownItem({
+  label,
+  icon: Icon,
+  onClick,
+  active,
+}: {
+  label: string;
+  icon: any;
+  onClick: () => void;
+  active?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
+        active
+          ? "bg-rose/10 text-rose"
+          : "text-charcoal-light hover:bg-rose/5 hover:text-charcoal"
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
 }
 
 function BlogEditor({
@@ -31,27 +102,53 @@ function BlogEditor({
   onSave: (data: any) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useAdminLocale();
   const [titleRo, setTitleRo] = useState(post?.title_ro || "");
   const [titleEn, setTitleEn] = useState(post?.title_en || "");
   const [slug, setSlug] = useState(post?.slug || "");
   const [published, setPublished] = useState(post?.published || false);
+  const [hidden, setHidden] = useState(post?.hidden || false);
   const [saving, setSaving] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [headingOpen, setHeadingOpen] = useState(false);
+  const [spell, setSpell] = useState<SpellcheckLang>("ro");
+  const headingRef = useRef<HTMLDivElement>(null);
 
-  const editorRo = useEditor({
-    extensions: [StarterKit, ImageExtension, LinkExtension],
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ link: false }),
+      ImageExtension,
+      LinkExtension.configure({ openOnClick: false }),
+      Iframe,
+    ],
     content: post?.content_ro || "",
     editorProps: {
-      attributes: { class: "prose prose-sm max-w-none focus:outline-none min-h-[200px] px-4 py-3" },
+      attributes: {
+        class: "prose prose-sm max-w-none focus:outline-none min-h-[280px] px-4 py-3 cursor-text",
+        spellcheck: spell !== "off" ? "true" : "false",
+        lang: spell !== "off" ? spell : "ro",
+      },
     },
+    immediatelyRender: true,
   });
 
-  const editorEn = useEditor({
-    extensions: [StarterKit, ImageExtension, LinkExtension],
-    content: post?.content_en || "",
-    editorProps: {
-      attributes: { class: "prose prose-sm max-w-none focus:outline-none min-h-[200px] px-4 py-3" },
-    },
-  });
+  useEffect(() => {
+    editor?.view?.dom?.setAttribute("spellcheck", spell !== "off" ? "true" : "false");
+    editor?.view?.dom?.setAttribute("lang", spell !== "off" ? spell : "ro");
+  }, [spell, editor]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (headingRef.current && !headingRef.current.contains(e.target as Node)) {
+        setHeadingOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -60,75 +157,279 @@ function BlogEditor({
       slug,
       title_ro: titleRo,
       title_en: titleEn || null,
-      content_ro: editorRo?.getHTML() || null,
-      content_en: editorEn?.getHTML() || null,
+      content_ro: editor?.getHTML() || null,
+      content_en: post?.content_en || null,
       published,
+      hidden: published ? hidden : false,
     });
     setSaving(false);
   };
+
+  const handleMediaSelect = (url: string, type: string) => {
+    if (!editor) return;
+    if (type === "image") {
+      editor.chain().focus().setImage({ src: url }).run();
+    } else if (type === "audio") {
+      editor.chain().focus().insertContent(`<audio src="${url}" controls></audio>`).run();
+    } else if (type === "video") {
+      editor.chain().focus().insertContent(`<video src="${url}" controls class="w-full rounded-xl"></video>`).run();
+    }
+    setMediaOpen(false);
+  };
+
+  const handleVideoHtml = (html: string) => {
+    if (!editor) return;
+    const srcMatch = html.match(/src="([^"]+)"/);
+    if (srcMatch) {
+      editor.chain().focus().setIframe({ src: srcMatch[1] }).run();
+    }
+  };
+
+  const handleLinkApply = (url: string) => {
+    if (!editor) return;
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    } else {
+      editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    }
+  };
+
+  const openLinkDialog = () => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href;
+    setLinkUrl(previousUrl || "");
+    setLinkDialogOpen(true);
+  };
+
+  const toggleSpellcheck = () => {
+    setSpell((prev) => (prev === "ro" ? "en" : prev === "en" ? "off" : "ro"));
+  };
+
+  const cycleHeading = (level: number) => {
+    if (!editor) return;
+    if (level === 0) {
+      editor.chain().focus().setParagraph().run();
+    } else {
+      editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
+    }
+    setHeadingOpen(false);
+  };
+
+  const currentHeading = headingLevels.find((h) => {
+    if (h.level === 0) return !editor?.isActive("heading");
+    return editor?.isActive("heading", { level: h.level });
+  }) || headingLevels[0];
+
+  const spellLabel = spell === "ro" ? "RO" : spell === "en" ? "EN" : "ABC";
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-serif text-xl text-charcoal">
-          {post ? "Editează articol" : "Articol nou"}
+          {post ? t("admin.edit_post") : t("admin.new_post")}
         </h2>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={onCancel}>Anulează</Button>
+          <Button variant="ghost" onClick={onCancel}>{t("admin.cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Se salvează..." : "Salvează"}
+            {saving ? t("admin.saving") : t("admin.save")}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Input label="Titlu (RO)" value={titleRo} onChange={(e) => setTitleRo(e.target.value)} />
-        <Input label="Titlu (EN)" value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />
+        <Input label={t("admin.title_ro")} value={titleRo} onChange={(e) => setTitleRo(e.target.value)} />
+        <Input label={t("admin.title_en")} value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />
       </div>
 
-      <Input label="Slug (URL)" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="nume-articol" />
+      <Input label={t("admin.slug")} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="nume-articol" />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-charcoal-light">Conținut (RO)</label>
-          <div className="rounded-xl border border-sage/30 bg-white/60 backdrop-blur-sm">
-            <div className="flex gap-1 border-b border-sage/20 p-2">
-              <button onClick={() => editorRo?.chain().focus().toggleBold().run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60">B</button>
-              <button onClick={() => editorRo?.chain().focus().toggleItalic().run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60 italic">I</button>
-              <button onClick={() => editorRo?.chain().focus().toggleHeading({ level: 2 }).run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60">H2</button>
-              <button onClick={() => editorRo?.chain().focus().toggleBulletList().run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60">•</button>
+      <div className="mx-auto max-w-4xl">
+        <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.content_ro")}</label>
+        <div className="rounded-xl border border-sage/30 bg-white/60 backdrop-blur-sm overflow-hidden">
+          {editor && (
+            <div className="flex flex-wrap items-center gap-0.5 border-b border-sage/20 p-1.5">
+              <div className="relative" ref={headingRef}>
+                <ToolbarButton
+                  onClick={() => setHeadingOpen(!headingOpen)}
+                  title="Format"
+                >
+                  <currentHeading.icon className="h-4 w-4" />
+                  <ChevronDown className="h-3 w-3 ml-0.5" />
+                </ToolbarButton>
+                {headingOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-xl border border-sage/20 bg-white/90 p-1 shadow-xl backdrop-blur-xl">
+                    {headingLevels.map((h) => (
+                      <DropdownItem
+                        key={h.level}
+                        label={h.label}
+                        icon={h.icon}
+                        active={currentHeading.level === h.level}
+                        onClick={() => cycleHeading(h.level)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <span className="mx-0.5 h-6 w-px bg-sage/15" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleBold().run()}
+                active={editor.isActive("bold")}
+                title="Bold (Ctrl+B)"
+              >
+                <Bold className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+                active={editor.isActive("italic")}
+                title="Italic (Ctrl+I)"
+              >
+                <Italic className="h-4 w-4" />
+              </ToolbarButton>
+
+              <span className="mx-0.5 h-6 w-px bg-sage/15" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleBulletList().run()}
+                active={editor.isActive("bulletList")}
+                title="Bullet List"
+              >
+                <List className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                active={editor.isActive("orderedList")}
+                title="Ordered List"
+              >
+                <ListOrdered className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                active={editor.isActive("blockquote")}
+                title="Blockquote"
+              >
+                <TextQuote className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+                active={editor.isActive("codeBlock")}
+                title="Code Block"
+              >
+                <Code2 className="h-4 w-4" />
+              </ToolbarButton>
+
+              <span className="mx-0.5 h-6 w-px bg-sage/15" />
+
+              <ToolbarButton
+                onClick={() => setMediaOpen(true)}
+                title="Insert Image / Audio"
+              >
+                <Image className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => setVideoDialogOpen(true)}
+                title="Insert Video (YouTube/Vimeo)"
+              >
+                <PlaySquare className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={openLinkDialog}
+                active={editor.isActive("link")}
+                title="Insert Link (Ctrl+K)"
+              >
+                <Link2 className="h-4 w-4" />
+              </ToolbarButton>
+
+              <span className="mx-0.5 h-6 w-px bg-sage/15" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().undo().run()}
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                onClick={() => editor.chain().focus().redo().run()}
+                title="Redo (Ctrl+Shift+Z)"
+              >
+                <Redo2 className="h-4 w-4" />
+              </ToolbarButton>
+
+              <span className="mx-0.5 h-6 w-px bg-sage/15" />
+
+              <ToolbarButton
+                onClick={() => editor.chain().focus().setHorizontalRule().run()}
+                title="Horizontal Rule"
+              >
+                <Minus className="h-4 w-4" />
+              </ToolbarButton>
+
+              <div className="ml-auto">
+                <ToolbarButton
+                  onClick={toggleSpellcheck}
+                  title={`Spellcheck: ${spell === "ro" ? "Romanian" : spell === "en" ? "English" : "Off"}`}
+                >
+                  <Languages className="h-4 w-4" />
+                  <span className="ml-1 text-[10px] font-medium">{spellLabel}</span>
+                </ToolbarButton>
+              </div>
             </div>
-            <EditorContent editor={editorRo} />
-          </div>
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-charcoal-light">Content (EN)</label>
-          <div className="rounded-xl border border-sage/30 bg-white/60 backdrop-blur-sm">
-            <div className="flex gap-1 border-b border-sage/20 p-2">
-              <button onClick={() => editorEn?.chain().focus().toggleBold().run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60">B</button>
-              <button onClick={() => editorEn?.chain().focus().toggleItalic().run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60 italic">I</button>
-              <button onClick={() => editorEn?.chain().focus().toggleHeading({ level: 2 }).run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60">H2</button>
-              <button onClick={() => editorEn?.chain().focus().toggleBulletList().run()} className="rounded-lg px-2 py-1 text-sm hover:bg-white/60">•</button>
-            </div>
-            <EditorContent editor={editorEn} />
-          </div>
+          )}
+          <EditorContent editor={editor} />
         </div>
       </div>
 
-      <label className="flex items-center gap-3">
-        <input
-          type="checkbox"
-          checked={published}
-          onChange={(e) => setPublished(e.target.checked)}
-          className="h-4 w-4 rounded border-sage/30 text-rose focus:ring-rose/20"
-        />
-        <span className="text-sm text-charcoal-light">Publicat</span>
-      </label>
+      <div className="flex items-center gap-6">
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={published}
+            onChange={(e) => setPublished(e.target.checked)}
+            className="h-4 w-4 rounded border-sage/30 text-rose focus:ring-rose/20"
+          />
+          <span className="text-sm text-charcoal-light">{t("admin.published")}</span>
+        </label>
+
+        {published && (
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={hidden}
+              onChange={(e) => setHidden(e.target.checked)}
+              className="h-4 w-4 rounded border-sage/30 text-rose focus:ring-rose/20"
+            />
+            <span className="flex items-center gap-1.5 text-sm text-charcoal-light">
+              <EyeOff className="h-3.5 w-3.5" /> {t("admin.hidden_from_users")}
+            </span>
+          </label>
+        )}
+      </div>
+
+      <MediaLibrary
+        open={mediaOpen}
+        onClose={() => setMediaOpen(false)}
+        onSelect={handleMediaSelect}
+      />
+
+      <VideoUrlDialog
+        open={videoDialogOpen}
+        onClose={() => setVideoDialogOpen(false)}
+        onInsert={handleVideoHtml}
+      />
+
+      <LinkDialog
+        open={linkDialogOpen}
+        onClose={() => setLinkDialogOpen(false)}
+        onApply={handleLinkApply}
+        initialUrl={linkUrl}
+      />
     </div>
   );
 }
 
 export default function AdminBlogPage() {
+  const { t } = useAdminLocale();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [editing, setEditing] = useState<BlogPost | null>(null);
   const [creating, setCreating] = useState(false);
@@ -159,7 +460,7 @@ export default function AdminBlogPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Sigur dorești să ștergi acest articol?")) return;
+    if (!confirm(t("admin.confirm_delete_post"))) return;
     const supabase = createClient();
     await supabase.from("blog_posts").delete().eq("id", id);
     loadPosts();
@@ -176,9 +477,9 @@ export default function AdminBlogPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl text-charcoal">Articole Blog</h1>
+        <h1 className="font-serif text-2xl text-charcoal">{t("admin.blog_title")}</h1>
         <Button onClick={() => setCreating(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Articol Nou
+          <Plus className="mr-2 h-4 w-4" /> {t("admin.new_post")}
         </Button>
       </div>
 
@@ -187,7 +488,7 @@ export default function AdminBlogPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : posts.length === 0 ? (
-        <p className="mt-8 text-charcoal-light">Nu există articole încă.</p>
+        <p className="mt-8 text-charcoal-light">{t("admin.no_posts")}</p>
       ) : (
         <div className="mt-6 space-y-3">
           {posts.map((post) => (
@@ -196,9 +497,13 @@ export default function AdminBlogPage() {
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-charcoal">{post.title_ro}</h3>
                   {post.published ? (
-                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">Publicat</span>
+                    post.hidden ? (
+                      <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs text-warning">{t("admin.hidden")}</span>
+                    ) : (
+                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">{t("admin.published")}</span>
+                    )
                   ) : (
-                    <span className="rounded-full bg-charcoal-light/10 px-2 py-0.5 text-xs text-charcoal-light">Ciornă</span>
+                    <span className="rounded-full bg-charcoal-light/10 px-2 py-0.5 text-xs text-charcoal-light">{t("admin.draft")}</span>
                   )}
                 </div>
                 <p className="mt-1 text-sm text-charcoal-light">

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { AdminLocaleProvider, useAdminLocale } from "@/components/admin/locale-provider";
 import {
   LayoutDashboard,
   FileText,
@@ -17,27 +18,25 @@ import {
   LogOut,
   Menu,
   X,
+  Globe,
 } from "lucide-react";
 
-const adminLinks = [
-  { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/admin/blog", icon: FileText, label: "Articole" },
-  { href: "/admin/events", icon: Calendar, label: "Evenimente" },
-  { href: "/admin/registrations", icon: Users, label: "Înscrieri" },
-  { href: "/admin/testimonials", icon: Star, label: "Testimoniale" },
-  { href: "/admin/emails", icon: Mail, label: "Email-uri" },
-  { href: "/admin/messages", icon: MessageSquare, label: "Mesaje" },
-];
-
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { locale, setLocale, t } = useAdminLocale();
+
+  const adminLinks = [
+    { href: "/admin", icon: LayoutDashboard, key: "dashboard" },
+    { href: "/admin/blog", icon: FileText, key: "blog" },
+    { href: "/admin/events", icon: Calendar, key: "events" },
+    { href: "/admin/registrations", icon: Users, key: "registrations" },
+    { href: "/admin/testimonials", icon: Star, key: "testimonials" },
+    { href: "/admin/emails", icon: Mail, key: "emails" },
+    { href: "/admin/messages", icon: MessageSquare, key: "messages" },
+  ];
 
   const isLoginPage = pathname === "/admin/login";
 
@@ -94,7 +93,7 @@ export default function AdminLayout({
           </button>
         </div>
         <nav className="flex-1 space-y-1 p-4">
-          {adminLinks.map(({ href, icon: Icon, label }) => (
+          {adminLinks.map(({ href, icon: Icon, key }) => (
             <Link
               key={href}
               href={href}
@@ -107,17 +106,24 @@ export default function AdminLayout({
               )}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {t(`admin.${key}`)}
             </Link>
           ))}
         </nav>
         <div className="border-t border-sage/20 p-4">
           <button
+            onClick={() => setLocale(locale === "ro" ? "en" : "ro")}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm text-charcoal-light transition-colors hover:bg-white/40 hover:text-charcoal mb-1"
+          >
+            <Globe className="h-4 w-4" />
+            {locale === "ro" ? "English" : "Română"}
+          </button>
+          <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm text-charcoal-light transition-colors hover:bg-white/40 hover:text-error"
           >
             <LogOut className="h-4 w-4" />
-            Deconectare
+            {t("admin.logout")}
           </button>
         </div>
       </aside>
@@ -130,10 +136,18 @@ export default function AdminLayout({
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h2 className="font-serif text-lg text-charcoal">Panou de Control</h2>
+          <h2 className="font-serif text-lg text-charcoal">{t("admin.dashboard")}</h2>
         </header>
         <main className="p-6">{children}</main>
       </div>
     </div>
+  );
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminLocaleProvider>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </AdminLocaleProvider>
   );
 }

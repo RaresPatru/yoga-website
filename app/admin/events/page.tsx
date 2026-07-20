@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, Trash2, Eye } from "lucide-react";
+import { Plus, Edit2, Trash2 } from "lucide-react";
+import { useAdminLocale } from "@/components/admin/locale-provider";
 
 interface Event {
   id: string;
@@ -33,6 +34,7 @@ function EventForm({
   onSave: (data: any) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useAdminLocale();
   const [form, setForm] = useState({
     slug: event?.slug || "",
     title_ro: event?.title_ro || "",
@@ -65,26 +67,26 @@ function EventForm({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-serif text-xl text-charcoal">
-          {event ? "Editează eveniment" : "Eveniment nou"}
+          {event ? t("admin.edit_event") : t("admin.new_event")}
         </h2>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={onCancel}>Anulează</Button>
+          <Button variant="ghost" onClick={onCancel}>{t("admin.cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Se salvează..." : "Salvează"}
+            {saving ? t("admin.saving") : t("admin.save")}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Input label="Titlu (RO)" value={form.title_ro} onChange={(e) => setForm({...form, title_ro: e.target.value})} />
-        <Input label="Titlu (EN)" value={form.title_en} onChange={(e) => setForm({...form, title_en: e.target.value})} />
+        <Input label={t("admin.title_ro")} value={form.title_ro} onChange={(e) => setForm({...form, title_ro: e.target.value})} />
+        <Input label={t("admin.title_en")} value={form.title_en} onChange={(e) => setForm({...form, title_en: e.target.value})} />
       </div>
 
-      <Input label="Slug" value={form.slug} onChange={(e) => setForm({...form, slug: e.target.value})} placeholder="nume-eveniment" />
+      <Input label={t("admin.slug")} value={form.slug} onChange={(e) => setForm({...form, slug: e.target.value})} placeholder="nume-eveniment" />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-charcoal-light">Descriere (RO)</label>
+          <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.description_ro")}</label>
           <textarea
             value={form.description_ro}
             onChange={(e) => setForm({...form, description_ro: e.target.value})}
@@ -93,7 +95,7 @@ function EventForm({
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-charcoal-light">Descriere (EN)</label>
+          <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.description_en")}</label>
           <textarea
             value={form.description_en}
             onChange={(e) => setForm({...form, description_en: e.target.value})}
@@ -104,16 +106,16 @@ function EventForm({
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Input label="Data" type="date" value={form.date} onChange={(e) => setForm({...form, date: e.target.value})} />
-        <Input label="Ora" type="time" value={form.time} onChange={(e) => setForm({...form, time: e.target.value})} />
-        <Input label="Locație" value={form.location} onChange={(e) => setForm({...form, location: e.target.value})} />
-        <Input label="Preț (0 = gratuit)" type="number" value={form.price} onChange={(e) => setForm({...form, price: e.target.value})} />
+        <Input label={t("admin.date")} type="date" value={form.date} onChange={(e) => setForm({...form, date: e.target.value})} />
+        <Input label={t("admin.time")} type="time" value={form.time} onChange={(e) => setForm({...form, time: e.target.value})} />
+        <Input label={t("admin.location")} value={form.location} onChange={(e) => setForm({...form, location: e.target.value})} />
+        <Input label={t("admin.price")} type="number" value={form.price} onChange={(e) => setForm({...form, price: e.target.value})} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Input label="Participanți maxim" type="number" value={form.max_participants} onChange={(e) => setForm({...form, max_participants: e.target.value})} />
-        <Input label="URL Imagine" value={form.image_url} onChange={(e) => setForm({...form, image_url: e.target.value})} />
-        <Input label="Link WhatsApp" value={form.whatsapp_group_link} onChange={(e) => setForm({...form, whatsapp_group_link: e.target.value})} />
+        <Input label={t("admin.max_participants")} type="number" value={form.max_participants} onChange={(e) => setForm({...form, max_participants: e.target.value})} />
+        <Input label={t("admin.image_url")} value={form.image_url} onChange={(e) => setForm({...form, image_url: e.target.value})} />
+        <Input label={t("admin.whatsapp_link")} value={form.whatsapp_group_link} onChange={(e) => setForm({...form, whatsapp_group_link: e.target.value})} />
       </div>
 
       <label className="flex items-center gap-3">
@@ -123,13 +125,14 @@ function EventForm({
           onChange={(e) => setForm({...form, published: e.target.checked})}
           className="h-4 w-4 rounded border-sage/30 text-rose focus:ring-rose/20"
         />
-        <span className="text-sm text-charcoal-light">Publicat</span>
+        <span className="text-sm text-charcoal-light">{t("admin.published")}</span>
       </label>
     </div>
   );
 }
 
 export default function AdminEventsPage() {
+  const { t } = useAdminLocale();
   const [events, setEvents] = useState<Event[]>([]);
   const [editing, setEditing] = useState<Event | null>(null);
   const [creating, setCreating] = useState(false);
@@ -160,7 +163,7 @@ export default function AdminEventsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Sigur dorești să ștergi acest eveniment?")) return;
+    if (!confirm(t("admin.confirm_delete_event"))) return;
     const supabase = createClient();
     await supabase.from("events").delete().eq("id", id);
     loadEvents();
@@ -173,9 +176,9 @@ export default function AdminEventsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl text-charcoal">Evenimente</h1>
+        <h1 className="font-serif text-2xl text-charcoal">{t("admin.events")}</h1>
         <Button onClick={() => setCreating(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Eveniment Nou
+          <Plus className="mr-2 h-4 w-4" /> {t("admin.new_event")}
         </Button>
       </div>
 
@@ -184,7 +187,7 @@ export default function AdminEventsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : events.length === 0 ? (
-        <p className="mt-8 text-charcoal-light">Nu există evenimente încă.</p>
+        <p className="mt-8 text-charcoal-light">{t("admin.no_events")}</p>
       ) : (
         <div className="mt-6 space-y-3">
           {events.map((event) => (
@@ -193,12 +196,12 @@ export default function AdminEventsPage() {
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-charcoal">{event.title_ro}</h3>
                   {event.published ? (
-                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">Publicat</span>
+                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">{t("admin.published")}</span>
                   ) : (
-                    <span className="rounded-full bg-charcoal-light/10 px-2 py-0.5 text-xs text-charcoal-light">Ciornă</span>
+                    <span className="rounded-full bg-charcoal-light/10 px-2 py-0.5 text-xs text-charcoal-light">{t("admin.draft")}</span>
                   )}
                   <span className="text-sm text-charcoal-light">
-                    {event.date} | {event.price === 0 ? "Gratuit" : `${event.price} RON`}
+                    {event.date} | {event.price === 0 ? t("admin.free") : `${event.price} RON`}
                   </span>
                 </div>
               </div>

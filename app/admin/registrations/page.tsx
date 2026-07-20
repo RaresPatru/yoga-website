@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Input } from "@/components/ui/input";
+import { useAdminLocale } from "@/components/admin/locale-provider";
 
 interface Registration {
   id: string;
@@ -16,6 +17,7 @@ interface Registration {
 }
 
 export default function AdminRegistrationsPage() {
+  const { t } = useAdminLocale();
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -43,18 +45,19 @@ export default function AdminRegistrationsPage() {
     pending: "bg-warning/10 text-warning",
     refunded: "bg-error/10 text-error",
   };
-  const statusLabel: Record<string, string> = {
-    free: "Gratuit",
-    completed: "Plătit",
-    pending: "În așteptare",
-    refunded: "Restituit",
+
+  const statusLabelKey: Record<string, string> = {
+    free: "admin.free",
+    completed: "admin.paid",
+    pending: "admin.pending",
+    refunded: "admin.refunded",
   };
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-charcoal">Înscrieri</h1>
+      <h1 className="font-serif text-2xl text-charcoal">{t("admin.registrations")}</h1>
       <Input
-        placeholder="Caută după nume sau email..."
+        placeholder={t("admin.search_name_email")}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="mt-4"
@@ -65,7 +68,7 @@ export default function AdminRegistrationsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : filtered.length === 0 ? (
-        <p className="mt-6 text-charcoal-light">Nu există înscrieri.</p>
+        <p className="mt-6 text-charcoal-light">{t("admin.no_registrations")}</p>
       ) : (
         <div className="mt-6 space-y-3">
           {filtered.map((reg) => (
@@ -79,7 +82,7 @@ export default function AdminRegistrationsPage() {
                   </p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs ${statusColor[reg.payment_status] || "bg-charcoal-light/10 text-charcoal-light"}`}>
-                  {statusLabel[reg.payment_status] || reg.payment_status}
+                  {t(statusLabelKey[reg.payment_status] || reg.payment_status)}
                 </span>
               </div>
             </GlassCard>

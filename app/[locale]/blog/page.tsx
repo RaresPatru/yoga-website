@@ -22,6 +22,7 @@ export default async function BlogPage() {
     .from("blog_posts")
     .select("id, slug, title_ro, title_en, content_ro, created_at")
     .eq("published", true)
+    .eq("hidden", false)
     .order("created_at", { ascending: false });
 
   return (

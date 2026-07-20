@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAdminLocale } from "@/components/admin/locale-provider";
 
 interface Message {
   id: string;
@@ -16,6 +17,7 @@ interface Message {
 }
 
 export default function AdminContactMessagesPage() {
+  const { t } = useAdminLocale();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,7 +34,7 @@ export default function AdminContactMessagesPage() {
   useEffect(() => { load(); }, [load]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Sigur dorești să ștergi acest mesaj?")) return;
+    if (!confirm(t("admin.confirm_delete_message"))) return;
     const supabase = createClient();
     await supabase.from("contact_messages").delete().eq("id", id);
     load();
@@ -40,14 +42,14 @@ export default function AdminContactMessagesPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-charcoal">Mesaje Contact</h1>
+      <h1 className="font-serif text-2xl text-charcoal">{t("admin.messages")}</h1>
 
       {loading ? (
         <div className="mt-8 flex justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : messages.length === 0 ? (
-        <p className="mt-6 text-charcoal-light">Nu există mesaje.</p>
+        <p className="mt-6 text-charcoal-light">{t("admin.no_messages")}</p>
       ) : (
         <div className="mt-6 space-y-3">
           {messages.map((m) => (

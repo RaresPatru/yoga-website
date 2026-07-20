@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @theme inline {
   --color-cream: #FFF8F0;
@@ -31,5 +32,17 @@ body {
 @layer base {
   h1, h2, h3, h4 {
     font-family: var(--font-serif);
+  }
+}
+
+@layer utilities {
+  .blog-content iframe {
+    width: 100% !important;
+    aspect-ratio: 16 / 9;
+    border-radius: 0.75rem;
+  }
+  .blog-content .aspect-video iframe {
+    aspect-ratio: unset;
+    border-radius: 0;
   }
 }
