@@ -224,7 +224,7 @@ function EventForm({
         <div>
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <Input label={t("admin.title_ro")} value={form.title_ro} onChange={(e) => setForm({...form, title_ro: e.target.value})} spellcheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
+              <Input label={t("admin.title_ro")} value={form.title_ro} onChange={(e) => setForm({...form, title_ro: e.target.value})} spellCheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
             </div>
             <button
               onClick={handleTranslateTitle}
@@ -236,7 +236,7 @@ function EventForm({
             </button>
           </div>
         </div>
-        <Input label={t("admin.title_en")} value={form.title_en} onChange={(e) => setForm({...form, title_en: e.target.value})} spellcheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
+        <Input label={t("admin.title_en")} value={form.title_en} onChange={(e) => setForm({...form, title_en: e.target.value})} spellCheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
       </div>
 
       <Input label={t("admin.slug")} value={form.slug} onChange={(e) => setForm({...form, slug: e.target.value})} placeholder="nume-eveniment" />

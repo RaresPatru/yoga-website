@@ -306,7 +306,7 @@ function BlogEditor({
             {translatingTitle ? t("admin.translating") : "→ EN"}
           </button>
         </div>
-        <Input label={t("admin.title_en")} value={titleEn} onChange={(e) => setTitleEn(e.target.value)} spellcheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
+        <Input label={t("admin.title_en")} value={titleEn} onChange={(e) => setTitleEn(e.target.value)} spellCheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
       </div>
 
       <Input label={t("admin.slug")} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="nume-articol" />
