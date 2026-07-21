@@ -8,7 +8,8 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatDate, formatTime } from "@/lib/utils";
-import { ArrowRight, Calendar, Clock, Star } from "lucide-react";
+import { StickyCta } from "@/components/sticky-cta";
+import { ArrowRight, Calendar, Clock, Star, Users } from "lucide-react";
 
 interface Post {
   id: string;
@@ -26,6 +27,8 @@ interface Event {
   date: string;
   time: string;
   price: number;
+  max_participants: number | null;
+  registration_count: number;
 }
 
 interface Testimonial {
@@ -58,7 +61,7 @@ export default function HomePage() {
 
     supabase
       .from("events")
-      .select("id, slug, title_ro, title_en, date, time, price")
+      .select("id, slug, title_ro, title_en, date, time, price, max_participants, registration_count")
       .eq("published", true)
       .gte("date", today)
       .order("date", { ascending: true })
@@ -185,13 +188,15 @@ export default function HomePage() {
       )}
 
       {events.length > 0 && (
-        <section className="bg-white/40 py-20 backdrop-blur-sm">
+        <section id="events" className="bg-white/40 py-20 backdrop-blur-sm">
           <div className="mx-auto max-w-7xl px-4">
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
               {t("events_title")}
             </h2>
             <div className="mt-8 grid gap-6 sm:grid-cols-3">
-              {events.map((event) => (
+              {events.map((event) => {
+                const isFull = event.max_participants != null && (event.registration_count || 0) >= event.max_participants;
+                return (
                 <Link key={event.id} href={`/events/${event.slug}`}>
                   <GlassCard className="h-full transition-transform hover:scale-[1.02]">
                     <h3 className="font-serif text-lg text-charcoal">
@@ -205,14 +210,21 @@ export default function HomePage() {
                         <Clock className="h-3.5 w-3.5" /> {formatTime(event.time)}
                       </span>
                     </div>
-                    <div className="mt-3">
+                    <div className="mt-3 flex items-center gap-3">
                       <span className="rounded-full bg-rose/10 px-3 py-1 text-sm font-medium text-rose">
                         {event.price === 0 ? "Gratuit" : `${event.price} RON`}
                       </span>
+                      {event.max_participants && (
+                        <span className={`flex items-center gap-1 text-xs ${isFull ? "text-error" : "text-charcoal-light"}`}>
+                          <Users className="h-3 w-3" />
+                          {isFull ? "Complet" : `${event.registration_count || 0}/${event.max_participants}`}
+                        </span>
+                      )}
                     </div>
                   </GlassCard>
                 </Link>
-              ))}
+                );
+              })}
             </div>
             <div className="mt-8 text-center">
               <Link href="/events">
@@ -253,6 +265,7 @@ export default function HomePage() {
           </div>
         </section>
       )}
+      <StickyCta />
     </div>
   );
 }

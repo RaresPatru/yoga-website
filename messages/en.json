@@ -43,7 +43,22 @@
     "no_events": "No events yet.",
     "success_title": "Registration successful!",
     "success_text": "You will receive an email with the confirmation and the WhatsApp group link.",
-    "payment_title": "Redirecting to payment..."
+    "payment_title": "Redirecting to payment...",
+    "fully_booked": "Fully booked",
+    "spots_available": "{count} spots available",
+    "spots_filled": "{filled}/{total} spots filled",
+    "join_waitlist": "Join the waiting list",
+    "waitlist_success": "You've been added to the waiting list",
+    "waitlist_success_text": "You will receive an email when a spot opens up.",
+    "waitlist_phone": "Phone",
+    "waitlist_btn": "Join the waiting list",
+    "claim_spot_title": "A spot opened up!",
+    "claim_spot_text": "Claim your spot within the next 24 hours.",
+    "claim_spot_btn": "Claim spot",
+    "claim_spot_success": "Spot claimed successfully! You'll receive a confirmation email.",
+    "phone_country": "Country Code",
+    "phone_hint": "Enter your phone number with country code",
+    "captcha_error": "Security check failed. Please try again."
   },
   "testimonials": {
     "title": "Testimonials",
@@ -160,6 +175,12 @@
     "video_title": "Insert Video URL",
     "video_hint": "YouTube, Vimeo, Instagram or any video URL.",
     "video_placeholder": "https://youtube.com/watch?v=...",
-    "video_insert": "Insert"
+    "video_insert": "Insert",
+    "registrations_count": "Registrations: {count}",
+    "waiting_list": "Waiting List",
+    "waiting_count": "Waiting: {count}",
+    "view_waiting_list": "View Waiting List",
+    "no_waiting_list": "No one on the waiting list.",
+    "close": "Close"
   }
 }

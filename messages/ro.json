@@ -43,7 +43,22 @@
     "no_events": "Momentan nu există evenimente.",
     "success_title": "Înscriere reușită!",
     "success_text": "Veți primi un email cu confirmarea și linkul către grupul de WhatsApp.",
-    "payment_title": "Redirectare către plată..."
+    "payment_title": "Redirectare către plată...",
+    "fully_booked": "Locuri epuizate",
+    "spots_available": "{count} locuri disponibile",
+    "spots_filled": "{filled}/{total} locuri ocupate",
+    "join_waitlist": "Intră pe lista de așteptare",
+    "waitlist_success": "Ai fost adăugat pe lista de așteptare",
+    "waitlist_success_text": "Vei primi un email când se eliberează un loc.",
+    "waitlist_phone": "Telefon",
+    "waitlist_btn": "Înscrie-te pe lista de așteptare",
+    "claim_spot_title": "Un loc s-a eliberat!",
+    "claim_spot_text": "Revendică-ți locul în următoarele 24 de ore.",
+    "claim_spot_btn": "Revendică locul",
+    "claim_spot_success": "Loc revendicat cu succes! Vei primi un email de confirmare.",
+    "phone_country": "Prefix",
+    "phone_hint": "Introdu numărul de telefon cu prefixul țării",
+    "captcha_error": "Verificare securitate eșuată. Încearcă din nou."
   },
   "testimonials": {
     "title": "Testimoniale",
@@ -160,6 +175,12 @@
     "video_title": "Inserează URL Video",
     "video_hint": "YouTube, Vimeo, Instagram sau orice URL de video.",
     "video_placeholder": "https://youtube.com/watch?v=...",
-    "video_insert": "Inserează"
+    "video_insert": "Inserează",
+    "registrations_count": "Înscrieri: {count}",
+    "waiting_list": "Lista de așteptare",
+    "waiting_count": "În așteptare: {count}",
+    "view_waiting_list": "Vezi lista de așteptare",
+    "no_waiting_list": "Nicio persoană în lista de așteptare.",
+    "close": "Închide"
   }
 }

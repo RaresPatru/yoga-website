@@ -2,12 +2,40 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getResend } from "@/lib/resend";
 import { generateICS } from "@/lib/utils";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 export async function POST(req: Request) {
   try {
-    const { eventId, fullName, email, phone, paymentStatus } = await req.json();
+    const { eventId, fullName, email, phone, paymentStatus, captchaToken } = await req.json();
+
+    if (captchaToken) {
+      const verified = await verifyTurnstile(captchaToken);
+      if (!verified) {
+        return NextResponse.json({ error: "Security check failed" }, { status: 400 });
+      }
+    }
 
     const supabase = createAdminClient();
+
+    const { data: event } = await supabase
+      .from("events")
+      .select("max_participants")
+      .eq("id", eventId)
+      .single();
+
+    if (event?.max_participants) {
+      const { count } = await supabase
+        .from("registrations")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId);
+
+      if (count != null && count >= event.max_participants) {
+        return NextResponse.json(
+          { error: "Event is full" },
+          { status: 409 }
+        );
+      }
+    }
 
     const { error } = await supabase.from("registrations").insert({
       event_id: eventId,
@@ -19,10 +47,9 @@ export async function POST(req: Request) {
 
     if (error) throw error;
 
-    // Send confirmation email
     try {
-      const { data: event } = await supabase.from("events").select("*").eq("id", eventId).single();
-      if (event) {
+      const { data: eventData } = await supabase.from("events").select("*").eq("id", eventId).single();
+      if (eventData) {
         const { data: template } = await supabase
           .from("email_templates")
           .select("*")
@@ -32,11 +59,11 @@ export async function POST(req: Request) {
         if (template) {
           const vars: Record<string, string> = {
             user_name: fullName,
-            event_name: event.title_ro,
-            event_date: event.date,
-            event_time: event.time.slice(0, 5),
-            event_location: event.location || "",
-            whatsapp_link: event.whatsapp_group_link || "",
+            event_name: eventData.title_ro,
+            event_date: eventData.date,
+            event_time: eventData.time.slice(0, 5),
+            event_location: eventData.location || "",
+            whatsapp_link: eventData.whatsapp_group_link || "",
           };
 
           const subject = template.subject_ro.replace(/\{\{(\w+)\}\}/g, (_m: string, k: string) => vars[k] || "");
@@ -44,11 +71,11 @@ export async function POST(req: Request) {
 
           const resend = getResend();
           const icsContent = generateICS({
-            title: event.title_ro,
-            description: event.description_ro || "",
-            date: event.date,
-            time: event.time,
-            location: event.location || "",
+            title: eventData.title_ro,
+            description: eventData.description_ro || "",
+            date: eventData.date,
+            time: eventData.time,
+            location: eventData.location || "",
           });
 
           const res = await resend.emails.send({
@@ -58,7 +85,7 @@ export async function POST(req: Request) {
             html: body,
             attachments: [
               {
-                filename: `${event.title_ro.replace(/\s+/g, "_")}.ics`,
+                filename: `${eventData.title_ro.replace(/\s+/g, "_")}.ics`,
                 content: Buffer.from(icsContent).toString("base64"),
               },
             ],

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, Trash2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, X } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 
 interface Event {
@@ -23,6 +23,88 @@ interface Event {
   image_url: string | null;
   whatsapp_group_link: string | null;
   published: boolean;
+}
+
+interface WaitingEntry {
+  id: string;
+  event_id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  created_at: string;
+  claimed_at: string | null;
+}
+
+function WaitingListModal({
+  event,
+  onClose,
+}: {
+  event: Event;
+  onClose: () => void;
+}) {
+  const { t } = useAdminLocale();
+  const [entries, setEntries] = useState<WaitingEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("waiting_list")
+      .select("*")
+      .eq("event_id", event.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) setEntries(data);
+        setLoading(false);
+      });
+  }, [event.id]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <GlassCard hover={false} className="w-full max-w-lg max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-serif text-lg text-charcoal">{t("admin.waiting_list")}</h2>
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-sage/10">
+            <X className="h-5 w-5 text-charcoal-light" />
+          </button>
+        </div>
+        <p className="mb-4 text-sm text-charcoal-light">{event.title_ro} — {event.date}</p>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-rose border-t-transparent" />
+          </div>
+        ) : entries.length === 0 ? (
+          <p className="py-8 text-center text-charcoal-light">{t("admin.no_waiting_list")}</p>
+        ) : (
+          <div className="space-y-2">
+            {entries.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center justify-between rounded-lg border border-sage/20 bg-white/50 px-4 py-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-charcoal">{entry.full_name}</p>
+                  <p className="text-xs text-charcoal-light">{entry.email} — {entry.phone}</p>
+                  <p className="text-xs text-charcoal-light/60">
+                    {new Date(entry.created_at).toLocaleString("ro-RO")}
+                  </p>
+                </div>
+                {entry.claimed_at ? (
+                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">
+                    Revendicat
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs text-warning">
+                    În așteptare
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </GlassCard>
+    </div>
+  );
 }
 
 function EventForm({
@@ -137,6 +219,8 @@ export default function AdminEventsPage() {
   const [editing, setEditing] = useState<Event | null>(null);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<Record<string, { registrations: number; waiting: number }>>({});
+  const [waitingFor, setWaitingFor] = useState<Event | null>(null);
 
   const loadEvents = useCallback(async () => {
     const supabase = createClient();
@@ -144,7 +228,39 @@ export default function AdminEventsPage() {
       .from("events")
       .select("*")
       .order("date", { ascending: false });
-    if (data) setEvents(data);
+    if (data) {
+      setEvents(data);
+
+      const ids = data.map((e) => e.id);
+
+      const { data: regCounts } = await supabase
+        .from("registrations")
+        .select("event_id")
+        .in("event_id", ids);
+
+      const { data: waitCounts } = await supabase
+        .from("waiting_list")
+        .select("event_id")
+        .in("event_id", ids);
+
+      const regMap: Record<string, number> = {};
+      const waitMap: Record<string, number> = {};
+      for (const r of regCounts || []) {
+        regMap[r.event_id] = (regMap[r.event_id] || 0) + 1;
+      }
+      for (const w of waitCounts || []) {
+        waitMap[w.event_id] = (waitMap[w.event_id] || 0) + 1;
+      }
+
+      const merged: Record<string, { registrations: number; waiting: number }> = {};
+      for (const id of ids) {
+        merged[id] = {
+          registrations: regMap[id] || 0,
+          waiting: waitMap[id] || 0,
+        };
+      }
+      setCounts(merged);
+    }
     setLoading(false);
   }, []);
 
@@ -175,6 +291,10 @@ export default function AdminEventsPage() {
 
   return (
     <div>
+      {waitingFor && (
+        <WaitingListModal event={waitingFor} onClose={() => setWaitingFor(null)} />
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl text-charcoal">{t("admin.events")}</h1>
         <Button onClick={() => setCreating(true)}>
@@ -190,31 +310,48 @@ export default function AdminEventsPage() {
         <p className="mt-8 text-charcoal-light">{t("admin.no_events")}</p>
       ) : (
         <div className="mt-6 space-y-3">
-          {events.map((event) => (
-            <GlassCard key={event.id} hover={false} className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-charcoal">{event.title_ro}</h3>
-                  {event.published ? (
-                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">{t("admin.published")}</span>
-                  ) : (
-                    <span className="rounded-full bg-charcoal-light/10 px-2 py-0.5 text-xs text-charcoal-light">{t("admin.draft")}</span>
-                  )}
-                  <span className="text-sm text-charcoal-light">
-                    {event.date} | {event.price === 0 ? t("admin.free") : `${event.price} RON`}
-                  </span>
+          {events.map((event) => {
+            const c = counts[event.id];
+            return (
+              <GlassCard key={event.id} hover={false} className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-charcoal">{event.title_ro}</h3>
+                    {event.published ? (
+                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">{t("admin.published")}</span>
+                    ) : (
+                      <span className="rounded-full bg-charcoal-light/10 px-2 py-0.5 text-xs text-charcoal-light">{t("admin.draft")}</span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-charcoal-light">
+                    <span>{event.date} | {event.price === 0 ? t("admin.free") : `${event.price} RON`}</span>
+                    <span>{event.slug}</span>
+                    {c && (
+                      <>
+                        <span>{t("admin.registrations_count").replace("{count}", String(c.registrations))}</span>
+                        {c.waiting > 0 && (
+                          <span>{t("admin.waiting_count").replace("{count}", String(c.waiting))}</span>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setEditing(event)}>
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleDelete(event.id)}>
-                  <Trash2 className="h-4 w-4 text-error" />
-                </Button>
-              </div>
-            </GlassCard>
-          ))}
+                <div className="flex gap-2">
+                  {c && c.waiting > 0 && (
+                    <Button variant="ghost" size="sm" onClick={() => setWaitingFor(event)}>
+                      <Users className="h-4 w-4 text-warning" />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(event)}>
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(event.id)}>
+                    <Trash2 className="h-4 w-4 text-error" />
+                  </Button>
+                </div>
+              </GlassCard>
+            );
+          })}
         </div>
       )}
     </div>

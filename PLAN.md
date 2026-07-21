@@ -6,7 +6,7 @@
 A responsive yoga website for a female instructor with blog, paid/free event registration via Stripe, email confirmations with calendar invites, testimonials, admin dashboard, and analytics — deployed on Vercel.
 
 ## Current Phase
-Phase 6
+Phase 7
 
 ## Phases
 
@@ -55,7 +55,26 @@ Phase 6
 - [x] Upload error handling — try/catch + proper error surfacing in media library
 - **Status:** complete
 
-### Phase 6: Content + Future Features
+### Phase 6: Waiting List, CAPTCHA & Phone Validation
+- [x] UI/UX research on yoga website patterns (RESEARCH_FINDINGS.md)
+- [x] Dependency bumps: React 19, Stripe 22, TipTap 28, TypeScript 6, ESLint 10
+- [x] SQL migration: waiting_list + waiting_list_notifications tables, RLS, indexes
+- [x] PhoneInput component with libphonenumber-js, country code selector (RO default)
+- [x] Cloudflare Turnstile CAPTCHA wrapper component
+- [x] Mobile sticky CTA component (conditional, scrolls to #events)
+- [x] Homepage: events section id, capacity badges (X/Y), "Complet" label when full
+- [x] i18n keys for fully_booked, waitlist, claim_spot, captcha_error, phone_hint
+- [x] Event detail page rewrite: capacity bar, Turnstile, PhoneInput, waiting list flow, claim token
+- [x] API: register route — Turnstile verify, phone validate, capacity check (409)
+- [x] API: register/waiting-list — insert into waiting_list with captcha
+- [x] API: register/claim-spot/[token] — validate token, create registration, mark claimed
+- [x] API: register/notify-waiting — batch notification (first 10, 24h expiry)
+- [x] Stripe webhook — waiting list trigger on checkout.session.expired and charge.refunded
+- [x] Admin events page: registration count, waiting count, waiting list modal
+- [x] lib/turnstile.ts — shared Turnstile verification utility
+- **Status:** complete
+
+### Phase 7: Content + Future Features
 - [ ] Beginner admin guide
 - [ ] About page
 - [ ] Real content: images, instructor bio
@@ -79,6 +98,9 @@ Phase 6
 | `@tailwindcss/typography` plugin | Tailwind preflight strips all default styles; prose needed for visible formatting |
 | lucide-react icons for editor toolbar | Matches existing theme, consistent visual language, no extra deps |
 | Editor constrained to max-w-4xl centered | Google Docs / Medium-style readability, full width on mobile |
+| libphonenumber-js for phone validation | Lightweight client-side validation, no external API call, country code support |
+| Cloudflare Turnstile for CAPTCHA | Free, privacy-friendly (no data tracking), no npm package needed |
+| Waiting list claim via unique token (UUID in URL) | Simple stateless flow, 24h expiry per batch, no auth required for claim |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

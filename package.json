@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@stripe/stripe-js": "^9.9.0",
+    "@stripe/stripe-js": "^9.12.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
     "@tailwindcss/typography": "^0.5.20",
@@ -20,16 +20,17 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "ics": "^3.12.0",
-    "lucide-react": "^1.24.0",
+    "lucide-react": "^1.25.0",
     "motion": "^12.42.2",
     "next": "16.2.10",
     "next-intl": "^4.13.2",
-    "posthog-js": "^1.399.1",
-    "posthog-node": "^5.40.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "posthog-js": "^1.405.3",
+    "posthog-node": "^5.46.0",
+    "libphonenumber-js": "^1.13.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "resend": "^6.17.2",
-    "stripe": "^22.3.1",
+    "stripe": "^22.3.2",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
@@ -38,9 +39,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
-    "eslint": "^9",
+    "eslint": "^10.7.0",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^6.0.0"
   }
 }
