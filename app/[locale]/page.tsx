@@ -59,14 +59,51 @@ export default function HomePage() {
       .limit(3)
       .then(({ data }) => { if (data) setPosts(data); });
 
-    supabase
-      .from("events")
-      .select("id, slug, title_ro, title_en, date, time, price, max_participants, registration_count")
-      .eq("published", true)
-      .gte("date", today)
-      .order("date", { ascending: true })
-      .limit(3)
-      .then(({ data }) => { if (data) setEvents(data); });
+    const loadEvents = async () => {
+      const baseQuery = () =>
+        supabase
+          .from("events")
+          .select("id, slug, title_ro, title_en, date, time, price, max_participants")
+          .eq("published", true);
+
+      let { data: upcoming } = await baseQuery()
+        .gte("date", today)
+        .order("date", { ascending: true })
+        .limit(3);
+
+      if (!upcoming || upcoming.length === 0) {
+        const { data: past } = await baseQuery()
+          .lt("date", today)
+          .order("date", { ascending: false })
+          .limit(3);
+        upcoming = past || [];
+      }
+
+      if (upcoming && upcoming.length > 0) {
+        const ids = upcoming.map((e) => e.id);
+        const { data: counts } = await supabase
+          .from("registrations")
+          .select("event_id")
+          .in("event_id", ids)
+          .neq("payment_status", "pending");
+
+        const countMap: Record<string, number> = {};
+        for (const r of counts || []) {
+          countMap[r.event_id] = (countMap[r.event_id] || 0) + 1;
+        }
+
+        setEvents(
+          upcoming.map((e) => ({
+            ...e,
+            registration_count: countMap[e.id] || 0,
+          }))
+        );
+      } else {
+        setEvents([]);
+      }
+    };
+
+    loadEvents();
 
     supabase
       .from("testimonials")

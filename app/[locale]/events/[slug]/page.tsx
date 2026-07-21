@@ -81,6 +81,7 @@ export default function EventDetailPage() {
             .from("registrations")
             .select("id", { count: "exact", head: true })
             .eq("event_id", data.id)
+            .neq("payment_status", "pending")
             .then(({ count }) => {
               setRegistrationCount(count || 0);
             });
@@ -197,6 +198,10 @@ export default function EventDetailPage() {
       setError(t("Completează verificarea de securitate.", "Complete the security check."));
       return;
     }
+    if (!phoneValid) {
+      setError(t("Introdu un număr de telefon valid.", "Enter a valid phone number."));
+      return;
+    }
     if (event!.price === 0) {
       handleFreeRegistration();
     } else {
@@ -208,6 +213,10 @@ export default function EventDetailPage() {
     e.preventDefault();
     if (!captchaToken) {
       setError(t("Completează verificarea de securitate.", "Complete the security check."));
+      return;
+    }
+    if (!phoneValid) {
+      setError(t("Introdu un număr de telefon valid.", "Enter a valid phone number."));
       return;
     }
     setSubmitting(true);
