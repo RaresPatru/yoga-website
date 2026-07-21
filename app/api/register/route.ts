@@ -37,15 +37,19 @@ export async function POST(req: Request) {
       }
     }
 
-    const { error } = await supabase.from("registrations").insert({
-      event_id: eventId,
-      full_name: fullName,
-      email,
-      phone,
-      payment_status: paymentStatus || "free",
-    });
+    const { data: registration, error: insertError } = await supabase
+      .from("registrations")
+      .insert({
+        event_id: eventId,
+        full_name: fullName,
+        email,
+        phone,
+        payment_status: paymentStatus || "free",
+      })
+      .select("id")
+      .single();
 
-    if (error) throw error;
+    if (insertError) throw insertError;
 
     try {
       const { data: eventData } = await supabase.from("events").select("*").eq("id", eventId).single();
@@ -98,7 +102,7 @@ export async function POST(req: Request) {
       console.error("Email send error:", emailError);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, id: registration.id });
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(

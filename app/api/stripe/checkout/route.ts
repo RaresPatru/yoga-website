@@ -3,7 +3,7 @@ import { getStripe } from "@/lib/stripe";
 
 export async function POST(req: Request) {
   try {
-    const { eventId, price, successUrl, cancelUrl } = await req.json();
+    const { eventId, price, registrationId, successUrl, cancelUrl } = await req.json();
 
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       mode: "payment",
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { eventId },
+      metadata: { eventId, registrationId },
     });
 
     return NextResponse.json({ url: session.url });

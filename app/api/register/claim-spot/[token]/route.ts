@@ -23,6 +23,21 @@ export async function GET(
       );
     }
 
+    const event = entry.events as any;
+    if (event?.max_participants) {
+      const { count } = await supabase
+        .from("registrations")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", entry.event_id);
+
+      if (count != null && count >= event.max_participants) {
+        return NextResponse.json(
+          { error: "Event is full, spot no longer available" },
+          { status: 409 }
+        );
+      }
+    }
+
     const { data: registration, error: insertError } = await supabase
       .from("registrations")
       .insert({

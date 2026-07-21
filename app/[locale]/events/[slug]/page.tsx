@@ -168,11 +168,14 @@ export default function EventDetailPage() {
       return;
     }
 
+    const regData = await res.json();
+
     const stripeRes = await fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         eventId: event!.id,
+        registrationId: regData.id,
         price: event!.price,
         successUrl: `${window.location.origin}/${locale}/events/${event!.slug}?success=1`,
         cancelUrl: `${window.location.origin}/${locale}/events/${event!.slug}?canceled=1`,

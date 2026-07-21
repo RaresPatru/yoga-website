@@ -24,11 +24,21 @@ async function notifyWaitingList(eventId: string, spotsOpened: number = 1) {
     .eq("id", eventId)
     .single();
 
+  const { data: lastNotification } = await supabase
+    .from("waiting_list_notifications")
+    .select("batch_number")
+    .eq("event_id", eventId)
+    .order("batch_number", { ascending: false })
+    .limit(1)
+    .single();
+
+  const batchNumber = (lastNotification?.batch_number || 0) + 1;
+
   const { data: notification } = await supabase
     .from("waiting_list_notifications")
     .insert({
       event_id: eventId,
-      batch_number: 1,
+      batch_number: batchNumber,
       expires_at: expiresAt.toISOString(),
       spots_opened: spotsOpened,
     })
@@ -91,32 +101,31 @@ export async function POST(req: Request) {
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as any;
-      const eventId = session.metadata?.eventId;
+      const registrationId = session.metadata?.registrationId;
 
-      if (eventId) {
+      if (registrationId) {
         await supabase
           .from("registrations")
           .update({ payment_status: "completed", stripe_session_id: session.id })
-          .eq("event_id", eventId)
-          .eq("payment_status", "pending");
+          .eq("id", registrationId);
       }
     }
 
     if (event.type === "checkout.session.expired") {
       const session = event.data.object as any;
-      const eventId = session.metadata?.eventId;
+      const registrationId = session.metadata?.registrationId;
 
-      if (eventId) {
+      if (registrationId) {
         const { data: reg } = await supabase
           .from("registrations")
           .delete()
-          .eq("event_id", eventId)
+          .eq("id", registrationId)
           .eq("payment_status", "pending")
-          .select()
+          .select("event_id")
           .single();
 
         if (reg) {
-          await notifyWaitingList(eventId);
+          await notifyWaitingList(reg.event_id);
         }
       }
     }
