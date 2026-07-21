@@ -23,39 +23,24 @@ export async function GET(
       );
     }
 
-    const event = entry.events as any;
-    if (event?.max_participants) {
-      const { count } = await supabase
-        .from("registrations")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", entry.event_id);
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("register_for_event", {
+      p_event_id: entry.event_id,
+      p_full_name: entry.full_name,
+      p_email: entry.email,
+      p_phone: entry.phone,
+      p_payment_status: "free",
+    });
 
-      if (count != null && count >= event.max_participants) {
-        return NextResponse.json(
-          { error: "Event is full, spot no longer available" },
-          { status: 409 }
-        );
-      }
-    }
+    if (rpcError) throw rpcError;
 
-    const { data: registration, error: insertError } = await supabase
-      .from("registrations")
-      .insert({
-        event_id: entry.event_id,
-        full_name: entry.full_name,
-        email: entry.email,
-        phone: entry.phone,
-        payment_status: "free",
-      })
-      .select()
-      .single();
-
-    if (insertError || !registration) {
+    if (rpcResult?.error) {
       return NextResponse.json(
-        { error: "Failed to claim spot" },
-        { status: 500 }
+        { error: rpcResult.error },
+        { status: 409 }
       );
     }
+
+    const registration = rpcResult;
 
     await supabase
       .from("waiting_list")

@@ -17,39 +17,24 @@ export async function POST(req: Request) {
 
     const supabase = createAdminClient();
 
-    const { data: event } = await supabase
-      .from("events")
-      .select("max_participants")
-      .eq("id", eventId)
-      .single();
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("register_for_event", {
+      p_event_id: eventId,
+      p_full_name: fullName,
+      p_email: email,
+      p_phone: phone,
+      p_payment_status: paymentStatus || "free",
+    });
 
-    if (event?.max_participants) {
-      const { count } = await supabase
-        .from("registrations")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", eventId);
+    if (rpcError) throw rpcError;
 
-      if (count != null && count >= event.max_participants) {
-        return NextResponse.json(
-          { error: "Event is full" },
-          { status: 409 }
-        );
-      }
+    if (rpcResult?.error) {
+      return NextResponse.json(
+        { error: rpcResult.error },
+        { status: 409 }
+      );
     }
 
-    const { data: registration, error: insertError } = await supabase
-      .from("registrations")
-      .insert({
-        event_id: eventId,
-        full_name: fullName,
-        email,
-        phone,
-        payment_status: paymentStatus || "free",
-      })
-      .select("id")
-      .single();
-
-    if (insertError) throw insertError;
+    const registration = rpcResult;
 
     try {
       const { data: eventData } = await supabase.from("events").select("*").eq("id", eventId).single();
