@@ -101,6 +101,9 @@ Phase 7
 | libphonenumber-js for phone validation | Lightweight client-side validation, no external API call, country code support |
 | Cloudflare Turnstile for CAPTCHA | Free, privacy-friendly (no data tracking), no npm package needed |
 | Waiting list claim via unique token (UUID in URL) | Simple stateless flow, 24h expiry per batch, no auth required for claim |
+| register_for_event RPC (PostgreSQL function) | Atomic check+insert with SELECT FOR UPDATE, prevents race condition |
+| UseRef callbacks in Turnstile component | Decouples effect from inline function references, prevents flickering |
+| Stripe webhook uses registrationId from metadata | Targets specific registration instead of blanket event_id match |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -117,3 +120,7 @@ Phase 7
 | Media library modals show Romanian always | 1 | Imported `useAdminLocale()` — components weren't connected to locale context |
 | YouTube iframes shrink on public blog page | 1 | Added responsive CSS: `.blog-content iframe { width: 100%; aspect-ratio: 16/9 }` |
 | Romanian spellcheck underlines all words | 1 | Browser/OS limitation — needs RO language pack installed client-side |
+| Turnstile widget flickers on every keystroke | 1 | Fixed: useRef callbacks decouple effect from inline function references |
+| Build fails on Vercel: ESLint 10 peer dep conflict | 1 | Fixed: downgraded ESLint 10.7.0 → 9.39.5 |
+| Stripe webhook marks all pending registrations as completed | 1 | Fixed: pass registrationId in session metadata, match by id |
+| Race condition: two concurrent inserts can exceed max_participants | 1 | Fixed: register_for_event RPC with SELECT FOR UPDATE |
