@@ -181,6 +181,9 @@
     "waiting_count": "Waiting: {count}",
     "view_waiting_list": "View Waiting List",
     "no_waiting_list": "No one on the waiting list.",
-    "close": "Close"
+    "close": "Close",
+    "translate": "Translate to English",
+    "translating": "Translating...",
+    "translate_error": "Translation error"
   }
 }

@@ -181,6 +181,9 @@
     "waiting_count": "În așteptare: {count}",
     "view_waiting_list": "Vezi lista de așteptare",
     "no_waiting_list": "Nicio persoană în lista de așteptare.",
-    "close": "Închide"
+    "close": "Închide",
+    "translate": "Tradu în engleză",
+    "translating": "Se traduce...",
+    "translate_error": "Eroare la traducere"
   }
 }

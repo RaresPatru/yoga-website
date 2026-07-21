@@ -5,11 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, Trash2, EyeOff, ChevronDown } from "lucide-react";
+import { Plus, Edit2, Trash2, EyeOff, ChevronDown, Loader2 } from "lucide-react";
 import {
   Bold, Italic, List, ListOrdered, TextQuote, Code2,
   Image, PlaySquare, Link2, Undo2, Redo2, Minus, Pilcrow,
-  Heading1, Heading2, Heading3, Languages,
+  Heading1, Heading2, Heading3, Languages, Info, X,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -114,7 +114,13 @@ function BlogEditor({
   const [linkUrl, setLinkUrl] = useState("");
   const [headingOpen, setHeadingOpen] = useState(false);
   const [spell, setSpell] = useState<SpellcheckLang>("ro");
+  const [titleEn, setTitleEn] = useState(post?.title_en || "");
+  const [contentEn, setContentEn] = useState(post?.content_en || "");
+  const [translatingTitle, setTranslatingTitle] = useState(false);
+  const [translatingContent, setTranslatingContent] = useState(false);
+  const [showSpellTooltip, setShowSpellTooltip] = useState(false);
   const headingRef = useRef<HTMLDivElement>(null);
+  const spellTooltipRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -136,7 +142,8 @@ function BlogEditor({
 
   useEffect(() => {
     editor?.view?.dom?.setAttribute("spellcheck", spell !== "off" ? "true" : "false");
-    editor?.view?.dom?.setAttribute("lang", spell !== "off" ? spell : "ro");
+    const langVal = spell === "ro" ? "ro-RO" : spell === "en" ? "en" : "ro";
+    editor?.view?.dom?.setAttribute("lang", langVal);
   }, [spell, editor]);
 
   useEffect(() => {
@@ -155,9 +162,9 @@ function BlogEditor({
       id: post?.id,
       slug,
       title_ro: titleRo,
-      title_en: post?.title_en || null,
+      title_en: titleEn || null,
       content_ro: editor?.getHTML() || null,
-      content_en: post?.content_en || null,
+      content_en: contentEn || null,
       published,
       hidden: published ? hidden : false,
     });
@@ -200,8 +207,58 @@ function BlogEditor({
     setLinkDialogOpen(true);
   };
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (spellTooltipRef.current && !spellTooltipRef.current.contains(e.target as Node)) {
+        setShowSpellTooltip(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const translateText = async (text: string): Promise<string> => {
+    const res = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, from: "ro", to: "en" }),
+    });
+    if (!res.ok) throw new Error("Translation failed");
+    const data = await res.json();
+    return data.translatedText;
+  };
+
+  const handleTranslateTitle = async () => {
+    if (!titleRo.trim()) return;
+    setTranslatingTitle(true);
+    try {
+      const translated = await translateText(titleRo);
+      setTitleEn(translated);
+    } catch {
+      alert(t("admin.translate_error"));
+    } finally {
+      setTranslatingTitle(false);
+    }
+  };
+
+  const handleTranslateContent = async () => {
+    if (!editor) return;
+    const plainText = editor.getText().trim();
+    if (!plainText) return;
+    setTranslatingContent(true);
+    try {
+      const translated = await translateText(plainText);
+      setContentEn(translated);
+    } catch {
+      alert(t("admin.translate_error"));
+    } finally {
+      setTranslatingContent(false);
+    }
+  };
+
   const toggleSpellcheck = () => {
     setSpell((prev) => (prev === "ro" ? "en" : prev === "en" ? "off" : "ro"));
+    setShowSpellTooltip(false);
   };
 
   const cycleHeading = (level: number) => {
@@ -235,12 +292,37 @@ function BlogEditor({
         </div>
       </div>
 
-      <Input label={t("admin.title_ro")} value={titleRo} onChange={(e) => setTitleRo(e.target.value)} />
+      <div>
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Input label={t("admin.title_ro")} value={titleRo} onChange={(e) => setTitleRo(e.target.value)} />
+          </div>
+          <button
+            onClick={handleTranslateTitle}
+            disabled={translatingTitle || !titleRo.trim()}
+            className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {translatingTitle ? t("admin.translating") : "→ EN"}
+          </button>
+        </div>
+        <Input label={t("admin.title_en")} value={titleEn} onChange={(e) => setTitleEn(e.target.value)} spellcheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
+      </div>
 
       <Input label={t("admin.slug")} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="nume-articol" />
 
       <div className="mx-auto max-w-4xl">
-        <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.content_ro")}</label>
+        <div className="mb-1.5 flex items-center justify-between">
+          <label className="block text-sm font-medium text-charcoal-light">{t("admin.content_ro")}</label>
+          <button
+            onClick={handleTranslateContent}
+            disabled={translatingContent || !editor || !editor.getText().trim()}
+            className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {translatingContent ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {translatingContent ? t("admin.translating") : "→ EN"}
+          </button>
+        </div>
         <div className="rounded-xl border border-sage/30 bg-white/60 backdrop-blur-sm overflow-hidden">
           {editor && (
             <div className="flex flex-wrap items-center gap-0.5 border-b border-sage/20 p-1.5">
@@ -361,7 +443,7 @@ function BlogEditor({
                 <Minus className="h-4 w-4" />
               </ToolbarButton>
 
-              <div className="ml-auto">
+              <div className="relative ml-auto">
                 <ToolbarButton
                   onClick={toggleSpellcheck}
                   title={`Spellcheck: ${spell === "ro" ? "Romanian" : spell === "en" ? "English" : "Off"}`}
@@ -369,11 +451,52 @@ function BlogEditor({
                   <Languages className="h-4 w-4" />
                   <span className="ml-1 text-[10px] font-medium">{spellLabel}</span>
                 </ToolbarButton>
+                {spell === "ro" && (
+                  <>
+                    <button
+                      onClick={() => setShowSpellTooltip(!showSpellTooltip)}
+                      className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning/20 text-warning hover:bg-warning/30"
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
+                    {showSpellTooltip && (
+                      <div
+                        ref={spellTooltipRef}
+                        className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-sage/20 bg-white/95 p-3 shadow-xl backdrop-blur-xl"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-xs leading-relaxed text-charcoal-light">
+                            Dacă sublinierile roșii nu apar pentru limba română, adaugă dicționarul românesc în
+                            Chrome Settings → Languages → Spell check.
+                          </p>
+                          <button
+                            onClick={() => setShowSpellTooltip(false)}
+                            className="shrink-0 rounded-full p-0.5 hover:bg-sage/10"
+                          >
+                            <X className="h-3 w-3 text-charcoal-light" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}
           <EditorContent editor={editor} />
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.content_en")}</label>
+        <textarea
+          value={contentEn}
+          onChange={(e) => setContentEn(e.target.value)}
+          rows={6}
+          spellCheck={spell !== "off"}
+          lang={spell === "ro" ? "ro-RO" : "en"}
+          className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+        />
       </div>
 
       <div className="flex items-center gap-6">

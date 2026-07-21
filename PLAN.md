@@ -78,8 +78,14 @@ Phase 7
 - [ ] Beginner admin guide
 - [ ] About page
 - [ ] Real content: images, instructor bio
+- [x] Auto‑translation (RO → EN) via google-translate-api-x
+- [x] Updated blog form: editable Title (EN) + Content (EN) fields, "→ EN" translate buttons
+- [x] Updated event form: "→ EN" translate buttons for title + description
+- [x] Romanian spellcheck fix: lang="ro-RO", tooltip with Chrome dictionary install instructions
+- [x] Spellcheck toggle extended to event form (previously blog-only)
+- [x] Spellcheck/lang attributes propagated to Input component and all textareas
 - [ ] (future feature requests added here)
-- **Status:** pending
+- **Status:** in progress
 
 ## Decisions Made
 | Decision | Rationale |
@@ -104,6 +110,8 @@ Phase 7
 | register_for_event RPC (PostgreSQL function) | Atomic check+insert with SELECT FOR UPDATE, prevents race condition |
 | UseRef callbacks in Turnstile component | Decouples effect from inline function references, prevents flickering |
 | Stripe webhook uses registrationId from metadata | Targets specific registration instead of blanket event_id match |
+| google-translate-api-x for RO→EN translation | Free, zero API keys, 0 dependencies, MIT license, actively maintained |
+| Native browser spellcheck (Approach A) for RO | Simplest approach for contenteditable (TipTap); JS spellcheck libs don't integrate cleanly with ProseMirror |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

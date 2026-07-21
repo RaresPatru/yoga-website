@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, Trash2, Users, X } from "lucide-react";
+import { Plus, Edit2, Trash2, Users, X, Loader2, Languages, Info } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+
+type SpellcheckLang = "ro" | "en" | "off";
 
 interface Event {
   id: string;
@@ -133,6 +135,65 @@ function EventForm({
     published: event?.published || false,
   });
   const [saving, setSaving] = useState(false);
+  const [translatingTitle, setTranslatingTitle] = useState(false);
+  const [translatingDesc, setTranslatingDesc] = useState(false);
+  const [spell, setSpell] = useState<SpellcheckLang>("ro");
+  const [showSpellTooltip, setShowSpellTooltip] = useState(false);
+  const spellTooltipRef = useRef<HTMLDivElement>(null);
+
+  const translateText = async (text: string): Promise<string> => {
+    const res = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, from: "ro", to: "en" }),
+    });
+    if (!res.ok) throw new Error("Translation failed");
+    const data = await res.json();
+    return data.translatedText;
+  };
+
+  const handleTranslateTitle = async () => {
+    if (!form.title_ro.trim()) return;
+    setTranslatingTitle(true);
+    try {
+      const translated = await translateText(form.title_ro);
+      setForm({ ...form, title_en: translated });
+    } catch {
+      alert(t("admin.translate_error"));
+    } finally {
+      setTranslatingTitle(false);
+    }
+  };
+
+  const handleTranslateDesc = async () => {
+    if (!form.description_ro.trim()) return;
+    setTranslatingDesc(true);
+    try {
+      const translated = await translateText(form.description_ro);
+      setForm({ ...form, description_en: translated });
+    } catch {
+      alert(t("admin.translate_error"));
+    } finally {
+      setTranslatingDesc(false);
+    }
+  };
+
+  const toggleSpellcheck = () => {
+    setSpell((prev) => (prev === "ro" ? "en" : prev === "en" ? "off" : "ro"));
+    setShowSpellTooltip(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (spellTooltipRef.current && !spellTooltipRef.current.contains(e.target as Node)) {
+        setShowSpellTooltip(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const spellLabel = spell === "ro" ? "RO" : spell === "en" ? "EN" : "ABC";
 
   const handleSave = async () => {
     setSaving(true);
@@ -160,20 +221,46 @@ function EventForm({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Input label={t("admin.title_ro")} value={form.title_ro} onChange={(e) => setForm({...form, title_ro: e.target.value})} />
-        <Input label={t("admin.title_en")} value={form.title_en} onChange={(e) => setForm({...form, title_en: e.target.value})} />
+        <div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input label={t("admin.title_ro")} value={form.title_ro} onChange={(e) => setForm({...form, title_ro: e.target.value})} spellcheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
+            </div>
+            <button
+              onClick={handleTranslateTitle}
+              disabled={translatingTitle || !form.title_ro.trim()}
+              className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {translatingTitle ? t("admin.translating") : "→ EN"}
+            </button>
+          </div>
+        </div>
+        <Input label={t("admin.title_en")} value={form.title_en} onChange={(e) => setForm({...form, title_en: e.target.value})} spellcheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
       </div>
 
       <Input label={t("admin.slug")} value={form.slug} onChange={(e) => setForm({...form, slug: e.target.value})} placeholder="nume-eveniment" />
 
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.description_ro")}</label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="block text-sm font-medium text-charcoal-light">{t("admin.description_ro")}</label>
+            <button
+              onClick={handleTranslateDesc}
+              disabled={translatingDesc || !form.description_ro.trim()}
+              className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {translatingDesc ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              {translatingDesc ? t("admin.translating") : "→ EN"}
+            </button>
+          </div>
           <textarea
             value={form.description_ro}
             onChange={(e) => setForm({...form, description_ro: e.target.value})}
             rows={4}
-            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+            spellCheck={spell !== "off"}
+            lang={spell === "ro" ? "ro-RO" : "en"}
+            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
           />
         </div>
         <div>
@@ -182,8 +269,43 @@ function EventForm({
             value={form.description_en}
             onChange={(e) => setForm({...form, description_en: e.target.value})}
             rows={4}
-            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+            spellCheck={spell !== "off"}
+            lang={spell === "ro" ? "ro-RO" : "en"}
+            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
           />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <button
+            onClick={toggleSpellcheck}
+            className="flex items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 py-2 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose"
+          >
+            <Languages className="h-3.5 w-3.5" />
+            <span>{spellLabel}</span>
+          </button>
+          {spell === "ro" && (
+            <>
+              <button
+                onClick={() => setShowSpellTooltip(!showSpellTooltip)}
+                className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-warning/20 text-warning hover:bg-warning/30"
+              >
+                <Info className="h-3 w-3" />
+              </button>
+              {showSpellTooltip && (
+                <div
+                  ref={spellTooltipRef}
+                  className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-sage/20 bg-white/95 p-3 shadow-xl backdrop-blur-xl"
+                >
+                  <p className="text-xs leading-relaxed text-charcoal-light">
+                    Dacă sublinierile roșii nu apar pentru limba română, adaugă dicționarul românesc în
+                    Chrome Settings → Languages → Spell check.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
