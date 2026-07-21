@@ -26,14 +26,19 @@ declare global {
 export function Turnstile({ onVerify, onExpire }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const onVerifyRef = useRef(onVerify);
+  const onExpireRef = useRef(onExpire);
+
+  onVerifyRef.current = onVerify;
+  onExpireRef.current = onExpire;
 
   useEffect(() => {
     if (!window.turnstile || !containerRef.current) return;
 
     widgetIdRef.current = window.turnstile.render(containerRef.current, {
       sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "1x00000000000000000000AA",
-      callback: onVerify,
-      "expired-callback": onExpire,
+      callback: (token: string) => onVerifyRef.current(token),
+      "expired-callback": () => onExpireRef.current?.(),
     });
 
     return () => {
@@ -41,7 +46,7 @@ export function Turnstile({ onVerify, onExpire }: TurnstileProps) {
         window.turnstile.remove(widgetIdRef.current);
       }
     };
-  }, [onVerify, onExpire]);
+  }, []);
 
   return <div ref={containerRef} className="turnstile-widget" />;
 }
