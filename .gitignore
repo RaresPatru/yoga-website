@@ -48,3 +48,7 @@ next-env.d.ts
 test-results/
 playwright-report/
 blob-report/
+
+# local agent tooling (kept on disk, not in the repo)
+.agents/
+skills-lock.json
