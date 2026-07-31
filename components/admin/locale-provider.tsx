@@ -1,9 +1,38 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useSyncExternalStore, ReactNode } from "react";
 
 type Locale = "ro" | "en";
-type Messages = Record<string, any>;
+type Messages = Record<string, unknown>;
+
+const STORAGE_KEY = "admin-locale";
+const listeners = new Set<() => void>();
+
+function readLocale(): Locale {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === "en" ? "en" : "ro";
+  } catch {
+    return "ro";
+  }
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function writeLocale(locale: Locale) {
+  try {
+    localStorage.setItem(STORAGE_KEY, locale);
+  } catch {
+    // storage unavailable
+  }
+  for (const listener of listeners) listener();
+}
 
 interface LocaleContextValue {
   locale: Locale;
@@ -18,40 +47,24 @@ const LocaleContext = createContext<LocaleContextValue>({
 });
 
 export function AdminLocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("ro");
+  const locale = useSyncExternalStore(subscribe, readLocale, () => "ro" as Locale);
   const [messages, setMessages] = useState<Messages>({});
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("admin-locale") as Locale | null;
-      if (saved === "ro" || saved === "en") {
-        setLocaleState(saved);
-      }
-    } catch {
-      console.warn("localStorage not available");
-    }
-  }, []);
 
   useEffect(() => {
     import(`../../messages/${locale}.json`)
       .then((mod) => setMessages(mod.default))
       .catch((err) => console.error("Failed to load locale messages:", err));
-    try {
-      localStorage.setItem("admin-locale", locale);
-    } catch {
-      console.warn("localStorage not available");
-    }
   }, [locale]);
 
-  const setLocale = useCallback((l: Locale) => setLocaleState(l), []);
+  const setLocale = useCallback((l: Locale) => writeLocale(l), []);
 
   const t = useCallback(
     (key: string): string => {
       const keys = key.split(".");
-      let value: any = messages;
+      let value: unknown = messages;
       for (const k of keys) {
         if (value && typeof value === "object" && k in value) {
-          value = value[k];
+          value = (value as Record<string, unknown>)[k];
         } else {
           return key;
         }

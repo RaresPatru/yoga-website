@@ -6,7 +6,7 @@
 A responsive yoga website for a female instructor with blog, paid/free event registration via Stripe, email confirmations with calendar invites, testimonials, admin dashboard, and analytics — deployed on Vercel.
 
 ## Current Phase
-Phase 7
+Phase 8 (complete) → Phase 7 remaining items
 
 ## Phases
 
@@ -87,6 +87,15 @@ Phase 7
 - [ ] (future feature requests added here)
 - **Status:** in progress
 
+### Phase 8: Security, A11y, i18n & Performance Audit (modern-web-guidance)
+- [x] Full audit of public + admin code (security, accessibility, i18n, perf, responsive)
+- [x] Security: upload/translate require admin auth; register/contact/testimonials require Turnstile + validation + rate limits; checkout price from server; webhook refund matches session via payment_intent; claim-spot GET→POST; blog/event HTML sanitized (isomorphic-dompurify)
+- [x] A11y: dynamic `lang` per locale, skip link, aria-expanded/controls on mobile menu + labels, native `<dialog>` for all modals, Input label association (useId + aria-invalid/describedby), labeled PhoneInput, icon buttons aria-labels, language switcher aria-label, focus-visible rings
+- [x] i18n: contact page fully translated, events list EN descriptions, home page strings via messages, share/calendar buttons translated, skip link translated, dead `app/page.tsx` removed
+- [x] Perf/responsive: next/image with sizes (events cards, event detail, media library), `dvh` units, `prefers-reduced-motion` support, ICS generation escaping/timezone fix
+- [x] Lint + build clean (0 errors, 0 warnings)
+- **Status:** complete
+
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
@@ -112,6 +121,11 @@ Phase 7
 | Stripe webhook uses registrationId from metadata | Targets specific registration instead of blanket event_id match |
 | google-translate-api-x for RO→EN translation | Free, zero API keys, 0 dependencies, MIT license, actively maintained |
 | Native browser spellcheck (Approach A) for RO | Simplest approach for contenteditable (TipTap); JS spellcheck libs don't integrate cleanly with ProseMirror |
+| isomorphic-dompurify for HTML sanitization | Server-side DOMPurify wrapper, works in Node + browser; blog/event HTML from TipTap is user-authorable |
+| In-memory rate limiter (lib/rate-limit.ts) | Zero-dep fixed-window per-IP limits on public APIs; adequate for serverless single-instance scope |
+| Server-side price lookup in checkout API | Client-supplied price removed — Stripe line items built from DB row only |
+| Native `<dialog>` for modals | Free focus trap, Esc handling, backdrop; replaces fixed-div overlays |
+| useSyncExternalStore for Turnstile script + admin locale | Rule-compliant external-state subscription; no setState-in-effect |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -132,3 +146,12 @@ Phase 7
 | Build fails on Vercel: ESLint 10 peer dep conflict | 1 | Fixed: downgraded ESLint 10.7.0 → 9.39.5 |
 | Stripe webhook marks all pending registrations as completed | 1 | Fixed: pass registrationId in session metadata, match by id |
 | Race condition: two concurrent inserts can exceed max_participants | 1 | Fixed: register_for_event RPC with SELECT FOR UPDATE |
+| Refund webhook matched stripe_session_id against payment_intent | 1 | Fixed: resolve payment_intent → checkout session via Stripe API, then match session id |
+| Upload/translate APIs callable without auth | 1 | Fixed: is-admin.ts verifies Authorization Bearer via supabase.auth.getUser |
+| Claim-spot endpoint vulnerable to CSRF via GET | 1 | Fixed: GET → POST |
+| Blog/event HTML rendered raw (stored XSS) | 1 | Fixed: sanitizeHtml wrapper (isomorphic-dompurify) on public render + admin preview |
+| Checkout trusted client-supplied price/URLs | 1 | Fixed: server fetches event + registration, builds URLs from Origin header + locale param |
+| `next build` failed on deleted app/page.tsx | 1 | Cleaned stale `.next` generated types |
+| `next build` type error on checkout route | 1 | Guarded undefined origin header |
+| Stripe SDK 22 list() returns array | 1 | sessions.data[0] → Array.isArray check |
+| Lint: react-hooks set-state-in-effect (29 errors) | 1 | Inlined fetch-on-mount with .then + cancellation; useSyncExternalStore for script/localStorage; render-adjust pattern for LinkDialog; removed sync setLoading branches |

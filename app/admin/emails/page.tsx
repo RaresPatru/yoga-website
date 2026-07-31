@@ -36,7 +36,16 @@ export default function AdminEmailsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase.from("email_templates").select("*").then(({ data }) => {
+      if (cancelled) return;
+      if (data) setTemplates(data);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleEdit = (tpl: Template) => {
     setEditing(tpl.id);

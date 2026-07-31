@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
-import { motion } from "motion/react";
+import { useTranslations, useLocale } from "next-intl";
+import { motion, useReducedMotion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Link } from "@/i18n/navigation";
@@ -38,14 +38,11 @@ interface Testimonial {
 
 export default function HomePage() {
   const t = useTranslations("home");
-  const [locale, setLocale] = useState("ro");
+  const locale = useLocale();
+  const reduceMotion = useReducedMotion();
   const [posts, setPosts] = useState<Post[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-
-  useEffect(() => {
-    setLocale(document.documentElement.lang || "ro");
-  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -114,15 +111,28 @@ export default function HomePage() {
       .then(({ data }) => { if (data) setTestimonials(data); });
   }, []);
 
-  const lt = (ro: string, en: string) => locale === "ro" ? ro : en;
+  const enterFromLeft = reduceMotion
+    ? {}
+    : { initial: { opacity: 0, x: -40 }, animate: { opacity: 1, x: 0 } };
+  const enterFromRight = reduceMotion
+    ? {}
+    : { initial: { opacity: 0, x: 40 }, animate: { opacity: 1, x: 0 } };
+  const enterUp = (delay = 0) =>
+    reduceMotion
+      ? {}
+      : {
+          initial: { opacity: 0, y: 40 },
+          whileInView: { opacity: 1, y: 0 },
+          viewport: { once: true, margin: "-100px" },
+          transition: { duration: 0.6, delay },
+        };
 
   return (
     <div className="flex flex-col">
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden px-4">
+      <section className="relative flex min-h-[90dvh] items-center overflow-hidden px-4">
         <div className="mx-auto grid w-full max-w-7xl gap-8 md:grid-cols-2 md:gap-16 items-center">
           <motion.div
-            initial={{ opacity: 0, x: -40 }}
-            animate={{ opacity: 1, x: 0 }}
+            {...enterFromLeft}
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="relative aspect-[3/4] w-full max-w-lg mx-auto md:mx-0 rounded-3xl overflow-hidden shadow-2xl"
           >
@@ -133,8 +143,7 @@ export default function HomePage() {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
+            {...enterFromRight}
             transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
             className="text-center md:text-left"
           >
@@ -155,13 +164,7 @@ export default function HomePage() {
 
       <section className="bg-white/40 py-20 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center"
-          >
+          <motion.div {...enterUp()} className="text-center">
             <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
               {t("mission_title")}
             </h2>
@@ -178,10 +181,8 @@ export default function HomePage() {
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
+                {...enterUp(i * 0.1)}
+                transition={{ duration: 0.5, delay: reduceMotion ? 0 : i * 0.1 }}
               >
                 <GlassCard className="text-center">
                   <p className="font-serif text-4xl text-rose">{stat.value}</p>
@@ -204,7 +205,7 @@ export default function HomePage() {
                 <Link key={post.id} href={`/blog/${post.slug}`}>
                   <GlassCard className="h-full transition-transform hover:scale-[1.02]">
                     <h3 className="font-serif text-lg text-charcoal">
-                      {lt(post.title_ro, post.title_en || post.title_ro)}
+                      {locale === "ro" ? post.title_ro : (post.title_en || post.title_ro)}
                     </h3>
                     <p className="mt-2 text-sm text-charcoal-light">
                       {formatDate(post.created_at, locale)}
@@ -216,7 +217,7 @@ export default function HomePage() {
             <div className="mt-8 text-center">
               <Link href="/blog">
                 <Button variant="secondary">
-                  {lt("Vezi toate articolele", "View all posts")} <ArrowRight className="ml-2 h-4 w-4" />
+                  {t("view_all_posts")} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -237,7 +238,7 @@ export default function HomePage() {
                 <Link key={event.id} href={`/events/${event.slug}`}>
                   <GlassCard className="h-full transition-transform hover:scale-[1.02]">
                     <h3 className="font-serif text-lg text-charcoal">
-                      {lt(event.title_ro, event.title_en || event.title_ro)}
+                      {locale === "ro" ? event.title_ro : (event.title_en || event.title_ro)}
                     </h3>
                     <div className="mt-3 flex flex-wrap gap-3 text-sm text-charcoal-light">
                       <span className="flex items-center gap-1">
@@ -249,12 +250,12 @@ export default function HomePage() {
                     </div>
                     <div className="mt-3 flex items-center gap-3">
                       <span className="rounded-full bg-rose/10 px-3 py-1 text-sm font-medium text-rose">
-                        {event.price === 0 ? "Gratuit" : `${event.price} RON`}
+                        {event.price === 0 ? t("free") : `${event.price} RON`}
                       </span>
                       {event.max_participants && (
                         <span className={`flex items-center gap-1 text-xs ${isFull ? "text-error" : "text-charcoal-light"}`}>
                           <Users className="h-3 w-3" />
-                          {isFull ? "Complet" : `${event.registration_count || 0}/${event.max_participants}`}
+                          {isFull ? t("full") : `${event.registration_count || 0}/${event.max_participants}`}
                         </span>
                       )}
                     </div>
@@ -266,7 +267,7 @@ export default function HomePage() {
             <div className="mt-8 text-center">
               <Link href="/events">
                 <Button variant="secondary">
-                  {lt("Vezi toate evenimentele", "View all events")} <ArrowRight className="ml-2 h-4 w-4" />
+                  {t("view_all_events")} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -281,21 +282,21 @@ export default function HomePage() {
               {t("testimonials_title")}
             </h2>
             <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {testimonials.map((t) => (
-                <GlassCard key={t.id}>
+              {testimonials.map((testimonial) => (
+                <GlassCard key={testimonial.id}>
                   <div className="mb-3 flex gap-1">
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className="h-4 w-4 fill-rose text-rose" />
                     ))}
                   </div>
-                  <p className="text-charcoal">&ldquo;{t.content}&rdquo;</p>
+                  <p className="text-charcoal">&ldquo;{testimonial.content}&rdquo;</p>
                 </GlassCard>
               ))}
             </div>
             <div className="mt-8 text-center">
               <Link href="/testimonials">
                 <Button variant="secondary">
-                  {lt("Vezi toate testimonialele", "View all testimonials")} <ArrowRight className="ml-2 h-4 w-4" />
+                  {t("view_all_testimonials")} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>

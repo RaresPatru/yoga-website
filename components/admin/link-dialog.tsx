@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X, Link as LinkIcon } from "lucide-react";
@@ -16,10 +16,26 @@ interface LinkDialogProps {
 export function LinkDialog({ open, onClose, onApply, initialUrl }: LinkDialogProps) {
   const { t } = useAdminLocale();
   const [url, setUrl] = useState(initialUrl || "");
+  const [prevOpen, setPrevOpen] = useState(open);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setUrl(initialUrl || "");
+  }
 
   useEffect(() => {
-    setUrl(initialUrl || "");
-  }, [initialUrl, open]);
+    if (open && dialogRef.current && !dialogRef.current.open) {
+      dialogRef.current.showModal();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const handleClose = () => onClose();
+    dialog?.addEventListener("close", handleClose);
+    return () => dialog?.removeEventListener("close", handleClose);
+  }, [onClose]);
 
   const handleApply = () => {
     onApply(url);
@@ -30,13 +46,23 @@ export function LinkDialog({ open, onClose, onApply, initialUrl }: LinkDialogPro
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-white/30 bg-white/90 p-6 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
+    <dialog
+      ref={dialogRef}
+      className="m-auto w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-transparent p-0 backdrop:bg-black/40"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md rounded-2xl border border-white/30 bg-white/90 p-6 shadow-2xl backdrop-blur-xl">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-serif text-lg text-charcoal">
             {initialUrl ? t("admin.edit_link") : t("admin.add_link")}
           </h3>
-          <button onClick={onClose} className="rounded-full p-1 text-charcoal-light hover:bg-white/40">
+          <button
+            onClick={onClose}
+            aria-label={t("admin.close")}
+            className="rounded-full p-1 text-charcoal-light hover:bg-white/40"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -55,6 +81,6 @@ export function LinkDialog({ open, onClose, onApply, initialUrl }: LinkDialogPro
           </Button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

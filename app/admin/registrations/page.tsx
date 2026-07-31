@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Input } from "@/components/ui/input";
@@ -22,17 +22,20 @@ export default function AdminRegistrationsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
     const supabase = createClient();
-    const { data } = await supabase
+    supabase
       .from("registrations")
       .select("*, events:event_id(title_ro, date, price)")
-      .order("created_at", { ascending: false });
-    if (data) setRegistrations(data as unknown as Registration[]);
-    setLoading(false);
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data) setRegistrations(data as unknown as Registration[]);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const filtered = registrations.filter((r) =>
     r.full_name.toLowerCase().includes(search.toLowerCase()) ||

@@ -1,16 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export function StickyCta() {
+  const locale = useLocale();
   const [hasOpenEvents, setHasOpenEvents] = useState(false);
-  const [locale, setLocale] = useState("ro");
-
-  useEffect(() => {
-    setLocale(document.documentElement.lang || "ro");
-  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -18,16 +15,23 @@ export function StickyCta() {
 
     supabase
       .from("events")
-      .select("id, max_participants, registration_count")
+      .select("id, max_participants")
       .eq("published", true)
       .gte("date", today)
       .limit(1)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          const event = data[0] as any;
-          const isFull = event.max_participants != null && (event.registration_count || 0) >= event.max_participants;
-          setHasOpenEvents(!isFull);
+      .then(async ({ data }) => {
+        if (!data || data.length === 0) return;
+        const event = data[0];
+        if (event.max_participants == null) {
+          setHasOpenEvents(true);
+          return;
         }
+        const { count } = await supabase
+          .from("registrations")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", event.id)
+          .neq("payment_status", "pending");
+        setHasOpenEvents((count || 0) < event.max_participants);
       });
   }, []);
 

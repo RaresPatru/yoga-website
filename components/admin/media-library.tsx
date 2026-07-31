@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Image, Music, Video, Upload, Trash2, X, Search, FileType, PlaySquare } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import NextImage from "next/image";
 
 interface MediaFile {
   name: string;
   id: string;
   updated_at: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 type MediaType = "image" | "audio" | "video" | "all";
@@ -59,6 +60,13 @@ function getPublicUrl(bucket: string, path: string) {
   return storageClient.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const supabase = createClient();
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 interface MediaLibraryProps {
   open: boolean;
   onClose: () => void;
@@ -74,8 +82,22 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<MediaType>(filterType);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const bucket = "media";
+
+  useEffect(() => {
+    if (open && dialogRef.current && !dialogRef.current.open) {
+      dialogRef.current.showModal();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const handleClose = () => onClose();
+    dialog?.addEventListener("close", handleClose);
+    return () => dialog?.removeEventListener("close", handleClose);
+  }, [onClose]);
 
   const loadFiles = useCallback(async () => {
     const supabase = createClient();
@@ -88,7 +110,21 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (open) { setLoading(true); loadFiles(); } }, [open, loadFiles]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const supabase = createClient();
+    supabase.storage.from(bucket).list("", {
+      limit: 200,
+      sortBy: { column: "created_at", order: "desc" },
+    }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (data) setFiles(data as MediaFile[]);
+      if (error) console.error("Storage list error:", error);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [open, bucket]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -105,7 +141,8 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
     formData.append("bucket", bucket);
 
     try {
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const headers = await getAuthHeaders();
+      const res = await fetch("/api/upload", { method: "POST", body: formData, headers });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
@@ -127,9 +164,10 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
 
   const handleDelete = async (fileName: string) => {
     if (!confirm(t("admin.media_confirm_delete"))) return;
+    const headers = await getAuthHeaders();
     const res = await fetch("/api/upload", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ bucket, fileName }),
     });
     if (res.ok) {
@@ -158,8 +196,14 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="flex h-[80vh] w-full max-w-4xl flex-col rounded-2xl border border-white/30 bg-white/90 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
+    <dialog
+      ref={dialogRef}
+      className="m-auto max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl rounded-2xl bg-transparent p-0 backdrop:bg-black/40"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="flex h-[80vh] w-full flex-col rounded-2xl border border-white/30 bg-white/90 shadow-2xl backdrop-blur-xl">
         <div className="flex items-center justify-between border-b border-sage/20 px-6 py-4">
           <h2 className="font-serif text-xl text-charcoal">{t("admin.media_library")}</h2>
           <div className="flex items-center gap-3">
@@ -168,18 +212,23 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
               <Upload className="mr-2 h-4 w-4" />
               {uploading ? t("admin.media_uploading") : t("admin.media_upload")}
             </Button>
-            <button onClick={onClose} className="rounded-full p-1 text-charcoal-light hover:bg-white/40">
+            <button
+              onClick={onClose}
+              aria-label={t("admin.close")}
+              className="rounded-full p-1 text-charcoal-light hover:bg-white/40"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 border-b border-sage/20 px-6 py-3">
-          <div className="flex gap-1">
+        <div className="flex flex-col gap-3 border-b border-sage/20 px-6 py-3 sm:flex-row sm:items-center">
+          <div className="flex gap-1" role="group" aria-label={t("admin.media_library")}>
             {tabs.map(({ key, labelKey, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
+                aria-pressed={activeTab === key}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                   activeTab === key
                     ? "bg-rose/10 text-rose font-medium"
@@ -191,10 +240,11 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
               </button>
             ))}
           </div>
-          <div className="relative ml-auto flex-1 max-w-xs">
+          <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-charcoal-light" />
             <input
               type="text"
+              aria-label={t("admin.media_search")}
               placeholder={t("admin.media_search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -205,8 +255,9 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
 
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="flex h-full items-center justify-center">
+            <div className="flex h-full items-center justify-center" role="status">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
+              <span className="sr-only">{t("admin.loading")}</span>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-charcoal-light">
@@ -227,6 +278,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
                     type={type}
                     onSelect={() => onSelect(url, type)}
                     onDelete={() => handleDelete(file.name)}
+                    deleteLabel={t("admin.media_delete")}
                   />
                 );
               })}
@@ -242,7 +294,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
           </div>
         )}
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -252,19 +304,29 @@ function MediaItem({
   type,
   onSelect,
   onDelete,
+  deleteLabel,
 }: {
   file: MediaFile;
   url: string;
   type: MediaType;
   onSelect: () => void;
   onDelete: () => void;
+  deleteLabel: string;
 }) {
   return (
     <GlassCard hover={false} className="group relative overflow-hidden p-0">
       <button onClick={onSelect} className="block w-full text-left">
         <div className="flex aspect-video items-center justify-center bg-sage/5">
           {type === "image" ? (
-            <img src={url} alt={file.name} className="h-full w-full object-cover" />
+            <div className="relative h-full w-full">
+              <NextImage
+                src={url}
+                alt={file.name}
+                fill
+                sizes="(max-width: 640px) 50vw, 25vw"
+                className="object-cover"
+              />
+            </div>
           ) : type === "audio" ? (
             <div className="flex flex-col items-center gap-2 text-charcoal-light">
               <Music className="h-8 w-8" />
@@ -283,7 +345,8 @@ function MediaItem({
       </button>
       <button
         onClick={onDelete}
-        className="absolute right-1 top-1 rounded-full bg-white/80 p-1 text-error opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
+        aria-label={deleteLabel}
+        className="absolute right-1 top-1 rounded-full bg-white/80 p-1 text-error opacity-100 backdrop-blur-sm transition-opacity hover:bg-white focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -302,26 +365,42 @@ export function VideoUrlDialog({
 }) {
   const { t } = useAdminLocale();
   const [url, setUrl] = useState("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    if (open && dialogRef.current && !dialogRef.current.open) {
+      dialogRef.current.showModal();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const handleClose = () => onClose();
+    dialog?.addEventListener("close", handleClose);
+    return () => dialog?.removeEventListener("close", handleClose);
+  }, [onClose]);
 
   const handleInsert = () => {
     const trimmed = url.trim();
     if (!trimmed) return;
 
+    if (!/^https?:\/\//i.test(trimmed)) return;
+
     let html = "";
     if (trimmed.includes("youtube.com/watch") || trimmed.includes("youtu.be")) {
       const id = trimmed.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)?.[1];
       if (id) {
-        html = `<iframe width="100%" height="400" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>`;
+        html = `<iframe width="100%" height="400" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen title="YouTube video"></iframe>`;
       }
     } else if (trimmed.includes("vimeo.com")) {
       const id = trimmed.match(/vimeo\.com\/(\d+)/)?.[1];
       if (id) {
-        html = `<iframe width="100%" height="400" src="https://player.vimeo.com/video/${id}" frameborder="0" allowfullscreen></iframe>`;
+        html = `<iframe width="100%" height="400" src="https://player.vimeo.com/video/${id}" frameborder="0" allowfullscreen title="Vimeo video"></iframe>`;
       }
     } else if (trimmed.includes("instagram.com")) {
-      html = `<iframe width="100%" height="480" src="${trimmed}" frameborder="0" allowfullscreen></iframe><script async src="//www.instagram.com/embed.js"></script>`;
+      html = `<iframe width="100%" height="480" src="${trimmed}" frameborder="0" allowfullscreen title="Instagram post"></iframe>`;
     } else {
-      html = `<iframe width="100%" height="400" src="${trimmed}" frameborder="0" allowfullscreen></iframe>`;
+      html = `<iframe width="100%" height="400" src="${trimmed}" frameborder="0" allowfullscreen title="Embedded content"></iframe>`;
     }
 
     if (html) {
@@ -334,11 +413,21 @@ export function VideoUrlDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-white/30 bg-white/90 p-6 shadow-2xl backdrop-blur-xl" onClick={(e) => e.stopPropagation()}>
+    <dialog
+      ref={dialogRef}
+      className="m-auto w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-transparent p-0 backdrop:bg-black/40"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-md rounded-2xl border border-white/30 bg-white/90 p-6 shadow-2xl backdrop-blur-xl">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-serif text-lg text-charcoal">{t("admin.video_title")}</h3>
-          <button onClick={onClose} className="rounded-full p-1 text-charcoal-light hover:bg-white/40">
+          <button
+            onClick={onClose}
+            aria-label={t("admin.close")}
+            className="rounded-full p-1 text-charcoal-light hover:bg-white/40"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -358,6 +447,6 @@ export function VideoUrlDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

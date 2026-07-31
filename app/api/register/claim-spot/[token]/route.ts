@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function GET(
+export async function POST(
   _req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {

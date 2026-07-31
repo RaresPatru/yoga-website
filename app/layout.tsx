@@ -27,8 +27,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ro" className={`${fraunces.variable} ${inter.variable}`}>
-      <body className="min-h-screen flex flex-col antialiased">
+    <html lang="ro" suppressHydrationWarning className={`${fraunces.variable} ${inter.variable}`}>
+      <body className="flex min-h-dvh flex-col antialiased">
         <Suspense fallback={null}>
           <PostHogProvider>{children}</PostHogProvider>
         </Suspense>

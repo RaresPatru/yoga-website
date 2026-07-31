@@ -4,13 +4,6 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { formatDate } from "@/lib/utils";
 import { Star } from "lucide-react";
 
-interface Testimonial {
-  id: string;
-  content: string;
-  type: string;
-  created_at: string;
-}
-
 export default async function TestimonialsPage() {
   const locale = await getLocale();
   const t = await getTranslations("testimonials");
@@ -31,16 +24,16 @@ export default async function TestimonialsPage() {
         <p className="mt-8 text-charcoal-light">{t("no_testimonials")}</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {testimonials.map((t) => (
-            <GlassCard key={t.id}>
+          {testimonials.map((testimonial) => (
+            <GlassCard key={testimonial.id}>
               <div className="mb-3 flex gap-1">
                 {[...Array(5)].map((_, i) => (
                   <Star key={i} className="h-4 w-4 fill-rose text-rose" />
                 ))}
               </div>
-              <p className="text-charcoal">&ldquo;{t.content}&rdquo;</p>
+              <p className="text-charcoal">&ldquo;{testimonial.content}&rdquo;</p>
               <p className="mt-4 text-sm text-charcoal-light">
-                {formatDate(t.created_at, locale)}
+                {formatDate(testimonial.created_at, locale)}
               </p>
             </GlassCard>
           ))}

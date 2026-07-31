@@ -4,20 +4,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate, formatTime } from "@/lib/utils";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Calendar, Clock, MapPin } from "lucide-react";
-
-interface Event {
-  id: string;
-  slug: string;
-  title_ro: string;
-  title_en: string | null;
-  date: string;
-  time: string;
-  location: string | null;
-  price: number;
-  max_participants: number | null;
-  image_url: string | null;
-  description_ro: string | null;
-}
+import Image from "next/image";
 
 export default async function EventsPage() {
   const locale = await getLocale();
@@ -28,7 +15,7 @@ export default async function EventsPage() {
 
   const { data: events } = await supabase
     .from("events")
-    .select("id, slug, title_ro, title_en, date, time, location, price, max_participants, image_url, description_ro")
+    .select("id, slug, title_ro, title_en, date, time, location, price, max_participants, image_url, description_ro, description_en")
     .eq("published", true)
     .gte("date", today)
     .order("date", { ascending: true });
@@ -46,11 +33,13 @@ export default async function EventsPage() {
             <Link key={event.id} href={`/events/${event.slug}`}>
               <GlassCard className="group h-full transition-transform hover:scale-[1.02]">
                 {event.image_url && (
-                  <div className="mb-4 aspect-video w-full overflow-hidden rounded-xl bg-sage/10">
-                    <img
+                  <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl bg-sage/10">
+                    <Image
                       src={event.image_url}
-                      alt=""
-                      className="h-full w-full object-cover"
+                      alt={locale === "ro" ? event.title_ro : (event.title_en || event.title_ro)}
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-cover"
                     />
                   </div>
                 )}
@@ -58,7 +47,7 @@ export default async function EventsPage() {
                   {locale === "ro" ? event.title_ro : (event.title_en || event.title_ro)}
                 </h2>
                 <p className="mb-4 mt-2 line-clamp-2 text-sm text-charcoal-light">
-                  {event.description_ro}
+                  {locale === "ro" ? event.description_ro : (event.description_en || event.description_ro)}
                 </p>
                 <div className="flex flex-wrap gap-3 text-sm text-charcoal-light">
                   <span className="flex items-center gap-1">

@@ -5,7 +5,17 @@
     "events": "Events",
     "testimonials": "Testimonials",
     "contact": "Contact",
-    "admin": "Admin"
+    "admin": "Admin",
+    "menu": {
+      "open": "Open menu",
+      "close": "Close menu"
+    }
+  },
+  "common": {
+    "share": "Share",
+    "copied": "Link copied!",
+    "addToCalendar": "Add to Calendar",
+    "skip_to_content": "Skip to content"
   },
   "home": {
     "hero_title": "I guide your journey to balance",
@@ -18,6 +28,11 @@
     "students_label": "Students guided",
     "blog_title": "From the Blog",
     "events_title": "Upcoming Events",
+    "free": "Free",
+    "full": "Full",
+    "view_all_posts": "View all posts",
+    "view_all_events": "View all events",
+    "view_all_testimonials": "View all testimonials",
     "testimonials_title": "What Participants Say"
   },
   "blog": {
@@ -80,7 +95,11 @@
     "subject": "Subject",
     "message": "Message",
     "send": "Send",
-    "success": "Message sent successfully!"
+    "sending": "Sending...",
+    "success": "Message sent successfully!",
+    "success_message": "Thank you for your message. We'll get back to you soon.",
+    "captcha_required": "Please complete the security check.",
+    "error": "An error occurred. Please try again."
   },
   "footer": {
     "rights": "All rights reserved.",
@@ -182,6 +201,8 @@
     "view_waiting_list": "View Waiting List",
     "no_waiting_list": "No one on the waiting list.",
     "close": "Close",
+    "loading": "Loading...",
+    "media_delete": "Delete file",
     "translate": "Translate to English",
     "translating": "Translating...",
     "translate_error": "Translation error"

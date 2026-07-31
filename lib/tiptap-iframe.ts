@@ -2,7 +2,7 @@ import { Node } from "@tiptap/core";
 
 export interface IframeOptions {
   allowFullscreen: boolean;
-  HTMLAttributes: Record<string, any>;
+  HTMLAttributes: Record<string, string | number | boolean>;
 }
 
 declare module "@tiptap/core" {

@@ -24,7 +24,6 @@ import {
 function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { locale, setLocale, t } = useAdminLocale();
 
@@ -39,12 +38,10 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   ];
 
   const isLoginPage = pathname === "/admin/login";
+  const [loading, setLoading] = useState(!isLoginPage);
 
   useEffect(() => {
-    if (isLoginPage) {
-      setLoading(false);
-      return;
-    }
+    if (isLoginPage) return;
     const supabase = createClient();
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
@@ -53,7 +50,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     });
-  }, [router, isLoginPage]);
+  }, [router, isLoginPage, setLoading]);
 
   const handleLogout = async () => {
     const supabase = createClient();

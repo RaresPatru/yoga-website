@@ -31,7 +31,20 @@ export default function AdminContactMessagesPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("contact_messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data) setMessages(data);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleDelete = async (id: string) => {
     if (!confirm(t("admin.confirm_delete_message"))) return;

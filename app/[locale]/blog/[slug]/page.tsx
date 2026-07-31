@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getLocale, getTranslations } from "next-intl/server";
 import { formatDate } from "@/lib/utils";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ShareButton } from "@/components/ui/share-button";
 import { Link } from "@/i18n/navigation";
@@ -51,7 +52,7 @@ export default async function BlogPostPage({
         {content && (
           <div
             className="prose prose-sage blog-content mt-8 max-w-none"
-            dangerouslySetInnerHTML={{ __html: content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
           />
         )}
       </GlassCard>

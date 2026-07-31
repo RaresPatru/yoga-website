@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminRequest } from "@/lib/is-admin";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!(await isAdminRequest(request))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!rateLimit(`translate:${clientIp(request)}`, 60)) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const { text, from, to } = await request.json();
 
     if (!text || typeof text !== "string" || text.trim().length === 0) {

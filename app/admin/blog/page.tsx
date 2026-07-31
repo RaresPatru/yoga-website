@@ -2,14 +2,16 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthToken } from "@/lib/get-auth-token";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Edit2, Trash2, EyeOff, ChevronDown, Loader2 } from "lucide-react";
 import {
   Bold, Italic, List, ListOrdered, TextQuote, Code2,
-  Image, PlaySquare, Link2, Undo2, Redo2, Minus, Pilcrow,
+  ImageIcon, PlaySquare, Link2, Undo2, Redo2, Minus, Pilcrow,
   Heading1, Heading2, Heading3, Languages, Info, X,
+  type LucideIcon,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -74,7 +76,7 @@ function DropdownItem({
   active,
 }: {
   label: string;
-  icon: any;
+  icon: LucideIcon;
   onClick: () => void;
   active?: boolean;
 }) {
@@ -99,7 +101,7 @@ function BlogEditor({
   onCancel,
 }: {
   post?: BlogPost | null;
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: Partial<BlogPost>) => Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useAdminLocale();
@@ -218,9 +220,10 @@ function BlogEditor({
   }, []);
 
   const translateText = async (text: string): Promise<string> => {
+    const token = await getAuthToken();
     const res = await fetch("/api/translate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ text, from: "ro", to: "en" }),
     });
     if (!res.ok) throw new Error("Translation failed");
@@ -403,7 +406,7 @@ function BlogEditor({
                 onClick={() => setMediaOpen(true)}
                 title="Insert Image / Audio"
               >
-                <Image className="h-4 w-4" />
+                <ImageIcon className="h-4 w-4" />
               </ToolbarButton>
               <ToolbarButton
                 onClick={() => setVideoDialogOpen(true)}
@@ -564,9 +567,22 @@ export default function AdminBlogPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadPosts(); }, [loadPosts]);
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("blog_posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data) setPosts(data);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleSave = async (data: any) => {
+  const handleSave = async (data: Partial<BlogPost>) => {
     const supabase = createClient();
     if (data.id) {
       await supabase.from("blog_posts").update(data).eq("id", data.id);

@@ -5,7 +5,17 @@
     "events": "Evenimente",
     "testimonials": "Testimoniale",
     "contact": "Contact",
-    "admin": "Admin"
+    "admin": "Admin",
+    "menu": {
+      "open": "Deschide meniul",
+      "close": "Închide meniul"
+    }
+  },
+  "common": {
+    "share": "Distribuie",
+    "copied": "Link copiat!",
+    "addToCalendar": "Adaugă în Calendar",
+    "skip_to_content": "Sari la conținut"
   },
   "home": {
     "hero_title": "Îți ghidez călătoria către echilibru",
@@ -18,6 +28,11 @@
     "students_label": "Studenți ghidați",
     "blog_title": "Din Blog",
     "events_title": "Evenimente Viitoare",
+    "free": "Gratuit",
+    "full": "Complet",
+    "view_all_posts": "Vezi toate articolele",
+    "view_all_events": "Vezi toate evenimentele",
+    "view_all_testimonials": "Vezi toate testimonialele",
     "testimonials_title": "Ce Spun Participanții"
   },
   "blog": {
@@ -80,7 +95,11 @@
     "subject": "Subiect",
     "message": "Mesaj",
     "send": "Trimite",
-    "success": "Mesajul a fost trimis cu succes!"
+    "sending": "Se trimite...",
+    "success": "Mesajul a fost trimis cu succes!",
+    "success_message": "Îți mulțumim pentru mesaj. Te vom contacta în curând.",
+    "captcha_required": "Completează verificarea de securitate.",
+    "error": "A apărut o eroare. Încearcă din nou."
   },
   "footer": {
     "rights": "Toate drepturile rezervate.",
@@ -182,6 +201,8 @@
     "view_waiting_list": "Vezi lista de așteptare",
     "no_waiting_list": "Nicio persoană în lista de așteptare.",
     "close": "Închide",
+    "loading": "Se încarcă...",
+    "media_delete": "Șterge fișierul",
     "translate": "Tradu în engleză",
     "translating": "Se traduce...",
     "translate_error": "Eroare la traducere"

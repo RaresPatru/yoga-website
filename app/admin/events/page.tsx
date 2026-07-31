@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthToken } from "@/lib/get-auth-token";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ function WaitingListModal({
   const { t } = useAdminLocale();
   const [entries, setEntries] = useState<WaitingEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -61,12 +63,31 @@ function WaitingListModal({
       });
   }, [event.id]);
 
+  useEffect(() => {
+    if (dialogRef.current && !dialogRef.current.open) {
+      dialogRef.current.showModal();
+    }
+  }, []);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const handleClose = () => onClose();
+    dialog?.addEventListener("close", handleClose);
+    return () => dialog?.removeEventListener("close", handleClose);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <GlassCard hover={false} className="w-full max-w-lg max-h-[80vh] overflow-y-auto">
+    <dialog
+      ref={dialogRef}
+      className="m-auto max-h-[85vh] w-[calc(100vw-2rem)] max-w-lg rounded-2xl bg-transparent p-0 backdrop:bg-black/40"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <GlassCard hover={false} className="max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-serif text-lg text-charcoal">{t("admin.waiting_list")}</h2>
-          <button onClick={onClose} className="rounded-full p-1 hover:bg-sage/10">
+          <button onClick={onClose} aria-label={t("admin.close")} className="rounded-full p-1 hover:bg-sage/10">
             <X className="h-5 w-5 text-charcoal-light" />
           </button>
         </div>
@@ -105,7 +126,7 @@ function WaitingListModal({
           </div>
         )}
       </GlassCard>
-    </div>
+    </dialog>
   );
 }
 
@@ -115,7 +136,7 @@ function EventForm({
   onCancel,
 }: {
   event?: Event | null;
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: Partial<Event>) => Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useAdminLocale();
@@ -142,9 +163,10 @@ function EventForm({
   const spellTooltipRef = useRef<HTMLDivElement>(null);
 
   const translateText = async (text: string): Promise<string> => {
+    const token = await getAuthToken();
     const res = await fetch("/api/translate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ text, from: "ro", to: "en" }),
     });
     if (!res.ok) throw new Error("Translation failed");
@@ -386,9 +408,51 @@ export default function AdminEventsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadEvents(); }, [loadEvents]);
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("events")
+      .select("*")
+      .order("date", { ascending: false })
+      .then(async ({ data }) => {
+        if (cancelled) return;
+        if (data) {
+          setEvents(data);
 
-  const handleSave = async (data: any) => {
+          const ids = data.map((e) => e.id);
+
+          const [{ data: regCounts }, { data: waitCounts }] = await Promise.all([
+            supabase.from("registrations").select("event_id").in("event_id", ids),
+            supabase.from("waiting_list").select("event_id").in("event_id", ids),
+          ]);
+
+          if (cancelled) return;
+
+          const regMap: Record<string, number> = {};
+          const waitMap: Record<string, number> = {};
+          for (const r of regCounts || []) {
+            regMap[r.event_id] = (regMap[r.event_id] || 0) + 1;
+          }
+          for (const w of waitCounts || []) {
+            waitMap[w.event_id] = (waitMap[w.event_id] || 0) + 1;
+          }
+
+          const merged: Record<string, { registrations: number; waiting: number }> = {};
+          for (const id of ids) {
+            merged[id] = {
+              registrations: regMap[id] || 0,
+              waiting: waitMap[id] || 0,
+            };
+          }
+          setCounts(merged);
+        }
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSave = async (data: Partial<Event>) => {
     const supabase = createClient();
     if (data.id) {
       await supabase.from("events").update(data).eq("id", data.id);

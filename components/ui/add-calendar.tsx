@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarPlus } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "./button";
 import { generateICS } from "@/lib/utils";
 
@@ -15,6 +16,8 @@ interface AddCalendarProps {
 }
 
 export function AddCalendar({ event }: AddCalendarProps) {
+  const t = useTranslations("common");
+
   const handleDownload = () => {
     const ics = generateICS(event);
     const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
@@ -28,8 +31,8 @@ export function AddCalendar({ event }: AddCalendarProps) {
 
   return (
     <Button variant="secondary" size="sm" onClick={handleDownload}>
-      <CalendarPlus className="mr-2 h-4 w-4" />
-      Adaugă în Calendar
+      <CalendarPlus className="mr-2 h-4 w-4" aria-hidden="true" />
+      {t("addToCalendar")}
     </Button>
   );
 }

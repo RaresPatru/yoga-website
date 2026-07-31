@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type Stripe from "stripe";
 
 async function notifyWaitingList(eventId: string, spotsOpened: number = 1) {
   const supabase = createAdminClient();
@@ -49,7 +50,7 @@ async function notifyWaitingList(eventId: string, spotsOpened: number = 1) {
 
   for (const entry of nextBatch) {
     const eventSlug = event?.slug || eventId;
-    const claimUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/events/${eventSlug}?claim=${entry.id}`;
+    const claimUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/ro/events/${eventSlug}?claim=${entry.id}`;
 
     try {
       const { data: template } = await supabase
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
     const supabase = createAdminClient();
 
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object as any;
+      const session = event.data.object as Stripe.Checkout.Session;
       const registrationId = session.metadata?.registrationId;
 
       if (registrationId) {
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
     }
 
     if (event.type === "checkout.session.expired") {
-      const session = event.data.object as any;
+      const session = event.data.object as Stripe.Checkout.Session;
       const registrationId = session.metadata?.registrationId;
 
       if (registrationId) {
@@ -131,25 +132,33 @@ export async function POST(req: Request) {
     }
 
     if (event.type === "charge.refunded") {
-      const charge = event.data.object as any;
-      const sessionId = charge.payment_intent?.toString();
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntent = charge.payment_intent?.toString();
 
-      if (sessionId) {
-        const { data: sessions } = await supabase
-          .from("registrations")
-          .select("event_id")
-          .eq("stripe_session_id", sessionId)
-          .limit(1);
+      if (paymentIntent) {
+        const sessions = await stripe.checkout.sessions.list({
+          payment_intent: paymentIntent,
+          limit: 1,
+        });
 
-        if (sessions && sessions.length > 0) {
-          const eventId = sessions[0].event_id;
-
-          await supabase
+        const session = Array.isArray(sessions) ? sessions[0] : sessions.data[0];
+        if (session) {
+          const { data: registrations } = await supabase
             .from("registrations")
-            .update({ payment_status: "refunded" })
-            .eq("stripe_session_id", sessionId);
+            .select("event_id")
+            .eq("stripe_session_id", session.id)
+            .limit(1);
 
-          await notifyWaitingList(eventId);
+          if (registrations && registrations.length > 0) {
+            const eventId = registrations[0].event_id;
+
+            await supabase
+              .from("registrations")
+              .update({ payment_status: "refunded" })
+              .eq("stripe_session_id", session.id);
+
+            await notifyWaitingList(eventId);
+          }
         }
       }
     }

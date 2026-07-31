@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId } from "react";
 import { parsePhoneNumberWithError, getCountries, getCountryCallingCode, CountryCode } from "libphonenumber-js";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,7 @@ interface PhoneInputProps {
 }
 
 export function PhoneInput({ value, onChange, onValidChange, label, error, className, required }: PhoneInputProps) {
+  const generatedId = useId();
   const [country, setCountry] = useState<CountryCode>("RO");
   const [phoneError, setPhoneError] = useState("");
 
@@ -60,15 +61,20 @@ export function PhoneInput({ value, onChange, onValidChange, label, error, class
     }
   };
 
+  const errorId = error || phoneError ? `${generatedId}-error` : undefined;
+
   return (
     <div className={cn("space-y-1.5", className)}>
       {label && (
-        <label className="text-sm font-medium text-charcoal-light">{label}</label>
+        <label htmlFor={generatedId} className="text-sm font-medium text-charcoal-light">
+          {label}
+        </label>
       )}
       <div className="flex gap-2">
         <select
           value={country}
           onChange={handleCountryChange}
+          aria-label="Country code"
           className="w-28 shrink-0 rounded-xl border border-sage/30 bg-white/60 px-3 py-3 text-sm text-charcoal backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
         >
           {COUNTRIES.map((c) => (
@@ -78,11 +84,15 @@ export function PhoneInput({ value, onChange, onValidChange, label, error, class
           ))}
         </select>
         <input
+          id={generatedId}
           type="tel"
           value={value}
           onChange={handlePhoneChange}
           placeholder="+40 7XX XXX XXX"
+          autoComplete="tel"
           required={required}
+          aria-invalid={error || phoneError ? true : undefined}
+          aria-describedby={errorId}
           className={cn(
             "flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal",
             "placeholder:text-charcoal-light/50 backdrop-blur-sm",
@@ -92,7 +102,11 @@ export function PhoneInput({ value, onChange, onValidChange, label, error, class
           )}
         />
       </div>
-      {(error || phoneError) && <p className="text-sm text-error">{error || phoneError}</p>}
+      {(error || phoneError) && (
+        <p id={errorId} role="alert" className="text-sm text-error">
+          {error || phoneError}
+        </p>
+      )}
     </div>
   );
 }

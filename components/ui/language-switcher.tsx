@@ -18,14 +18,21 @@ export function LanguageSwitcher() {
     });
   };
 
+  const label =
+    locale === "ro"
+      ? "Switch to English"
+      : "Treci la română";
+
   return (
     <button
       onClick={toggleLocale}
       disabled={isPending}
-      className="flex items-center gap-1.5 rounded-full bg-white/40 px-3 py-1.5 text-sm text-charcoal-light backdrop-blur-sm transition-colors hover:bg-white/60"
+      aria-label={label}
+      title={label}
+      className="flex items-center gap-1.5 rounded-full bg-white/40 px-3 py-1.5 text-sm text-charcoal-light backdrop-blur-sm transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose/50"
     >
       <Globe className="h-4 w-4" />
-      {locale === "ro" ? "EN" : "RO"}
+      <span aria-hidden="true">{locale === "ro" ? "EN" : "RO"}</span>
     </button>
   );
 }

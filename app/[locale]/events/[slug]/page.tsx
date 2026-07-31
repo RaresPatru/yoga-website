@@ -2,16 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { useLocale } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Turnstile } from "@/components/ui/turnstile";
+import { useTurnstileScript } from "@/lib/use-turnstile";
 import { ShareButton } from "@/components/ui/share-button";
 import { AddCalendar } from "@/components/ui/add-calendar";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { Calendar, Clock, MapPin, Users, Check, AlertCircle } from "lucide-react";
 import { formatDate, formatTime } from "@/lib/utils";
+import Image from "next/image";
 
 interface EventData {
   id: string;
@@ -29,15 +33,13 @@ interface EventData {
   whatsapp_group_link: string | null;
 }
 
-const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-
 export default function EventDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const searchParams = useSearchParams();
+  const locale = useLocale();
   const [event, setEvent] = useState<EventData | null>(null);
   const [registrationCount, setRegistrationCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [locale, setLocale] = useState("ro");
   const [form, setForm] = useState({ fullName: "", email: "", phone: "" });
   const [submitting, setSubmitting] = useState(false);
   const [registered, setRegistered] = useState(false);
@@ -46,25 +48,10 @@ export default function EventDetailPage() {
   const [error, setError] = useState("");
   const [phoneValid, setPhoneValid] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+  const turnstileLoaded = useTurnstileScript();
   const [showWaitlist, setShowWaitlist] = useState(false);
 
-  useEffect(() => {
-    setLocale(document.documentElement.lang || "ro");
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && !document.querySelector(`script[src="${TURNSTILE_SCRIPT}"]`)) {
-      const script = document.createElement("script");
-      script.src = TURNSTILE_SCRIPT;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setTurnstileLoaded(true);
-      document.head.appendChild(script);
-    } else {
-      setTurnstileLoaded(true);
-    }
-  }, []);
+  const t = useCallback((ro: string, en: string) => locale === "ro" ? ro : en, [locale]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -91,22 +78,17 @@ export default function EventDetailPage() {
 
     const claimToken = searchParams.get("claim");
     if (claimToken) {
-      handleClaimSpot(claimToken);
+      fetch(`/api/register/claim-spot/${claimToken}`, { method: "POST" })
+        .then((res) => {
+          if (res.ok) {
+            setClaimSuccess(true);
+          } else {
+            setError(t("Link invalid sau expirat", "Invalid or expired link"));
+          }
+        })
+        .finally(() => setSubmitting(false));
     }
-  }, [slug, searchParams]);
-
-  const handleClaimSpot = async (token: string) => {
-    setSubmitting(true);
-    const res = await fetch(`/api/register/claim-spot/${token}`);
-    if (res.ok) {
-      setClaimSuccess(true);
-    } else {
-      setError("Link invalid sau expirat / Invalid or expired link");
-    }
-    setSubmitting(false);
-  };
-
-  const t = (ro: string, en: string) => locale === "ro" ? ro : en;
+  }, [slug, searchParams, t]);
 
   const handleFreeRegistration = async () => {
     setSubmitting(true);
@@ -177,11 +159,17 @@ export default function EventDetailPage() {
       body: JSON.stringify({
         eventId: event!.id,
         registrationId: regData.id,
-        price: event!.price,
-        successUrl: `${window.location.origin}/${locale}/events/${event!.slug}?success=1`,
-        cancelUrl: `${window.location.origin}/${locale}/events/${event!.slug}?canceled=1`,
+        locale,
       }),
     });
+
+    if (!stripeRes.ok) {
+      const data = await stripeRes.json().catch(() => ({}));
+      setError(data.error || t("Eroare la conectarea cu Stripe.", "Error connecting to Stripe."));
+      setCaptchaToken(null);
+      setSubmitting(false);
+      return;
+    }
 
     const { url } = await stripeRes.json();
     if (url) {
@@ -257,7 +245,7 @@ export default function EventDetailPage() {
   if (!event) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <p className="text-charcoal-light">Evenimentul nu a fost găsit.</p>
+        <p className="text-charcoal-light">{t("Evenimentul nu a fost găsit.", "Event not found.")}</p>
       </div>
     );
   }
@@ -337,8 +325,14 @@ export default function EventDetailPage() {
       <div className="grid gap-12 md:grid-cols-5">
         <div className="md:col-span-3">
           {event.image_url && (
-            <div className="mb-8 aspect-video overflow-hidden rounded-3xl bg-sage/10">
-              <img src={event.image_url} alt="" className="h-full w-full object-cover" />
+            <div className="relative mb-8 aspect-video overflow-hidden rounded-3xl bg-sage/10">
+              <Image
+                src={event.image_url}
+                alt={title}
+                fill
+                sizes="(max-width: 768px) 100vw, 60vw"
+                className="object-cover"
+              />
             </div>
           )}
 
@@ -373,7 +367,7 @@ export default function EventDetailPage() {
           {description && (
             <div
               className="prose prose-sage mt-8 max-w-none"
-              dangerouslySetInnerHTML={{ __html: description }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }}
             />
           )}
 
@@ -429,6 +423,7 @@ export default function EventDetailPage() {
                   label={t("Nume complet", "Full name")}
                   value={form.fullName}
                   onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  autoComplete="name"
                   required
                 />
                 <Input
@@ -436,6 +431,7 @@ export default function EventDetailPage() {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  autoComplete="email"
                   required
                 />
                 <PhoneInput
@@ -480,6 +476,7 @@ export default function EventDetailPage() {
                   label={t("Nume complet", "Full name")}
                   value={form.fullName}
                   onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  autoComplete="name"
                   required
                 />
                 <Input
@@ -487,6 +484,7 @@ export default function EventDetailPage() {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  autoComplete="email"
                   required
                 />
                 <PhoneInput

@@ -3,25 +3,58 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getResend } from "@/lib/resend";
 import { generateICS } from "@/lib/utils";
 import { verifyTurnstile } from "@/lib/turnstile";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export async function POST(req: Request) {
   try {
+    if (!rateLimit(`register:${clientIp(req)}`, 20)) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const { eventId, fullName, email, phone, paymentStatus, captchaToken } = await req.json();
 
-    if (captchaToken) {
-      const verified = await verifyTurnstile(captchaToken);
-      if (!verified) {
-        return NextResponse.json({ error: "Security check failed" }, { status: 400 });
-      }
+    if (!captchaToken) {
+      return NextResponse.json({ error: "Missing captcha token" }, { status: 400 });
+    }
+
+    const verified = await verifyTurnstile(captchaToken);
+    if (!verified) {
+      return NextResponse.json({ error: "Security check failed" }, { status: 400 });
+    }
+
+    if (!eventId || typeof eventId !== "string") {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (
+      !fullName ||
+      typeof fullName !== "string" ||
+      fullName.trim().length < 2 ||
+      fullName.trim().length > 100
+    ) {
+      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    }
+
+    if (!email || typeof email !== "string" || !EMAIL_RE.test(email.trim()) || email.length > 254) {
+      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+    }
+
+    if (!phone || typeof phone !== "string" || phone.replace(/\D/g, "").length < 6) {
+      return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
     }
 
     const supabase = createAdminClient();
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc("register_for_event", {
       p_event_id: eventId,
-      p_full_name: fullName,
-      p_email: email,
-      p_phone: phone,
+      p_full_name: fullName.trim(),
+      p_email: email.trim().toLowerCase(),
+      p_phone: phone.trim(),
       p_payment_status: paymentStatus || "free",
     });
 
@@ -47,7 +80,7 @@ export async function POST(req: Request) {
 
         if (template) {
           const vars: Record<string, string> = {
-            user_name: fullName,
+            user_name: fullName.trim(),
             event_name: eventData.title_ro,
             event_date: eventData.date,
             event_time: eventData.time.slice(0, 5),
@@ -67,9 +100,9 @@ export async function POST(req: Request) {
             location: eventData.location || "",
           });
 
-          const res = await resend.emails.send({
+          await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL!,
-            to: email,
+            to: email.trim().toLowerCase(),
             subject,
             html: body,
             attachments: [
@@ -79,8 +112,6 @@ export async function POST(req: Request) {
               },
             ],
           });
-
-          console.log("Resend response:", JSON.stringify(res));
         }
       }
     } catch (emailError) {

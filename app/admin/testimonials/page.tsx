@@ -32,7 +32,20 @@ export default function AdminTestimonialsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("testimonials")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data) setTestimonials(data);
+        setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleApprove = async (id: string, approved: boolean) => {
     const supabase = createClient();

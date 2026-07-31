@@ -4,15 +4,6 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate } from "@/lib/utils";
 import { getLocale, getTranslations } from "next-intl/server";
 
-interface Post {
-  id: string;
-  slug: string;
-  title_ro: string;
-  title_en: string | null;
-  content_ro: string | null;
-  created_at: string;
-}
-
 export default async function BlogPage() {
   const locale = await getLocale();
   const t = await getTranslations("blog");

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +59,10 @@ export function Header() {
 
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="rounded-full p-2 text-charcoal-light hover:bg-white/40 md:hidden"
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-menu"
+            aria-label={mobileOpen ? t("menu.close") : t("menu.open")}
+            className="rounded-full p-2 text-charcoal-light hover:bg-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose/50 md:hidden"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -68,7 +70,10 @@ export function Header() {
       </div>
 
       {mobileOpen && (
-        <div className="mx-4 animate-fade-down rounded-2xl border border-white/30 bg-white/80 p-4 shadow-xl backdrop-blur-xl md:hidden">
+        <div
+          id="mobile-menu"
+          className="mx-4 animate-fade-down rounded-2xl border border-white/30 bg-white/80 p-4 shadow-xl backdrop-blur-xl md:hidden"
+        >
           <div className="flex flex-col gap-1">
             {navLinks.map(({ href, key }) => (
               <Link
