@@ -140,6 +140,7 @@ function BlogEditor({
       },
     },
     immediatelyRender: true,
+    shouldRerenderOnTransaction: true,
   });
 
   useEffect(() => {
@@ -303,6 +304,7 @@ function BlogEditor({
           <button
             onClick={handleTranslateTitle}
             disabled={translatingTitle || !titleRo.trim()}
+            title={t("admin.translate_to_en")}
             className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
           >
             {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -320,6 +322,7 @@ function BlogEditor({
           <button
             onClick={handleTranslateContent}
             disabled={translatingContent || !editor || !editor.getText().trim()}
+            title={t("admin.translate_to_en")}
             className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
           >
             {translatingContent ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
@@ -457,7 +460,8 @@ function BlogEditor({
                 {spell === "ro" && (
                   <>
                     <button
-                      onClick={() => setShowSpellTooltip(!showSpellTooltip)}
+                      onMouseEnter={() => setShowSpellTooltip(true)}
+                      onMouseLeave={() => setShowSpellTooltip(false)}
                       className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning/20 text-warning hover:bg-warning/30"
                     >
                       <Info className="h-3 w-3" />
@@ -490,7 +494,7 @@ function BlogEditor({
         </div>
       </div>
 
-      <div>
+      <div className="mx-auto max-w-4xl">
         <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.content_en")}</label>
         <textarea
           value={contentEn}

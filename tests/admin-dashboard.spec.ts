@@ -6,11 +6,28 @@ test.describe("admin dashboard", () => {
     await loginAsAdmin(page);
   });
 
-  test("shows the four stat cards", async ({ page }) => {
-    for (const label of ["Evenimente", "Înscrieri", "Articole", "Testimoniale neaprobate"]) {
+  test("shows the stat cards", async ({ page }) => {
+    for (const label of ["Evenimente", "Înscrieri", "Articole", "Mesaje", "Testimoniale neaprobate"]) {
       await expect(page.locator("p.text-sm").getByText(label, { exact: true })).toBeVisible();
     }
     await expect(page.locator("h1.text-2xl").first()).toBeVisible();
+  });
+
+  test("stat cards link to their admin panels", async ({ page }) => {
+    const links: Array<[string, RegExp]> = [
+      ["Mesaje", /\/admin\/messages$/],
+      ["Evenimente", /\/admin\/events$/],
+      ["Înscrieri", /\/admin\/registrations$/],
+      ["Articole", /\/admin\/blog$/],
+      ["Testimoniale neaprobate", /\/admin\/testimonials$/],
+    ];
+    for (const [label, url] of links) {
+      const card = page.locator("a.group", { hasText: label }).first();
+      await expect(card).toBeVisible();
+      await card.click();
+      await expect(page).toHaveURL(url);
+      await page.goBack();
+    }
   });
 
   test("sidebar navigates to every admin section", async ({ page }) => {
@@ -31,10 +48,11 @@ test.describe("admin dashboard", () => {
   });
 
   test("locale toggle switches the sidebar between RO and EN", async ({ page }) => {
+    const sidebar = page.locator("nav");
     await page.getByRole("button", { name: "English" }).click();
-    await expect(page.getByRole("link", { name: "Blog Posts" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Registrations" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Blog Posts" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Registrations" })).toBeVisible();
     await page.getByRole("button", { name: "Română" }).click();
-    await expect(page.getByRole("link", { name: "Articole" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Articole" })).toBeVisible();
   });
 });

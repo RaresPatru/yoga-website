@@ -1,10 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
-import { Calendar, Users, FileText, Star } from "lucide-react";
+import { Calendar, Users, FileText, Star, Mail } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+
+interface StatCard {
+  icon: typeof Calendar;
+  labelKey: string;
+  value: number;
+  color: string;
+  href: string;
+}
 
 export default function AdminDashboard() {
   const { t } = useAdminLocale();
@@ -13,6 +22,7 @@ export default function AdminDashboard() {
     registrations: 0,
     posts: 0,
     pendingTestimonials: 0,
+    messages: 0,
   });
 
   useEffect(() => {
@@ -25,41 +35,46 @@ export default function AdminDashboard() {
         .from("testimonials")
         .select("*", { count: "exact", head: true })
         .eq("approved", false),
+      supabase.from("contact_messages").select("*", { count: "exact", head: true }),
     ]).then(
-      ([events, registrations, posts, testimonials]) => {
+      ([events, registrations, posts, testimonials, messages]) => {
         setStats({
           events: events.count ?? 0,
           registrations: registrations.count ?? 0,
           posts: posts.count ?? 0,
           pendingTestimonials: testimonials.count ?? 0,
+          messages: messages.count ?? 0,
         });
       }
     );
   }, []);
 
-  const cards = [
-    { icon: Calendar, labelKey: "admin.events", value: stats.events, color: "text-sage" },
-    { icon: Users, labelKey: "admin.registrations", value: stats.registrations, color: "text-rose" },
-    { icon: FileText, labelKey: "admin.blog", value: stats.posts, color: "text-lavender" },
-    { icon: Star, labelKey: "admin.pending_testimonials", value: stats.pendingTestimonials, color: "text-rose" },
+  const cards: StatCard[] = [
+    { icon: Calendar, labelKey: "admin.events", value: stats.events, color: "text-sage", href: "/admin/events" },
+    { icon: Users, labelKey: "admin.registrations", value: stats.registrations, color: "text-rose", href: "/admin/registrations" },
+    { icon: FileText, labelKey: "admin.blog", value: stats.posts, color: "text-lavender", href: "/admin/blog" },
+    { icon: Mail, labelKey: "admin.messages", value: stats.messages, color: "text-blush", href: "/admin/messages" },
+    { icon: Star, labelKey: "admin.pending_testimonials", value: stats.pendingTestimonials, color: "text-rose-dark", href: "/admin/testimonials" },
   ];
 
   return (
     <div>
       <h1 className="font-serif text-2xl text-charcoal">{t("admin.dashboard_title")}</h1>
-      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map((card) => (
-          <GlassCard key={card.labelKey} hover={false}>
-            <div className="flex items-center gap-4">
-              <card.icon className={`h-8 w-8 ${card.color}`} />
-              <div>
-                <p className="text-2xl font-semibold text-charcoal">
-                  {card.value}
-                </p>
-                <p className="text-sm text-charcoal-light">{t(card.labelKey)}</p>
+          <Link key={card.labelKey} href={card.href} className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-rose/40 rounded-2xl">
+            <GlassCard hover>
+              <div className="flex items-center gap-4">
+                <card.icon className={`h-8 w-8 transition-transform duration-300 group-hover:scale-110 ${card.color}`} />
+                <div>
+                  <p className="text-2xl font-semibold text-charcoal">
+                    {card.value}
+                  </p>
+                  <p className="text-sm text-charcoal-light">{t(card.labelKey)}</p>
+                </div>
               </div>
-            </div>
-          </GlassCard>
+            </GlassCard>
+          </Link>
         ))}
       </div>
     </div>

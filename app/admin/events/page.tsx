@@ -251,6 +251,7 @@ function EventForm({
             <button
               onClick={handleTranslateTitle}
               disabled={translatingTitle || !form.title_ro.trim()}
+              title={t("admin.translate_to_en")}
               className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
             >
               {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -270,6 +271,7 @@ function EventForm({
             <button
               onClick={handleTranslateDesc}
               disabled={translatingDesc || !form.description_ro.trim()}
+              title={t("admin.translate_to_en")}
               className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
             >
               {translatingDesc ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
@@ -310,7 +312,8 @@ function EventForm({
           {spell === "ro" && (
             <>
               <button
-                onClick={() => setShowSpellTooltip(!showSpellTooltip)}
+                onMouseEnter={() => setShowSpellTooltip(true)}
+                onMouseLeave={() => setShowSpellTooltip(false)}
                 className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-warning/20 text-warning hover:bg-warning/30"
               >
                 <Info className="h-3 w-3" />

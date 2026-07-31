@@ -181,3 +181,7 @@ Phase 8 (complete) → Phase 9 E2E tests (complete) → Phase 7 remaining items
 | Turnstile widget flickers on every keystroke | 1 | Fixed: useRef callbacks decouple effect from inline function references; regression test counts window.turnstile.render calls |
 | Turnstile invisible after interaction-only change | 1 | Reverted to default `always` appearance; widget shows during verification, fades out after success |
 | Playwright webServer fails to start (port 3100) | 1 | Manual dev server from earlier probing still held the port; kill node processes before running suite |
+| Translate buttons fail with "Eroare la traducere" (admin blog/events) | 1 | is-admin.ts read NEXT_PUBLIC_SUPABASE_ANON_KEY but env was renamed to NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY → isAdminRequest always false → 401; fixed with fallback; /api/upload was broken by the same check |
+| Contact form 500: permission denied for table contact_messages | 1 | Migration lacked table grants; same latent bug as waiting_list (fixed earlier); service-key insert needs grant — SQL block provided to user |
+| Blog EN translate button + toolbar active states never update | 1 | TipTap v3 useEditor defaults shouldRerenderOnTransaction to false → editor.getText()/isActive() stale; added shouldRerenderOnTransaction: true |
+| Dashboard EN sidebar toggle test broke after stat cards became links | 1 | "Blog Posts" matched sidebar link + stat card link; scoped locale test to nav |

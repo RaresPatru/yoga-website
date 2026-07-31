@@ -204,6 +204,7 @@
     "loading": "Loading...",
     "media_delete": "Delete file",
     "translate": "Translate to English",
+    "translate_to_en": "Translate to English",
     "translating": "Translating...",
     "translate_error": "Translation error"
   }
