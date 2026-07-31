@@ -155,3 +155,5 @@ Phase 8 (complete) → Phase 7 remaining items
 | `next build` type error on checkout route | 1 | Guarded undefined origin header |
 | Stripe SDK 22 list() returns array | 1 | sessions.data[0] → Array.isArray check |
 | Lint: react-hooks set-state-in-effect (29 errors) | 1 | Inlined fetch-on-mount with .then + cancellation; useSyncExternalStore for script/localStorage; render-adjust pattern for LinkDialog; removed sync setLoading branches |
+| npm audit: 12 high (next middleware/SSRF/DoS, postcss, sharp) | 1 | next 16.2.10 → 16.2.12; overrides: next→postcss 8.5.25, next→sharp 0.35.3 (verified optimizer at runtime), minimatch→10.2.6, brace-expansion→5.0.9; audit 0; SWC optionalDeps aligned to 16.2.12; allowScripts sharp key updated |
+| next/image rejects seed image host | 1 | Added media.istockphoto.com to images.remotePatterns |
