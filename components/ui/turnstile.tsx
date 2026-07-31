@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface TurnstileProps {
   onVerify: (token: string) => void;
@@ -16,6 +17,8 @@ declare global {
         "expired-callback"?: () => void;
         "error-callback"?: () => void;
         theme?: "light" | "dark" | "auto";
+        appearance?: "always" | "execute" | "interaction-only";
+        refresh?: "auto" | "manual";
       }) => string;
       reset: (widgetId: string) => void;
       remove: (widgetId: string) => void;
@@ -26,17 +29,30 @@ declare global {
 export function Turnstile({ onVerify, onExpire }: TurnstileProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const onVerifyRef = useRef(onVerify);
+  const onExpireRef = useRef(onExpire);
+  const [verified, setVerified] = useState(false);
 
   useEffect(() => {
-    const onVerifyRef = onVerify;
-    const onExpireRef = onExpire;
+    onVerifyRef.current = onVerify;
+    onExpireRef.current = onExpire;
+  });
 
+  useEffect(() => {
     if (!window.turnstile || !containerRef.current) return;
 
     widgetIdRef.current = window.turnstile.render(containerRef.current, {
       sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "1x00000000000000000000AA",
-      callback: (token: string) => onVerifyRef(token),
-      "expired-callback": () => onExpireRef?.(),
+      callback: (token: string) => {
+        onVerifyRef.current(token);
+        setVerified(true);
+      },
+      "expired-callback": () => {
+        onExpireRef.current?.();
+        setVerified(false);
+      },
+      "error-callback": () => setVerified(false),
+      refresh: "auto",
     });
 
     return () => {
@@ -44,7 +60,16 @@ export function Turnstile({ onVerify, onExpire }: TurnstileProps) {
         window.turnstile.remove(widgetIdRef.current);
       }
     };
-  }, [onVerify, onExpire]);
+  }, []);
 
-  return <div ref={containerRef} className="turnstile-widget" />;
+  return (
+    <div
+      className={cn(
+        "overflow-hidden transition-all duration-500",
+        verified ? "h-0 opacity-0" : "h-[70px] opacity-100"
+      )}
+    >
+      <div ref={containerRef} className="turnstile-widget" />
+    </div>
+  );
 }

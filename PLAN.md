@@ -6,7 +6,7 @@
 A responsive yoga website for a female instructor with blog, paid/free event registration via Stripe, email confirmations with calendar invites, testimonials, admin dashboard, and analytics — deployed on Vercel.
 
 ## Current Phase
-Phase 8 (complete) → Phase 7 remaining items
+Phase 8 (complete) → Phase 9 E2E tests (complete) → Phase 7 remaining items
 
 ## Phases
 
@@ -96,6 +96,16 @@ Phase 8 (complete) → Phase 7 remaining items
 - [x] Lint + build clean (0 errors, 0 warnings)
 - **Status:** complete
 
+### Phase 9: E2E Test Suite (Playwright)
+- [x] `playwright.config.ts` — webServer on port 3100, chromium desktop 1280×800, 3 workers, `ro-RO` locale, clipboard permissions, trace/screenshot on failure
+- [x] `tests/helpers.ts` — admin session client (signInWithPassword), seeders/deleters for events, posts, testimonials, registrations, waiting entries; service-key client mirrors the app's API routes where grants differ
+- [x] Public specs: home (hero, nav, footer, EN switch, mobile menu), blog (list→detail, share), events (cards, detail, calendar .ics, captcha gate, invalid phone, paid flow, EN), contact (labels, autocomplete, captcha error, EN), testimonials (approved-only, EN)
+- [x] Admin specs: login (redirect, wrong password, logout), dashboard (stat cards, sidebar, RO/EN toggle), blog CRUD (TipTap), events CRUD + waiting-list modal, registrations (list + search), testimonials (approve/delete), email templates, messages
+- [x] Navigation spec: root redirect, 200s, unknown route 404, unknown blog slug 404 page, unauth admin redirect
+- [x] Turnstile regression test — `window.turnstile.render` call-count spy (catches widget remount churn)
+- [x] Full suite green: 55/55
+- **Status:** complete
+
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
@@ -126,6 +136,12 @@ Phase 8 (complete) → Phase 7 remaining items
 | Server-side price lookup in checkout API | Client-supplied price removed — Stripe line items built from DB row only |
 | Native `<dialog>` for modals | Free focus trap, Esc handling, backdrop; replaces fixed-div overlays |
 | useSyncExternalStore for Turnstile script + admin locale | Rule-compliant external-state subscription; no setState-in-effect |
+| npm overrides for transitive vulnerabilities (next→postcss 8.5.25, next→sharp 0.35.3, minimatch 10.2.6, brace-expansion 5.0.9) | next pins vulnerable postcss 8.4.31/sharp ^0.34.5; overrides patch them; minimatch 3→10 forced major verified with clean lint run |
+| Playwright E2E suite (no extra CI in this phase) | Runs locally via `npm run test:e2e`; dev server on isolated port 3100, seeds+cleans up its own data as the test admin |
+| Test helpers use the role each app API uses (auth session vs service key) | DB grants differ per table; seeding through the same role the real code uses keeps RLS semantics honest |
+| Turnstile widget visible while verifying, fades out after success | Users shouldn't stare at a checkmark; widget stays mounted (h-0 opacity-0) so `refresh: auto` keeps re-verifying in the background; reappears on expired/error |
+| `interaction-only` appearance rejected | Hid the widget entirely (no initial rendering) — confusing, user wants to see verification progress |
+| `#main-content` gets `tabIndex={-1}` | Skip link target wasn't focusable; keyboard-only users couldn't activate the skip link |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -157,3 +173,11 @@ Phase 8 (complete) → Phase 7 remaining items
 | Lint: react-hooks set-state-in-effect (29 errors) | 1 | Inlined fetch-on-mount with .then + cancellation; useSyncExternalStore for script/localStorage; render-adjust pattern for LinkDialog; removed sync setLoading branches |
 | npm audit: 12 high (next middleware/SSRF/DoS, postcss, sharp) | 1 | next 16.2.10 → 16.2.12; overrides: next→postcss 8.5.25, next→sharp 0.35.3 (verified optimizer at runtime), minimatch→10.2.6, brace-expansion→5.0.9; audit 0; SWC optionalDeps aligned to 16.2.12; allowScripts sharp key updated |
 | next/image rejects seed image host | 1 | Added media.istockphoto.com to images.remotePatterns |
+| Playwright seed blocked: permission denied for events (service key) | 1 | Helpers authenticate as the test admin (mirrors UI RLS); registrations/waiting_list use service key like the app API routes |
+| Waiting list API broken in prod: permission denied for table waiting_list | 1 | Migration lacked table grants (only RLS policies); added grants for anon/authenticated/service_role to migration + applied to DB; re-running full migration later errors 42710 on existing policies (grants run first, so safe) |
+| Dev-mode: notFound() in dynamic blog slug returns status 200 | 1 | Assert rendered 404 page content instead of HTTP status (production build returns 404 correctly) |
+| Share button "Link copiat!" never visible in test | 1 | aria-label stays static ("Distribuie"); assert inner text instead of accessible name |
+| "abc" phone input never flags error | 1 | PhoneInput strips non-numeric chars → empty; test uses "0722" (4+ digits, invalid RO number) |
+| Turnstile widget flickers on every keystroke | 1 | Fixed: useRef callbacks decouple effect from inline function references; regression test counts window.turnstile.render calls |
+| Turnstile invisible after interaction-only change | 1 | Reverted to default `always` appearance; widget shows during verification, fades out after success |
+| Playwright webServer fails to start (port 3100) | 1 | Manual dev server from earlier probing still held the port; kill node processes before running suite |

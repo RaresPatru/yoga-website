@@ -25,6 +25,12 @@ create table if not exists waiting_list_notifications (
 alter table waiting_list enable row level security;
 alter table waiting_list_notifications enable row level security;
 
+-- Table grants (policies alone are not enough - roles also need table privileges)
+grant select, insert, update on waiting_list to anon, authenticated;
+grant select, insert, update, delete on waiting_list to service_role;
+grant select, insert on waiting_list_notifications to anon, authenticated;
+grant select, insert, update, delete on waiting_list_notifications to service_role;
+
 -- RLS: everyone can insert into waiting_list (public)
 create policy "Anyone can join waiting list"
   on waiting_list for insert
