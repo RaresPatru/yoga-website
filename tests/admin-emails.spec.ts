@@ -1,9 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin } from "./helpers";
 
 test.describe("admin email templates", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
     await page.goto("/admin/emails");
   });
 

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin, seedRegistration, deleteEventBySlug } from "./helpers";
+import { seedRegistration, deleteEventBySlug } from "./helpers";
 
 test.describe("admin registrations", () => {
   let eventSlug = "";
@@ -12,7 +12,6 @@ test.describe("admin registrations", () => {
     const reg = await seedRegistration();
     eventSlug = reg.eventSlug;
 
-    await loginAsAdmin(page);
     await page.goto("/admin/registrations");
 
     await expect(page.getByRole("heading", { name: "Înscrieri" })).toBeVisible();

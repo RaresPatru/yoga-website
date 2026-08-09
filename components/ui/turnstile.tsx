@@ -64,10 +64,21 @@ export function Turnstile({ onVerify, onExpire }: TurnstileProps) {
 
   return (
     <div
+      // Collapsed rather than unmounted once verified: the widget has to stay
+      // alive so `refresh: "auto"` can keep the token fresh in the background.
       className={cn(
         "overflow-hidden transition-all duration-500",
         verified ? "h-0 opacity-0" : "h-[70px] opacity-100"
       )}
+      // Height and opacity hide it visually but leave it in the tab order and
+      // readable by screen readers — a keyboard user would tab into an
+      // invisible iframe. `inert` removes it from both, and unlike aria-hidden
+      // it is safe to put on a container that holds focusable elements.
+      inert={verified}
+      // Lets tests wait for verification to finish instead of guessing with a
+      // timeout. Without a signal like this, a test either sleeps (slow and
+      // flaky) or submits the form before the token exists.
+      data-verified={verified ? "true" : "false"}
     >
       <div ref={containerRef} className="turnstile-widget" />
     </div>

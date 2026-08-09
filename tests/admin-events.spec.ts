@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin, deleteEventBySlug, seedWaitingEntry, seedEvent, unique } from "./helpers";
+import { deleteEventBySlug, seedWaitingEntry, seedEvent, unique } from "./helpers";
 
 test.describe("admin events CRUD", () => {
   let slug = "";
@@ -19,7 +19,6 @@ test.describe("admin events CRUD", () => {
         .getByRole("heading", { name: headingText })
         .locator("xpath=ancestor::div[contains(@class,'flex items-center justify-between')]");
 
-    await loginAsAdmin(page);
     await page.goto("/admin/events");
 
     await page.getByRole("button", { name: "Eveniment Nou" }).click();
@@ -61,7 +60,6 @@ test.describe("admin events CRUD", () => {
         .getByRole("heading", { name: headingText })
         .locator("xpath=ancestor::div[contains(@class,'flex items-center justify-between')]");
 
-    await loginAsAdmin(page);
     await page.goto("/admin/events");
 
     const row = cardRow(title);

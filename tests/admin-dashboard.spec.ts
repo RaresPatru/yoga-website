@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin } from "./helpers";
 
 test.describe("admin dashboard", () => {
   test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
+    // Signed in already via the saved storageState (see tests/auth.setup.ts).
+    await page.goto("/admin");
   });
 
   test("shows the stat cards", async ({ page }) => {

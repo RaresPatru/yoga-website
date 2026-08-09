@@ -30,8 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — real ones never get committed
 .env*
+# ...but the templates must be, otherwise nobody (including CI, and future you)
+# knows which variables the app needs. These hold placeholders only.
+!.env.example
+!.env.test.example
 
 # vercel
 .vercel
@@ -52,3 +56,10 @@ blob-report/
 # local agent tooling (kept on disk, not in the repo)
 .agents/
 skills-lock.json
+
+# Saved auth session for the Playwright admin project
+.playwright/
+.playwright-cli/
+
+# Machine-specific Claude Code permissions
+.claude/settings.local.json

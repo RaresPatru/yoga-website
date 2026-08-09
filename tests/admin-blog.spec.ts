@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin, deletePostBySlug, unique } from "./helpers";
+import { deletePostBySlug, unique } from "./helpers";
 
 test.describe("admin blog CRUD", () => {
   let slug = "";
@@ -19,7 +19,6 @@ test.describe("admin blog CRUD", () => {
         .getByRole("heading", { name: headingText })
         .locator("xpath=ancestor::div[contains(@class,'flex items-center justify-between')]");
 
-    await loginAsAdmin(page);
     await page.goto("/admin/blog");
 
     await page.getByRole("button", { name: "Articol Nou" }).click();

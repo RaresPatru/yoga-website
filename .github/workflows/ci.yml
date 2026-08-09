@@ -1,0 +1,120 @@
+# Continuous integration.
+#
+# Runs on every push and pull request. The point is that nothing reaches the
+# live site without the checks that would have caught the bugs found in the
+# August 2026 audit — several of which were sitting in "complete" phases.
+#
+# Two jobs, deliberately split:
+#
+#   quality  fast (~1 min): lint, types, production build. Catches most
+#            mistakes before the slow job is worth starting.
+#   e2e      slow (~5 min): spins up a real Postgres via the Supabase CLI,
+#            applies the migrations, seeds an admin, and drives the site in a
+#            real browser.
+#
+# The e2e job runs against a LOCAL database. It used to be possible to run the
+# suite against production, which left test data on the live website.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch cancels the previous run — no point finishing a
+# build for code that has already been replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, types, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` installs exactly what package-lock.json specifies, unlike
+      # `npm install` which may quietly update things. Reproducible builds.
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+        env:
+          # The build only needs these to exist — nothing is contacted at build
+          # time. Real values live in Vercel's environment settings.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-placeholder
+          SUPABASE_SECRET_KEY: build-placeholder
+
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start local Supabase
+        # Boots Postgres, GoTrue (auth) and the REST API in Docker, then applies
+        # everything in supabase/migrations plus supabase/seed.sql. This is the
+        # same schema the live project runs, which is only true because the
+        # migrations are now complete — grants included.
+        run: npx supabase start
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright
+        run: npx playwright test
+        env:
+          CI: "true"
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          # Fixed keys the Supabase CLI always issues for local development.
+          # They grant nothing anywhere else, so they are safe in a public repo.
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.LOCAL_SUPABASE_ANON_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.LOCAL_SUPABASE_SERVICE_KEY }}
+          TEST_ADMIN_EMAIL: playwright-admin@test.local
+          TEST_ADMIN_PASSWORD: playwright-test-password
+          # Cloudflare's always-pass test pair, which is what allows the booking
+          # flow to be tested end to end rather than stopping at the CAPTCHA.
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+          TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+          STRIPE_SECRET_KEY: sk_test_placeholder
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+          STRIPE_WEBHOOK_SECRET: whsec_placeholder
+          RESEND_API_KEY: re_test_placeholder
+          RESEND_FROM_EMAIL: test@example.com
+          # Every browser project shares 127.0.0.1, so the real per-IP limits
+          # would reject legitimate test traffic. Test-only.
+          RATE_LIMIT_MULTIPLIER: "200"
+
+      # Traces and screenshots from failures, so a red build can be diagnosed
+      # without reproducing it locally.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
