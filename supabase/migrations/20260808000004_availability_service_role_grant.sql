@@ -1,0 +1,30 @@
+-- ============================================================================
+-- Grant the service role read access to event_availability
+-- ============================================================================
+--
+-- The view was created with:
+--
+--   grant select on public.event_availability to anon, authenticated;
+--
+-- and `service_role` was never included. Nothing is broken today — every path
+-- that reads seat counts does so as an anonymous visitor or a signed-in admin,
+-- both of which are covered.
+--
+-- It is worth fixing anyway, because it is an inconsistency that will bite
+-- exactly once and confusingly. Every table in this schema grants to
+-- service_role; a view that does not means the first API route to read seat
+-- counts with the server-side key (createAdminClient) fails with
+--
+--   permission denied for view event_availability
+--
+-- which reads like a Row Level Security problem and is not one — the service
+-- role bypasses RLS entirely, so the usual debugging instinct leads nowhere.
+-- This was noticed when a verification script using the secret key could not
+-- read a view that the public website reads without trouble.
+--
+-- Safe to add: the view exposes an event id, a capacity and a count, and no
+-- personal data at all. The service role could already read the underlying
+-- registrations table directly.
+-- ============================================================================
+
+grant select on public.event_availability to service_role;

@@ -110,6 +110,22 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
     setLoading(false);
   }, []);
 
+  // Reset the loading flag whenever the dialog opens, not just the first time.
+  //
+  // `loading` starts true and goes false after the first fetch, so reopening
+  // showed the previous file list — including files deleted in between — until
+  // the new listing arrived.
+  //
+  // Written as a render-time adjustment rather than inside the effect below,
+  // which is React's documented pattern for reacting to a changed prop and
+  // avoids the set-state-in-effect lint rule (and the extra render an effect
+  // would cost).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setLoading(true);
+  }
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -136,23 +152,46 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
     }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("bucket", bucket);
 
     try {
+      // Two steps instead of one.
+      //
+      // 1. Ask our API for permission to upload. It checks the session is an
+      //    admin, validates the type and size, decides the filename, and hands
+      //    back a single-use token.
+      // 2. Send the bytes straight to Supabase with that token.
+      //
+      // The file never passes through our own server, which is the point:
+      // Vercel rejects request bodies over 4.5 MB, so the previous
+      // upload-via-our-API approach failed on most video and many phone photos
+      // while working fine on a developer's machine.
       const headers = await getAuthHeaders();
-      const res = await fetch("/api/upload", { method: "POST", body: formData, headers });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type,
+          size: file.size,
+          bucket,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
+        throw new Error(data.error || `HTTP ${res.status}`);
       }
-      const data = await res.json();
-      if (data.url) {
-        await loadFiles();
-      } else {
-        alert(data.error || t("admin.media_upload_error"));
-      }
+
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .uploadToSignedUrl(data.path, data.token, file, {
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      await loadFiles();
     } catch (err) {
       console.error("Upload error:", err);
       alert(err instanceof Error ? err.message : t("admin.media_upload_error"));
@@ -365,6 +404,7 @@ export function VideoUrlDialog({
 }) {
   const { t } = useAdminLocale();
   const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -386,28 +426,66 @@ export function VideoUrlDialog({
 
     if (!/^https?:\/\//i.test(trimmed)) return;
 
-    let html = "";
-    if (trimmed.includes("youtube.com/watch") || trimmed.includes("youtu.be")) {
-      const id = trimmed.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)?.[1];
-      if (id) {
-        html = `<iframe width="100%" height="400" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen title="YouTube video"></iframe>`;
+    // Converts a page URL into the provider's embeddable URL, and says what
+    // shape the result is.
+    //
+    // Two things changed here. Instagram links were previously used verbatim as
+    // an iframe src, which does not work — Instagram only renders inside a
+    // frame at its /embed path — and anything else at all was turned into an
+    // iframe pointing wherever the URL said. lib/sanitize.ts now strips iframes
+    // whose src is not a known provider, so an unsupported link would be
+    // silently discarded on save. Refusing it here, with a message, beats
+    // letting the instructor paste something that quietly vanishes.
+    const embed = (() => {
+      const youtube = trimmed.match(
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/
+      )?.[1];
+      if (youtube) {
+        return {
+          src: `https://www.youtube.com/embed/${youtube}`,
+          title: "YouTube video",
+          // Shorts are portrait, like reels.
+          aspect: trimmed.includes("/shorts/") ? "9 / 16" : "16 / 9",
+        };
       }
-    } else if (trimmed.includes("vimeo.com")) {
-      const id = trimmed.match(/vimeo\.com\/(\d+)/)?.[1];
-      if (id) {
-        html = `<iframe width="100%" height="400" src="https://player.vimeo.com/video/${id}" frameborder="0" allowfullscreen title="Vimeo video"></iframe>`;
+
+      const vimeo = trimmed.match(/vimeo\.com\/(\d+)/)?.[1];
+      if (vimeo) {
+        return {
+          src: `https://player.vimeo.com/video/${vimeo}`,
+          title: "Vimeo video",
+          aspect: "16 / 9",
+        };
       }
-    } else if (trimmed.includes("instagram.com")) {
-      html = `<iframe width="100%" height="480" src="${trimmed}" frameborder="0" allowfullscreen title="Instagram post"></iframe>`;
-    } else {
-      html = `<iframe width="100%" height="400" src="${trimmed}" frameborder="0" allowfullscreen title="Embedded content"></iframe>`;
+
+      const instagram = trimmed.match(
+        /instagram\.com\/(p|reel|tv)\/([\w-]+)/
+      );
+      if (instagram) {
+        const [, kind, code] = instagram;
+        return {
+          src: `https://www.instagram.com/${kind}/${code}/embed`,
+          title: "Instagram",
+          // Reels and IGTV are portrait; a standard post embed is roughly
+          // square once Instagram's caption chrome is included.
+          aspect: kind === "p" ? "4 / 5" : "9 / 16",
+        };
+      }
+
+      return null;
+    })();
+
+    if (!embed) {
+      setError(t("admin.video_unsupported"));
+      return;
     }
 
-    if (html) {
-      onInsert(html);
-      setUrl("");
-      onClose();
-    }
+    setError("");
+    onInsert(
+      `<iframe src="${embed.src}" data-aspect="${embed.aspect}" frameborder="0" allowfullscreen title="${embed.title}"></iframe>`
+    );
+    setUrl("");
+    onClose();
   };
 
   if (!open) return null;
@@ -436,10 +514,18 @@ export function VideoUrlDialog({
         </p>
         <Input
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            if (error) setError("");
+          }}
           placeholder={t("admin.video_placeholder")}
           onKeyDown={(e) => e.key === "Enter" && handleInsert()}
         />
+        {error && (
+          <p className="mt-2 text-sm text-error" role="alert">
+            {error}
+          </p>
+        )}
         <div className="mt-4 flex gap-2 justify-end">
           <Button variant="ghost" onClick={onClose}>{t("admin.cancel")}</Button>
           <Button onClick={handleInsert} disabled={!url.trim()}>

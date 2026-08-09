@@ -22,16 +22,19 @@ export function StickyCta() {
       .then(async ({ data }) => {
         if (!data || data.length === 0) return;
         const event = data[0];
+        // No cap means there is always room.
         if (event.max_participants == null) {
           setHasOpenEvents(true);
           return;
         }
-        const { count } = await supabase
-          .from("registrations")
-          .select("id", { count: "exact", head: true })
+        // Aggregate view — see the event detail page for why the registrations
+        // table cannot be counted from the browser.
+        const { data: availability } = await supabase
+          .from("event_availability")
+          .select("taken")
           .eq("event_id", event.id)
-          .neq("payment_status", "pending");
-        setHasOpenEvents((count || 0) < event.max_participants);
+          .single();
+        setHasOpenEvents((availability?.taken ?? 0) < event.max_participants);
       });
   }, []);
 
@@ -40,16 +43,30 @@ export function StickyCta() {
   const text = locale === "ro" ? "Înscrie-te acum" : "Book now";
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-sage/20 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-md lg:hidden">
-      <Button
-        className="w-full"
-        size="lg"
-        onClick={() => {
-          document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
-        }}
-      >
-        {text}
-      </Button>
-    </div>
+    <>
+      {/*
+       * A spacer the same height as the fixed bar.
+       *
+       * The bar is position:fixed, so it sits outside the document flow and
+       * covers whatever is at the bottom of the page — in practice the footer,
+       * with its contact and social links. Rendering a matching spacer here
+       * gives the page something to scroll past. Doing it inside this component
+       * rather than as page padding keeps the two in step: the bar only appears
+       * when seats are available, and so does the space it needs.
+       */}
+      <div aria-hidden="true" className="h-20 lg:hidden" />
+
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-sage/20 bg-white/90 px-4 py-3 shadow-lg backdrop-blur-md lg:hidden">
+        <Button
+          className="w-full"
+          size="lg"
+          onClick={() => {
+            document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
+          }}
+        >
+          {text}
+        </Button>
+      </div>
+    </>
   );
 }

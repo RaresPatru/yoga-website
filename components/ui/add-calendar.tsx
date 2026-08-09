@@ -12,6 +12,8 @@ interface AddCalendarProps {
     date: string;
     time: string;
     location: string;
+    /** Database id, so the entry a visitor downloads matches the emailed one. */
+    uid?: string;
   };
 }
 
