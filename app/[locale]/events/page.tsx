@@ -3,8 +3,29 @@ import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate, formatTime } from "@/lib/utils";
 import { getLocale, getTranslations } from "next-intl/server";
+import { buildPageMetadata } from "@/lib/metadata";
+import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import Image from "next/image";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({
+    title: locale === "ro" ? `Evenimente · ${SITE_NAME}` : `Events · ${SITE_NAME}`,
+    description:
+      locale === "ro"
+        ? "Ateliere, retreaturi și sesiuni de yoga în grupuri mici. Vezi datele următoare și rezervă-ți locul."
+        : "Workshops, retreats and yoga sessions in small groups. See upcoming dates and book your spot.",
+    path: "/events",
+    locale,
+    image: absoluteUrl(`/api/og/default?locale=${locale}`),
+  });
+}
 
 export default async function EventsPage() {
   const locale = await getLocale();

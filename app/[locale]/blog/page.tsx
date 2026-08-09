@@ -3,6 +3,27 @@ import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate } from "@/lib/utils";
 import { getLocale, getTranslations } from "next-intl/server";
+import { buildPageMetadata } from "@/lib/metadata";
+import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({
+    title: `Blog · ${SITE_NAME}`,
+    description:
+      locale === "ro"
+        ? "Gânduri despre practică, respirație și echilibru — scrise între ateliere."
+        : "Notes on practice, breath and balance — written between workshops.",
+    path: "/blog",
+    locale,
+    image: absoluteUrl(`/api/og/default?locale=${locale}`),
+  });
+}
 
 export default async function BlogPage() {
   const locale = await getLocale();

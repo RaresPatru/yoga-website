@@ -190,7 +190,10 @@ function BlogEditor({
     if (!editor) return;
     const srcMatch = html.match(/src="([^"]+)"/);
     if (srcMatch) {
-      editor.chain().focus().setIframe({ src: srcMatch[1] }).run();
+      // The dialog decides the shape (portrait for reels and Shorts, landscape
+      // for normal video) and passes it through as data-aspect.
+      const aspect = html.match(/data-aspect="([^"]+)"/)?.[1];
+      editor.chain().focus().setIframe({ src: srcMatch[1], ...(aspect ? { aspect } : {}) }).run();
     }
   };
 
