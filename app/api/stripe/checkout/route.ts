@@ -1,9 +1,21 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   try {
+    // Every call here creates a real Stripe Checkout session. Unthrottled, that
+    // is an open invitation to burn through API quota and fill the Stripe
+    // dashboard with junk. 20 per IP per 10 minutes is far more than a genuine
+    // person needs to complete one booking.
+    if (!rateLimit(`checkout:${clientIp(req)}`, 20)) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const { eventId, registrationId, locale } = await req.json();
 
     if (!eventId || !registrationId || (locale !== "ro" && locale !== "en")) {
@@ -69,6 +81,12 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
+      // Expires in 30 minutes (Stripe's minimum). A short window matters
+      // here: a pending registration holds a seat, and the seat only comes
+      // back when Stripe reports the session expired. The database also stops
+      // counting pending rows after an hour, so the two bound each other.
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+
       mode: "payment",
       success_url: `${base}/${locale}/events/${event.slug}?success=1`,
       cancel_url: `${base}/${locale}/events/${event.slug}?canceled=1`,

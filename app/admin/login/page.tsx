@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useAdminLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // proxy.ts redirects here with ?error=forbidden when someone is signed in but
+  // is not on the admin list. Without this message they would just see the
+  // login form again after a successful login and assume it was broken.
+  const forbidden = searchParams.get("error") === "forbidden";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +46,11 @@ export default function AdminLoginPage() {
         <h1 className="text-center font-serif text-2xl text-charcoal">
           {t("admin.login_title")}
         </h1>
+        {forbidden && (
+          <p className="mt-4 rounded-xl bg-error/10 px-4 py-3 text-sm text-error" role="alert">
+            {t("admin.login_forbidden")}
+          </p>
+        )}
         <form onSubmit={handleLogin} className="mt-8 space-y-4">
           <Input
             label={t("admin.email")}
@@ -64,5 +75,15 @@ export default function AdminLoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() needs a Suspense boundary above it so Next.js can render
+// the rest of the page while the URL is resolved.
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminLoginForm />
+    </Suspense>
   );
 }

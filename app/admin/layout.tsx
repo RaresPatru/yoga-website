@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import { AdminLocaleProvider, useAdminLocale } from "@/components/admin/locale-p
 import {
   LayoutDashboard,
   FileText,
+  PenLine,
   Calendar,
   Users,
   MessageSquare,
@@ -29,6 +30,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
 
   const adminLinks = [
     { href: "/admin", icon: LayoutDashboard, key: "dashboard" },
+    { href: "/admin/content", icon: PenLine, key: "content" },
     { href: "/admin/blog", icon: FileText, key: "blog" },
     { href: "/admin/events", icon: Calendar, key: "events" },
     { href: "/admin/registrations", icon: Users, key: "registrations" },
@@ -38,33 +40,19 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
   ];
 
   const isLoginPage = pathname === "/admin/login";
-  const [loading, setLoading] = useState(!isLoginPage);
 
-  useEffect(() => {
-    if (isLoginPage) return;
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push("/admin/login");
-      } else {
-        setLoading(false);
-      }
-    });
-  }, [router, isLoginPage, setLoading]);
-
+  // There used to be a useEffect here that fetched the session and redirected
+  // to /admin/login if it was missing. That check now lives in proxy.ts, which
+  // runs on the server before any HTML is sent. Doing it in the browser meant
+  // the admin shell was downloaded and rendered first, then torn down — a
+  // visible flash, and a spinner on every single page load. It was never a
+  // security control either: anyone can skip client-side JavaScript. The real
+  // protection is the RLS policies in the database.
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/admin/login");
   };
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-cream">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
-      </div>
-    );
-  }
 
   if (isLoginPage) {
     return <>{children}</>;

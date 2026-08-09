@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getResend } from "@/lib/resend";
-import { generateICS } from "@/lib/utils";
+import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+import { validateAttendee } from "@/lib/validate-attendee";
 
 export async function POST(req: Request) {
   try {
@@ -16,46 +14,59 @@ export async function POST(req: Request) {
       );
     }
 
-    const { eventId, fullName, email, phone, paymentStatus, captchaToken } = await req.json();
+    // `paymentStatus` is deliberately NOT read from the request body.
+    //
+    // It used to be, and was passed straight through to the database. That let
+    // anyone post {"paymentStatus":"completed"} to this endpoint and be
+    // recorded as having paid for a paid event — confirmation email, WhatsApp
+    // group link and all — without ever reaching Stripe. The price lives in
+    // the database, so the payment state is derived from it below and the
+    // client gets no say.
+    const body = await req.json();
 
-    if (!captchaToken) {
+    if (!body.captchaToken) {
       return NextResponse.json({ error: "Missing captcha token" }, { status: 400 });
     }
 
-    const verified = await verifyTurnstile(captchaToken);
+    const verified = await verifyTurnstile(body.captchaToken);
     if (!verified) {
       return NextResponse.json({ error: "Security check failed" }, { status: 400 });
     }
 
-    if (!eventId || typeof eventId !== "string") {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    // Shared with the waiting-list route so both apply identical rules; also
+    // trims and lowercases, so use `value` from here on rather than `body`.
+    const validation = validateAttendee(body);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
-
-    if (
-      !fullName ||
-      typeof fullName !== "string" ||
-      fullName.trim().length < 2 ||
-      fullName.trim().length > 100
-    ) {
-      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
-    }
-
-    if (!email || typeof email !== "string" || !EMAIL_RE.test(email.trim()) || email.length > 254) {
-      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
-    }
-
-    if (!phone || typeof phone !== "string" || phone.replace(/\D/g, "").length < 6) {
-      return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
-    }
+    const { eventId, fullName, email, phone } = validation.value;
 
     const supabase = createAdminClient();
 
+    // Look up the event to decide what this registration costs. A free event
+    // (price 0) is confirmed immediately; a paid one starts as 'pending' and is
+    // only flipped to 'completed' by the Stripe webhook once money actually
+    // arrives. Unpublished events are rejected so a draft cannot be booked via
+    // a guessed ID.
+    const { data: eventRow, error: eventLookupError } = await supabase
+      .from("events")
+      .select("id, price")
+      .eq("id", eventId)
+      .eq("published", true)
+      .single();
+
+    if (eventLookupError || !eventRow) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    const paymentStatus = eventRow.price > 0 ? "pending" : "free";
+
     const { data: rpcResult, error: rpcError } = await supabase.rpc("register_for_event", {
       p_event_id: eventId,
-      p_full_name: fullName.trim(),
-      p_email: email.trim().toLowerCase(),
-      p_phone: phone.trim(),
-      p_payment_status: paymentStatus || "free",
+      p_full_name: fullName,
+      p_email: email,
+      p_phone: phone,
+      p_payment_status: paymentStatus,
     });
 
     if (rpcError) throw rpcError;
@@ -69,53 +80,17 @@ export async function POST(req: Request) {
 
     const registration = rpcResult;
 
-    try {
-      const { data: eventData } = await supabase.from("events").select("*").eq("id", eventId).single();
-      if (eventData) {
-        const { data: template } = await supabase
-          .from("email_templates")
-          .select("*")
-          .eq("type", "registration_confirmation")
-          .single();
-
-        if (template) {
-          const vars: Record<string, string> = {
-            user_name: fullName.trim(),
-            event_name: eventData.title_ro,
-            event_date: eventData.date,
-            event_time: eventData.time.slice(0, 5),
-            event_location: eventData.location || "",
-            whatsapp_link: eventData.whatsapp_group_link || "",
-          };
-
-          const subject = template.subject_ro.replace(/\{\{(\w+)\}\}/g, (_m: string, k: string) => vars[k] || "");
-          const body = template.body_ro.replace(/\{\{(\w+)\}\}/g, (_m: string, k: string) => vars[k] || "");
-
-          const resend = getResend();
-          const icsContent = generateICS({
-            title: eventData.title_ro,
-            description: eventData.description_ro || "",
-            date: eventData.date,
-            time: eventData.time,
-            location: eventData.location || "",
-          });
-
-          await resend.emails.send({
-            from: process.env.RESEND_FROM_EMAIL!,
-            to: email.trim().toLowerCase(),
-            subject,
-            html: body,
-            attachments: [
-              {
-                filename: `${eventData.title_ro.replace(/\s+/g, "_")}.ics`,
-                content: Buffer.from(icsContent).toString("base64"),
-              },
-            ],
-          });
-        }
-      }
-    } catch (emailError) {
-      console.error("Email send error:", emailError);
+    // Only free events are confirmed here. For a paid event the registration is
+    // still 'pending' at this point — the visitor is about to be sent to Stripe
+    // — so the confirmation (which contains the WhatsApp link and the calendar
+    // invite) is sent by the Stripe webhook once the payment clears.
+    if (paymentStatus === "free") {
+      await sendConfirmationEmail({
+        eventId,
+        fullName,
+        email,
+        templateType: "registration_confirmation",
+      });
     }
 
     return NextResponse.json({ success: true, id: registration.id });
