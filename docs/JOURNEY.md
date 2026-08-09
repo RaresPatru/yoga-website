@@ -32,9 +32,9 @@ Three themes worth being able to speak to:
 2. **Tests that pass for the wrong reason.** The suite was green at 55/55 while
    the application's single most important flow — someone successfully booking —
    had no coverage at all.
-3. **Verifying rather than assuming.** Including one case below where I raised a
-   false alarm, checked properly, and corrected it. Being wrong and catching it
-   is part of the work.
+3. **Verifying rather than assuming.** Including two cases below where I stated
+   something confidently, checked properly, and corrected it. Being wrong and
+   catching it is part of the work.
 
 ---
 
@@ -435,8 +435,9 @@ looks perfectly fine in the dashboard and fails every login with an opaque HTTP
 
 ## Part 4 — Mistakes I made
 
-Included deliberately. Both were caught by the tooling built earlier, which is
-the argument for building it.
+Included deliberately. Most were caught by the tooling built earlier, which is
+the argument for building it — and one was caught only by putting a real card
+through the real site, which is the argument for not stopping at green tests.
 
 ### 4.1 I broke the site on iPhone with my own security header
 
@@ -523,6 +524,102 @@ the list in their original position.
 The general lesson is the one from 2.2 restated: **a fix you have only read is a
 hypothesis.** Three of these would have shipped looking finished.
 
+### 4.4 I deployed and took production down
+
+The first deploy of the rebuilt site returned **500 on every page**, including the
+home page:
+
+```
+Failed to load external module jsdom: ERR_REQUIRE_ESM: require() of
+ES Module @exodus/bytes/encoding-lite.js from
+html-encoding-sniffer/lib/html-encoding-sniffer.js not supported
+```
+
+`isomorphic-dompurify` — the HTML sanitizer — pulls `jsdom@30` →
+`html-encoding-sniffer@6` → `@exodus/bytes`, which is published as pure ESM in
+every version it has ever had. **Vercel's serverless bundle loads external
+modules with `require()`.** Pure ESM cannot be `require`d, so the import threw at
+runtime, on the server, on every request that sanitized anything.
+
+Three things about this are worth keeping.
+
+**The local production build passed.** `npm run build && npm start` was green,
+and the whole E2E suite ran against that build. Module resolution differs between
+a local Node process and Vercel's bundler: locally the same chain resolves as
+ESM and works. **A production build passing on my machine is not evidence that
+the deployed artifact runs.** Nothing in the pipeline had ever executed the thing
+Vercel actually builds.
+
+**The bug predated the change that exposed it.** `package-lock.json` last moved
+several commits earlier, and `/ro/blog/<slug>` had been returning 500 in
+production the whole time for exactly this reason. Nobody noticed because nothing
+linked to those pages. What my deploy changed was not the fault but the *blast
+radius*: the rebuilt home page imports the sanitizer, so the front door went down
+with it. A latent failure on an unvisited route is still a failure; it is just
+waiting for traffic.
+
+**The fix had to keep the security half still.** Pinning
+`isomorphic-dompurify` to `2.26.0` moves it back to a CJS-safe `jsdom@26`
+(`html-encoding-sniffer@4` → `whatwg-encoding`). DOMPurify itself is held at the
+current `3.4.13` through an npm `override`, so the sanitizer does not regress —
+only the DOM shim underneath it does. Verified by confirming `@exodus/bytes` is
+gone, that `require('jsdom')` and `require('html-encoding-sniffer')` both succeed
+(the exact call that failed on Vercel), and that all eleven sanitizer cases
+behave identically, including the lookalike-host, `javascript:` and `data:`
+rejections.
+
+The practice that would have caught it: **deploy to a preview URL and load a page
+before promoting to production.** Vercel builds every branch; the preview
+deployment is the real artifact. Skipping it meant the first execution of the
+production bundle was in front of users.
+
+There is also a decision here I would defend. The instinct was to roll back. That
+was ruled out, deliberately — the previous deployment had the *same* broken
+lockfile, so rolling back would have restored a home page that did not import the
+sanitizer while leaving the blog 500ing. Rolling forward with the dependency fix
+was the shorter path to a site with no known 500s.
+
+### 4.5 A single real payment found three things the tests could not
+
+The suite was green, the flow was covered, and Stripe test mode was wired up. One
+real end-to-end payment against production — card, webhook, inbox — still found
+three problems.
+
+**The confirmation email promised something it never sent.** The seeded
+`payment_confirmation` template said the WhatsApp group link was "in the attached
+file". It contained no `{{whatsapp_link}}` placeholder at all, and the `.ics`
+carries a title, time, description and location and nothing else. Someone who
+paid also received *less* information than someone who booked a free event: the
+free template lists the date, time and location, and this one did not. The
+template had been in the schema since the very first migration and was
+unreachable until the paid flow started sending from the Stripe webhook, so no
+code path had ever rendered it. Fixed in a migration whose `WHERE` clause only
+matches the original seeded text, so it cannot overwrite anything the instructor
+has since edited in `/admin/emails`.
+
+**A webhook branch that production can never reach.** The handler has a
+`charge.refunded` branch that frees the seat and notifies the waiting list.
+`charge.refunded` is not in the endpoint's subscribed events, so Stripe has never
+sent it — the branch is dead code in production, and a refund silently leaves the
+seat occupied. The endpoint *was* subscribed to four `invoice.*` events, which
+this application has no use for at all. **Code that handles an event you are not
+subscribed to reads exactly like code that works.**
+
+**And I got a conclusion wrong, out loud.** Looking at the Vercel logs I saw two
+webhook lines at the same millisecond and told the user Stripe had delivered the
+event twice, with an explanation about at-least-once delivery. It was a plausible
+story and it was false: checking the Stripe dashboard showed a single
+`checkout.session.completed` delivery, and the two log lines were one invocation
+logged twice. At-least-once delivery is real and the handler is genuinely
+idempotent — but that was not what happened here, and reciting a true general
+fact as a specific diagnosis is still a wrong answer. I corrected it in the same
+session.
+
+All three came from *running the thing and reading the output* rather than from
+reading code. That is the same lesson as 2.2 and 4.3, arriving for the third
+time, which is roughly the point at which it should stop being called a lesson
+and start being called a habit.
+
 ---
 
 ## Part 5 — Making the site findable
@@ -597,6 +694,14 @@ safe here because the view returns no row-level data — an id, a capacity and a
 count. That reasoning is written into the migration so the next person does not
 have to reconstruct it.
 
+**Rolling forward instead of rolling back.** When the deploy in 4.4 took
+production down, the reflex was to roll back. The previous deployment carried the
+same broken lockfile, so a rollback would have restored a working home page and
+left the blog returning 500 — trading a visible outage for an invisible one. The
+fix was small, understood and verifiable locally, so forward was the shorter path
+to a site with no known 500s. Rollback is the right default; it is not the right
+answer when the last known-good deployment was not actually good.
+
 **In-memory rate limiting, with the limitation stated.** On serverless each
 instance keeps its own counters, so the limits are per-instance and best-effort.
 That is documented in the code rather than quietly implied, with shared storage
@@ -615,3 +720,21 @@ noted as the upgrade path if abuse becomes real.
 | Colour contrast failures | systemic | none |
 | Schema reproducible from the repo | no | yes |
 | CI | none | lint, types, build, E2E on every push |
+
+Proven in production, not just in tests: a real card payment through Stripe →
+webhook → registration marked `completed` → confirmation email with a calendar
+invite at the correct local time.
+
+Two things are known-outstanding and are deliberately not fixed in code, because
+neither is a code problem:
+
+- **`charge.refunded` is not subscribed on the Stripe endpoint**, so the refund
+  branch cannot run (4.5). One checkbox in the Stripe dashboard, then worth a
+  refund test — refund → seat freed → waiting list notified has never executed
+  end to end.
+- **The launch blocker is content, not engineering.** Her photo, her story, the
+  About text, the FAQs and a real business name to replace the placeholder. All
+  editable from the admin panel; the list is in
+  [CONTENT-NEEDED.md](CONTENT-NEEDED.md). The site is technically ready and will
+  read as unfinished until that lands — which is why the placeholders are
+  deliberately visible rather than filled with plausible filler (2.7).
