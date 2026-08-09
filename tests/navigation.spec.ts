@@ -31,9 +31,17 @@ test.describe("navigation and routing", () => {
     expect(response?.status()).toBe(404);
   });
 
-  test("unknown blog slug renders the 404 page", async ({ page }) => {
-    await page.goto("/ro/blog/slug-care-nu-exista");
-    await expect(page.getByText("This page could not be found.")).toBeVisible();
+  // Asserts the status as well as the body now.
+  //
+  // This used to check only that Next's stock "This page could not be found."
+  // appeared, because at the time the response was HTTP 200 and asserting the
+  // status would have failed. That 200 was the actual bug — a soft 404, which
+  // search engines may index as a real page — and it stayed hidden precisely
+  // because the test was written around it rather than at it.
+  test("unknown blog slug returns 404 and shows the branded page", async ({ page }) => {
+    const response = await page.goto("/ro/blog/slug-care-nu-exista");
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("heading", { name: /Pagina nu a fost găsită/ })).toBeVisible();
   });
 
   for (const route of ["/admin", "/admin/blog", "/admin/events", "/admin/registrations", "/admin/testimonials", "/admin/emails", "/admin/messages"]) {
