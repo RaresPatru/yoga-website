@@ -1,6 +1,7 @@
 {
   "nav": {
     "home": "Home",
+    "about": "About",
     "blog": "Blog",
     "events": "Events",
     "testimonials": "Testimonials",
@@ -21,11 +22,6 @@
     "hero_title": "I guide your journey to balance",
     "hero_subtitle": "Yoga for body, mind and soul",
     "cta": "Explore",
-    "mission_title": "My Mission",
-    "mission_text": "I believe yoga is for everyone. Through mindful practice and personalized guidance, I help you discover your inner strength and balance.",
-    "years_label": "Years of experience",
-    "classes_label": "Classes taught",
-    "students_label": "Students guided",
     "blog_title": "From the Blog",
     "events_title": "Upcoming Events",
     "free": "Free",
@@ -114,6 +110,7 @@
     "email": "Email",
     "password": "Password",
     "login": "Login",
+    "login_forbidden": "This account does not have access to the admin panel.",
     "dashboard": "Dashboard",
     "blog": "Blog Posts",
     "events": "Events",
@@ -192,7 +189,7 @@
     "media_upload_error": "Upload error",
     "media_confirm_delete": "Delete this file?",
     "video_title": "Insert Video URL",
-    "video_hint": "YouTube, Vimeo, Instagram or any video URL.",
+    "video_hint": "YouTube, Vimeo or Instagram (post, reel or IGTV).",
     "video_placeholder": "https://youtube.com/watch?v=...",
     "video_insert": "Insert",
     "registrations_count": "Registrations: {count}",
@@ -206,6 +203,8 @@
     "translate": "Translate to English",
     "translate_to_en": "Translate to English",
     "translating": "Translating...",
-    "translate_error": "Translation error"
+    "translate_error": "Translation error",
+    "video_unsupported": "Unsupported link. Use YouTube, Vimeo or Instagram.",
+    "content": "Site content"
   }
 }

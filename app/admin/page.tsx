@@ -50,11 +50,11 @@ export default function AdminDashboard() {
   }, []);
 
   const cards: StatCard[] = [
-    { icon: Calendar, labelKey: "admin.events", value: stats.events, color: "text-sage", href: "/admin/events" },
-    { icon: Users, labelKey: "admin.registrations", value: stats.registrations, color: "text-rose", href: "/admin/registrations" },
+    { icon: Calendar, labelKey: "admin.events", value: stats.events, color: "text-sage-deep", href: "/admin/events" },
+    { icon: Users, labelKey: "admin.registrations", value: stats.registrations, color: "text-rose-deep", href: "/admin/registrations" },
     { icon: FileText, labelKey: "admin.blog", value: stats.posts, color: "text-lavender", href: "/admin/blog" },
     { icon: Mail, labelKey: "admin.messages", value: stats.messages, color: "text-blush", href: "/admin/messages" },
-    { icon: Star, labelKey: "admin.pending_testimonials", value: stats.pendingTestimonials, color: "text-rose-dark", href: "/admin/testimonials" },
+    { icon: Star, labelKey: "admin.pending_testimonials", value: stats.pendingTestimonials, color: "text-rose-deep", href: "/admin/testimonials" },
   ];
 
   return (

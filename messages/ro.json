@@ -1,6 +1,7 @@
 {
   "nav": {
     "home": "Acasă",
+    "about": "Despre mine",
     "blog": "Blog",
     "events": "Evenimente",
     "testimonials": "Testimoniale",
@@ -21,11 +22,6 @@
     "hero_title": "Îți ghidez călătoria către echilibru",
     "hero_subtitle": "Yoga pentru corp, minte și suflet",
     "cta": "Explorează",
-    "mission_title": "Misiunea mea",
-    "mission_text": "Cred că yoga este pentru toată lumea. Prin practică atentă și ghidare personalizată, te ajut să-ți descoperi puterea interioară și echilibrul.",
-    "years_label": "Ani de experiență",
-    "classes_label": "Clase susținute",
-    "students_label": "Studenți ghidați",
     "blog_title": "Din Blog",
     "events_title": "Evenimente Viitoare",
     "free": "Gratuit",
@@ -114,6 +110,7 @@
     "email": "Email",
     "password": "Parolă",
     "login": "Autentificare",
+    "login_forbidden": "Contul acesta nu are acces la panoul de administrare.",
     "dashboard": "Panou de Control",
     "blog": "Articole",
     "events": "Evenimente",
@@ -192,7 +189,7 @@
     "media_upload_error": "Eroare la încărcare",
     "media_confirm_delete": "Ștergi acest fișier?",
     "video_title": "Inserează URL Video",
-    "video_hint": "YouTube, Vimeo, Instagram sau orice URL de video.",
+    "video_hint": "YouTube, Vimeo sau Instagram (postare, reel sau IGTV).",
     "video_placeholder": "https://youtube.com/watch?v=...",
     "video_insert": "Inserează",
     "registrations_count": "Înscrieri: {count}",
@@ -206,6 +203,8 @@
     "translate": "Tradu în engleză",
     "translate_to_en": "Tradu în engleză",
     "translating": "Se traduce...",
-    "translate_error": "Eroare la traducere"
+    "translate_error": "Eroare la traducere",
+    "video_unsupported": "Link nesuportat. Folosește YouTube, Vimeo sau Instagram.",
+    "content": "Conținut site"
   }
 }

@@ -1,4 +1,5 @@
 import { useTranslations } from "next-intl";
+import { SITE_NAME } from "@/lib/site-config";
 
 export function Footer() {
   const t = useTranslations("footer");
@@ -7,7 +8,7 @@ export function Footer() {
     <footer className="mt-auto border-t border-sage/20 bg-white/40 backdrop-blur-sm">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-8 md:flex-row">
         <p className="text-sm text-charcoal-light">
-          &copy; {new Date().getFullYear()} Yoga Flow. {t("rights")}
+          &copy; {new Date().getFullYear()} {SITE_NAME}. {t("rights")}
         </p>
         <div className="flex items-center gap-4">
           <p className="text-sm text-charcoal-light">{t("follow")}</p>

@@ -1,21 +1,71 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/*
+ * COLOUR TOKENS
+ *
+ * Split by ROLE, not just by hue. This is the fix for a systemic accessibility
+ * problem: the original palette used one pastel per colour for everything, and
+ * pastels that look lovely as a background wash are unreadable as text or
+ * behind white lettering.
+ *
+ * Measured before the change:
+ *   white on --color-rose  2.08:1   <- every primary button on the site
+ *   rose text on rose/10   1.92:1   <- the price badge on every event card
+ *   sage-dark on cream     3.26:1   <- the logo
+ *
+ * WCAG AA asks for 4.5:1 for normal text. 2.08:1 is not a near miss; it is
+ * roughly the contrast of light grey on white. On a phone held outdoors — which
+ * is most of this audience, arriving from an Instagram story — the price and
+ * the "Book" button were the hardest things on the page to read.
+ *
+ * So each hue now has two jobs and two values:
+ *
+ *   DECORATIVE  the original pastels. Fills, washes, borders, progress bars,
+ *               focus rings. Never carries text, never sits behind white.
+ *   INTERACTIVE the deepened `-deep` variants. Buttons, links, prices, any
+ *               coloured text.
+ *
+ * Every pairing below is measured, not guessed; the numbers in the comments are
+ * real ratios against the surface each colour actually sits on.
+ *
+ * Deepening the rose also does the design a favour. #E8A0B4 is the exact
+ * bubblegum pink of every wellness template; #A94E67 reads closer to dried
+ * rose, which is both calmer and more distinctive.
+ */
 @theme inline {
   --color-cream: #FFF8F0;
+  --color-warm-white: #FFFAF5;
+
+  /* Decorative — fills and washes only. */
   --color-sage: #9CAF88;
   --color-sage-light: #B5C9A0;
-  --color-sage-dark: #7D9168;
   --color-lavender: #C4B5D4;
   --color-lavender-light: #D8CCE4;
   --color-blush: #F4C6C6;
   --color-rose: #E8A0B4;
-  --color-rose-dark: #D48098;
-  --color-charcoal: #2D2D2D;
-  --color-charcoal-light: #4A4A4A;
-  --color-success: #7FB069;
-  --color-error: #D9534F;
-  --color-warm-white: #FFFAF5;
+
+  /* Interactive — text, buttons, links. */
+  --color-rose-deep: #A94E67;   /* 5.29:1 w/ white · 5.02:1 on cream */
+  --color-rose-deeper: #8E3A50; /* hover state, deeper still */
+  --color-sage-deep: #5F7049;   /* 5.11:1 on cream · 5.38:1 w/ white */
+
+  /*
+   * Kept so existing markup does not break, but both now point at the
+   * accessible values. `rose-dark` was #D48098 (2.7:1 with white) and
+   * `sage-dark` was #7D9168 (3.26:1 on cream); anything still referencing them
+   * silently failed contrast, so they are aliases rather than the old pastels.
+   */
+  --color-rose-dark: #A94E67;
+  --color-sage-dark: #5F7049;
+
+  --color-charcoal: #2D2D2D;       /* 13.08:1 on cream */
+  --color-charcoal-light: #4A4A4A; /* 8.41:1 on cream */
+
+  /* Status colours, darkened to the same standard. */
+  --color-success: #4F7A3A; /* 4.77:1 on cream (was #7FB069, 2.4:1) */
+  --color-error: #B3261E;   /* 6.21:1 on cream (was #D9534F, 3.9:1) */
+  --color-warning: #8A5A00; /* readable amber for waiting-list states */
 
   --font-serif: "Fraunces", serif;
   --font-sans: "Inter", sans-serif;
@@ -36,13 +86,22 @@ body {
 }
 
 @layer utilities {
-  .blog-content iframe {
+  /*
+   * Fallback for older posts only.
+   *
+   * Embeds are now wrapped in a div that carries the aspect ratio, with the
+   * iframe stretched to fill it (`.absolute`). Content saved before that change
+   * contains a bare <iframe width="100%" height="400">, which would otherwise
+   * render at a fixed pixel height and squash on a phone.
+   *
+   * The :not(.absolute) is what keeps the two apart — without it this rule also
+   * applied to the new markup and forced every embed back to 16:9, including
+   * portrait Instagram reels.
+   */
+  .blog-content iframe:not(.absolute) {
     width: 100% !important;
+    height: auto;
     aspect-ratio: 16 / 9;
     border-radius: 0.75rem;
-  }
-  .blog-content .aspect-video iframe {
-    aspect-ratio: unset;
-    border-radius: 0;
   }
 }

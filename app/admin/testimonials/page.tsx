@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Check, X } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 
@@ -15,12 +16,40 @@ interface Testimonial {
   created_at: string;
   user_id: string | null;
   event_id: string;
+  /** Optional 1-5. NULL means unrated, and no stars are drawn. */
+  rating: number | null;
+  author_name: string | null;
+  video_url: string | null;
 }
 
 export default function AdminTestimonialsPage() {
-  const { t } = useAdminLocale();
+  const { t, locale } = useAdminLocale();
+  const ro = locale === "ro";
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savedId, setSavedId] = useState<string | null>(null);
+
+  const updateLocal = (id: string, patch: Partial<Testimonial>) =>
+    setTestimonials((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+  const saveDetails = async (item: Testimonial) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("testimonials")
+      .update({
+        author_name: item.author_name?.trim() || null,
+        rating: item.rating,
+        video_url: item.video_url?.trim() || null,
+      })
+      .eq("id", item.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setSavedId(item.id);
+    window.setTimeout(() => setSavedId((id) => (id === item.id ? null : id)), 2000);
+  };
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -87,15 +116,95 @@ export default function AdminTestimonialsPage() {
                     )}
                   </div>
                   <p className="mt-2 text-charcoal">{testimonial.content}</p>
+
+                  {/*
+                   * Attribution and rating.
+                   *
+                   * The public submission form does not collect either — people
+                   * leave a comment, not a form with a star widget — so these
+                   * are filled in here, by her, from what the person actually
+                   * said. Leaving the rating blank is a real choice: no stars
+                   * are drawn rather than five being assumed, which is what the
+                   * site used to do for every testimonial regardless.
+                   */}
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <div className="min-w-[12rem] flex-1">
+                      <Input
+                        label={ro ? "Nume" : "Name"}
+                        value={testimonial.author_name ?? ""}
+                        onChange={(e) => updateLocal(testimonial.id, { author_name: e.target.value })}
+                        placeholder={ro ? "ex. Ana P." : "e.g. Ana P."}
+                      />
+                    </div>
+
+                    <label className="flex flex-col gap-1.5 text-sm font-medium text-charcoal-light">
+                      {ro ? "Rating" : "Rating"}
+                      <select
+                        value={testimonial.rating ?? ""}
+                        onChange={(e) =>
+                          updateLocal(testimonial.id, {
+                            rating: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
+                        className="h-12 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal focus:border-rose-deep/50 focus:outline-none focus:ring-2 focus:ring-rose-deep/20"
+                      >
+                        <option value="">{ro ? "Fără" : "None"}</option>
+                        {[5, 4, 3, 2, 1].map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {testimonial.type === "video" && (
+                      <div className="min-w-[16rem] flex-1">
+                        <Input
+                          label={ro ? "Link video" : "Video link"}
+                          value={testimonial.video_url ?? ""}
+                          onChange={(e) => updateLocal(testimonial.id, { video_url: e.target.value })}
+                          placeholder={ro ? "Încarcă în Bibliotecă Media, apoi lipește linkul" : "Upload in Media Library, then paste the link"}
+                        />
+                      </div>
+                    )}
+
+                    <Button size="sm" onClick={() => saveDetails(testimonial)}>
+                      {t("admin.save")}
+                    </Button>
+                    {savedId === testimonial.id && (
+                      <span className="flex items-center gap-1 pb-3 text-sm text-success" role="status">
+                        <Check className="h-4 w-4" aria-hidden="true" />
+                        {ro ? "Salvat" : "Saved"}
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {/*
+                 * These were icon-only buttons with no accessible name — a
+                 * screen reader announced both as simply "button", giving no
+                 * way to tell approve from delete. An aria-label is the whole
+                 * fix, and it also lets tests target them by intent rather than
+                 * by DOM position, which broke the moment another button was
+                 * added to the card.
+                 */}
                 <div className="ml-4 flex gap-2">
                   {!testimonial.approved && (
-                    <Button variant="ghost" size="sm" onClick={() => handleApprove(testimonial.id, true)}>
-                      <Check className="h-4 w-4 text-success" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={ro ? "Aprobă testimonialul" : "Approve testimonial"}
+                      onClick={() => handleApprove(testimonial.id, true)}
+                    >
+                      <Check className="h-4 w-4 text-success" aria-hidden="true" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(testimonial.id)}>
-                    <X className="h-4 w-4 text-error" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={ro ? "Șterge testimonialul" : "Delete testimonial"}
+                    onClick={() => handleDelete(testimonial.id)}
+                  >
+                    <X className="h-4 w-4 text-error" aria-hidden="true" />
                   </Button>
                 </div>
               </div>

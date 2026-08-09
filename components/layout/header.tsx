@@ -5,10 +5,12 @@ import { useTranslations, useLocale } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Menu, X } from "lucide-react";
 import { LanguageSwitcher } from "@/components/ui/language-switcher";
+import { SITE_NAME } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
   { href: "/", key: "home" },
+  { href: "/about", key: "about" },
   { href: "/blog", key: "blog" },
   { href: "/events", key: "events" },
   { href: "/testimonials", key: "testimonials" },
@@ -29,7 +31,7 @@ export function Header() {
             href="/"
             className="font-serif text-xl font-semibold text-sage-dark"
           >
-            Yoga Flow
+            {SITE_NAME}
           </Link>
 
           <div className="hidden items-center gap-1 md:flex">

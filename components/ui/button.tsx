@@ -1,70 +1,74 @@
 "use client";
 
 import { forwardRef, isValidElement, cloneElement, type ReactElement } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { buttonClasses, type ButtonVariant, type ButtonSize } from "@/lib/button-styles";
+
+// Re-exported so existing imports from this module keep working.
+export { buttonClasses };
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost";
-  size?: "sm" | "md" | "lg";
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  /**
+   * Render the child element with the button's styling instead of emitting a
+   * <button>. Use this for links:
+   *
+   *     <Button asChild><Link href="/events">Vezi evenimentele</Link></Button>
+   *
+   * The alternative — <Link><Button>…</Button></Link> — puts a <button> inside
+   * an <a>. That is invalid HTML, and assistive technology has to guess whether
+   * it is announcing a link or a control. `asChild` produces a single <a>
+   * styled as a button, which is unambiguous.
+   */
   asChild?: boolean;
   children: React.ReactNode;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "primary", size = "md", asChild, className, children, ...props }, ref) => {
+    const reduceMotion = useReducedMotion();
     const classes = cn(
-      "inline-flex w-full cursor-pointer items-center justify-center rounded-full font-medium transition-colors",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose/50",
-      "disabled:pointer-events-none disabled:opacity-50",
-      {
-        "bg-rose text-white hover:bg-rose-dark shadow-lg shadow-rose/25":
-          variant === "primary",
-        "border border-sage/30 bg-white/60 text-charcoal hover:bg-white/80 backdrop-blur-sm":
-          variant === "secondary",
-        "text-charcoal-light hover:text-charcoal hover:bg-white/40":
-          variant === "ghost",
-      },
-      {
-        "h-9 px-4 text-sm": size === "sm",
-        "h-12 px-6 text-base": size === "md",
-        "h-14 px-8 text-lg": size === "lg",
-      },
-      className
+      buttonClasses({ variant, size, className }),
+      // Cancels the hover/tap scale when the OS asks for reduced motion.
+      reduceMotion && "motion-safe:hover:scale-100 motion-safe:active:scale-100"
     );
 
+    // `w-full` used to be hardcoded here, wrapped in an `inline-flex` motion.div.
+    // The wrapper sized itself to its content, so the button filled a container
+    // that was already content-width — meaning a caller passing `className="w-full"`
+    // got no effect at all. Dropping the wrapper lets width behave normally: the
+    // button is inline by default and full-width when a caller asks for it.
+    //
+    // NOTE: this branch only runs in client components. From a Server Component
+    // the child arrives as a serialised reference, isValidElement() is false,
+    // and the code falls through to a real <button> wrapping the link. Use
+    // buttonClasses() on the link directly in server-rendered code.
     if (asChild && isValidElement(children)) {
       const child = children as ReactElement<Record<string, unknown>>;
-      return (
-        <motion.div
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          className="inline-flex"
-          style={{ width: props.style?.width }}
-        >
-          {cloneElement(child, {
-            className: cn(child.props.className as string | undefined, classes),
-          })}
-        </motion.div>
-      );
+      // Forward everything, not just the class name. Passing only `className`
+      // meant `<Button asChild onClick={...}>` silently dropped the handler,
+      // along with `ref`, `aria-*` and anything else — no error, just a control
+      // that does nothing. The child's own props win, so a link's `href` is
+      // never overwritten.
+      return cloneElement(child, {
+        ...props,
+        ...child.props,
+        ref,
+        className: cn(child.props.className as string | undefined, classes),
+      } as Record<string, unknown>);
     }
 
     return (
-      <motion.div
-        whileHover={{ scale: 1.03 }}
-        whileTap={{ scale: 0.97 }}
-        className="inline-flex"
-        style={{ width: props.style?.width }}
+      <motion.button
+        ref={ref}
+        type={props.type ?? "button"}
+        className={classes}
+        {...(props as React.ComponentProps<typeof motion.button>)}
       >
-        <button
-          ref={ref}
-          type={props.type ?? "button"}
-          className={classes}
-          {...props}
-        >
-          {children}
-        </button>
-      </motion.div>
+        {children}
+      </motion.button>
     );
   }
 );

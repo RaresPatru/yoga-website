@@ -1,211 +1,372 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useTranslations, useLocale } from "next-intl";
-import { motion, useReducedMotion } from "motion/react";
-import { Button } from "@/components/ui/button";
-import { GlassCard } from "@/components/ui/glass-card";
+import Image from "next/image";
+import { getTranslations } from "next-intl/server";
+import { ArrowRight, Calendar, Clock, MapPin, Users, Quote } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { formatDate, formatTime } from "@/lib/utils";
+import { buttonClasses } from "@/lib/button-styles";
+import { GlassCard } from "@/components/ui/glass-card";
+import { TextPlaceholder, ImagePlaceholder } from "@/components/ui/content-placeholder";
 import { StickyCta } from "@/components/sticky-cta";
-import { ArrowRight, Calendar, Clock, Star, Users } from "lucide-react";
+import { FaqList } from "@/components/faq-list";
+import { createPublicClient } from "@/lib/supabase/public";
+import { getSiteContent, getFaqs } from "@/lib/site-content";
+import { sanitizeHtml } from "@/lib/sanitize";
+import { formatDate, formatTime } from "@/lib/utils";
 
-interface Post {
-  id: string;
-  slug: string;
-  title_ro: string;
-  title_en: string | null;
-  created_at: string;
-}
+/**
+ * Home page — a server component.
+ *
+ * REBUILT, AND WHY
+ *
+ * The previous version was a client component that fetched everything after
+ * hydration, so none of its content existed in the HTML. It also led with the
+ * blog and pushed events into third place, filled its hero with a placeholder
+ * glyph, and stated three invented statistics as fact.
+ *
+ * The order below follows what someone arriving from an Instagram story
+ * actually needs, in the order they need it:
+ *
+ *   1. Who is this and what is it        — hero, her photograph
+ *   2. What can I book, and when         — the next event, above the fold
+ *   3. Why should I trust her            — her story
+ *   4. What do others say                — testimonials
+ *   5. What am I worried about           — FAQ
+ *   6. Anything else                     — recent writing
+ *
+ * Events move from third to second because they are the only thing on this site
+ * that earns money, and because a link shared to a story is almost always about
+ * a specific event.
+ */
 
-interface Event {
+export const revalidate = 300;
+
+interface EventCard {
   id: string;
   slug: string;
   title_ro: string;
   title_en: string | null;
   date: string;
   time: string;
+  location: string | null;
   price: number;
   max_participants: number | null;
-  registration_count: number;
+  image_url: string | null;
 }
 
-interface Testimonial {
-  id: string;
-  content: string;
-}
+export default async function HomePage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const t = await getTranslations("home");
+  const supabase = createPublicClient();
+  const today = new Date().toISOString().split("T")[0];
 
-export default function HomePage() {
-  const t = useTranslations("home");
-  const locale = useLocale();
-  const reduceMotion = useReducedMotion();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [content, faqs] = await Promise.all([getSiteContent(locale), getFaqs(locale)]);
 
-  useEffect(() => {
-    const supabase = createClient();
-    const today = new Date().toISOString().split("T")[0];
-
+  const [{ data: upcoming }, { data: testimonials }, { data: posts }] = await Promise.all([
+    supabase
+      .from("events")
+      .select("id, slug, title_ro, title_en, date, time, location, price, max_participants, image_url")
+      .eq("published", true)
+      .gte("date", today)
+      .order("date", { ascending: true })
+      .limit(3),
+    supabase
+      .from("testimonials")
+      .select("id, content, type, rating")
+      .eq("approved", true)
+      .order("created_at", { ascending: false })
+      .limit(3),
     supabase
       .from("blog_posts")
       .select("id, slug, title_ro, title_en, created_at")
       .eq("published", true)
+      .eq("hidden", false)
       .order("created_at", { ascending: false })
-      .limit(3)
-      .then(({ data }) => { if (data) setPosts(data); });
+      .limit(3),
+  ]);
 
-    const loadEvents = async () => {
-      const baseQuery = () =>
-        supabase
-          .from("events")
-          .select("id, slug, title_ro, title_en, date, time, price, max_participants")
-          .eq("published", true);
+  const events = (upcoming ?? []) as EventCard[];
 
-      let { data: upcoming } = await baseQuery()
-        .gte("date", today)
-        .order("date", { ascending: true })
-        .limit(3);
+  // Seat counts come from the aggregate view — the registrations table itself
+  // holds personal data and is not readable without being signed in.
+  const availability = new Map<string, { capacity: number | null; taken: number }>();
+  if (events.length) {
+    const { data: rows } = await supabase
+      .from("event_availability")
+      .select("event_id, capacity, taken")
+      .in("event_id", events.map((e) => e.id));
+    for (const row of rows ?? []) {
+      availability.set(row.event_id, { capacity: row.capacity, taken: row.taken });
+    }
+  }
 
-      if (!upcoming || upcoming.length === 0) {
-        const { data: past } = await baseQuery()
-          .lt("date", today)
-          .order("date", { ascending: false })
-          .limit(3);
-        upcoming = past || [];
-      }
-
-      if (upcoming && upcoming.length > 0) {
-        const ids = upcoming.map((e) => e.id);
-        const { data: counts } = await supabase
-          .from("registrations")
-          .select("event_id")
-          .in("event_id", ids)
-          .neq("payment_status", "pending");
-
-        const countMap: Record<string, number> = {};
-        for (const r of counts || []) {
-          countMap[r.event_id] = (countMap[r.event_id] || 0) + 1;
-        }
-
-        setEvents(
-          upcoming.map((e) => ({
-            ...e,
-            registration_count: countMap[e.id] || 0,
-          }))
-        );
-      } else {
-        setEvents([]);
-      }
-    };
-
-    loadEvents();
-
-    supabase
-      .from("testimonials")
-      .select("id, content")
-      .eq("approved", true)
-      .order("created_at", { ascending: false })
-      .limit(6)
-      .then(({ data }) => { if (data) setTestimonials(data); });
-  }, []);
-
-  const enterFromLeft = reduceMotion
-    ? {}
-    : { initial: { opacity: 0, x: -40 }, animate: { opacity: 1, x: 0 } };
-  const enterFromRight = reduceMotion
-    ? {}
-    : { initial: { opacity: 0, x: 40 }, animate: { opacity: 1, x: 0 } };
-  const enterUp = (delay = 0) =>
-    reduceMotion
-      ? {}
-      : {
-          initial: { opacity: 0, y: 40 },
-          whileInView: { opacity: 1, y: 0 },
-          viewport: { once: true, margin: "-100px" },
-          transition: { duration: 0.6, delay },
-        };
+  const title = (e: EventCard) =>
+    locale === "ro" ? e.title_ro : e.title_en || e.title_ro;
+  const [nextEvent, ...laterEvents] = events;
 
   return (
     <div className="flex flex-col">
-      <section className="relative flex min-h-[90dvh] items-center overflow-hidden px-4">
-        <div className="mx-auto grid w-full max-w-7xl gap-8 md:grid-cols-2 md:gap-16 items-center">
-          <motion.div
-            {...enterFromLeft}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="relative aspect-[3/4] w-full max-w-lg mx-auto md:mx-0 rounded-3xl overflow-hidden shadow-2xl"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-sage/20 to-lavender/20" />
-            <div className="flex h-full items-center justify-center bg-gradient-to-br from-sage/10 to-lavender/10">
-              <span className="font-serif text-6xl text-sage/30">✧</span>
-            </div>
-          </motion.div>
+      {/* ---------------------------------------------------------------- */}
+      {/* 1. Hero — her, not a decorative glyph                            */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="px-4 pt-8 pb-16 md:pt-16">
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-8 md:grid-cols-2 md:gap-16">
+          {/*
+           * On a phone the headline comes first and the photograph follows;
+           * on desktop the photograph moves back to the left column.
+           *
+           * A 3:4 portrait at full mobile width is about 520px tall, so
+           * image-first meant a visitor arriving from Instagram saw a whole
+           * screen of photo and had to scroll before learning what the site
+           * even was. Leading with the headline also helps Largest Contentful
+           * Paint, since text renders immediately while the image is still
+           * downloading.
+           */}
+          <div className="order-2 relative mx-auto w-full max-w-md md:order-1 md:mx-0">
+            {content["home.hero_image"] ? (
+              <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-xl md:aspect-[3/4]">
+                <Image
+                  src={content["home.hero_image"]}
+                  alt={content["home.hero_title"] ?? ""}
+                  fill
+                  sizes="(max-width: 768px) 90vw, 45vw"
+                  className="object-cover"
+                  // The hero image is the largest thing on screen, so it is the
+                  // Largest Contentful Paint element. `priority` tells Next to
+                  // preload it instead of waiting for layout.
+                  priority
+                />
+              </div>
+            ) : (
+              <ImagePlaceholder
+                label="Fotografia ta principală — adaugă din panoul de administrare"
+                aspect="aspect-[4/5] md:aspect-[3/4]"
+              />
+            )}
+          </div>
 
-          <motion.div
-            {...enterFromRight}
-            transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-            className="text-center md:text-left"
-          >
+          <div className="order-1 text-center md:order-2 md:text-left">
             <h1 className="font-serif text-4xl leading-tight text-charcoal md:text-6xl">
-              {t("hero_title")}
+              {content["home.hero_title"] ?? t("hero_title")}
             </h1>
-            <p className="mt-4 text-lg text-charcoal-light md:text-xl">
-              {t("hero_subtitle")}
+            <p className="mt-5 text-lg text-charcoal-light md:text-xl">
+              {content["home.hero_subtitle"] ?? t("hero_subtitle")}
             </p>
-            <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center justify-center md:justify-start">
-              <Link href="/events">
-                <Button size="lg">{t("cta")}</Button>
-              </Link>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center md:justify-start">
+              <Link href="/events" className={buttonClasses({ size: "lg" })}>{t("cta")}</Link>
+              <Link href="/about" className={buttonClasses({ variant: "secondary", size: "lg" })}>{locale === "ro" ? "Despre mine" : "About me"}</Link>
             </div>
-          </motion.div>
-        </div>
-      </section>
-
-      <section className="bg-white/40 py-20 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4">
-          <motion.div {...enterUp()} className="text-center">
-            <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
-              {t("mission_title")}
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg text-charcoal-light">
-              {t("mission_text")}
-            </p>
-          </motion.div>
-
-          <div className="mt-12 grid gap-6 sm:grid-cols-3">
-            {[
-              { value: "10+", label: t("years_label") },
-              { value: "500+", label: t("classes_label") },
-              { value: "1000+", label: t("students_label") },
-            ].map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                {...enterUp(i * 0.1)}
-                transition={{ duration: 0.5, delay: reduceMotion ? 0 : i * 0.1 }}
-              >
-                <GlassCard className="text-center">
-                  <p className="font-serif text-4xl text-rose">{stat.value}</p>
-                  <p className="mt-2 text-sm text-charcoal-light">{stat.label}</p>
-                </GlassCard>
-              </motion.div>
-            ))}
           </div>
         </div>
       </section>
 
-      {posts.length > 0 && (
-        <section className="py-20">
-          <div className="mx-auto max-w-7xl px-4">
+      {/* ---------------------------------------------------------------- */}
+      {/* 2. The next event, as high up the page as it can go              */}
+      {/* ---------------------------------------------------------------- */}
+      {nextEvent ? (
+        <section id="events" className="bg-white/50 py-16 backdrop-blur-sm">
+          <div className="mx-auto max-w-6xl px-4">
+            <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
+              {locale === "ro" ? "Următorul eveniment" : "Next event"}
+            </h2>
+
+            <Link
+              href={`/events/${nextEvent.slug}`}
+              className="mt-6 block rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-deep focus-visible:ring-offset-2"
+            >
+              <GlassCard className="overflow-hidden transition-transform hover:scale-[1.01]">
+                <div className="grid gap-6 md:grid-cols-5">
+                  {nextEvent.image_url && (
+                    <div className="relative aspect-video overflow-hidden rounded-2xl md:col-span-2 md:aspect-square">
+                      <Image
+                        src={nextEvent.image_url}
+                        alt={title(nextEvent)}
+                        fill
+                        sizes="(max-width: 768px) 90vw, 40vw"
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className={nextEvent.image_url ? "md:col-span-3" : "md:col-span-5"}>
+                    <h3 className="font-serif text-2xl text-charcoal md:text-3xl">
+                      {title(nextEvent)}
+                    </h3>
+                    <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-charcoal-light">
+                      <span className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" aria-hidden="true" />
+                        {formatDate(nextEvent.date, locale)}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" aria-hidden="true" />
+                        {formatTime(nextEvent.time)}
+                      </span>
+                      {nextEvent.location && (
+                        <span className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" aria-hidden="true" />
+                          {nextEvent.location}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-5 flex flex-wrap items-center gap-3">
+                      <span className="rounded-full bg-rose/15 px-4 py-1.5 font-medium text-rose-deep">
+                        {nextEvent.price === 0 ? t("free") : `${nextEvent.price} RON`}
+                      </span>
+                      <SeatCount
+                        locale={locale}
+                        info={availability.get(nextEvent.id)}
+                        fullLabel={t("full")}
+                      />
+                    </div>
+                    <p className="mt-6 inline-flex items-center gap-2 font-medium text-rose-deep">
+                      {locale === "ro" ? "Vezi detalii și rezervă" : "See details and book"}
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </p>
+                  </div>
+                </div>
+              </GlassCard>
+            </Link>
+
+            {laterEvents.length > 0 && (
+              <div className="mt-8 grid gap-5 sm:grid-cols-2">
+                {laterEvents.map((event) => (
+                  <Link key={event.id} href={`/events/${event.slug}`}>
+                    <GlassCard className="h-full transition-transform hover:scale-[1.02]">
+                      <h3 className="font-serif text-lg text-charcoal">{title(event)}</h3>
+                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-charcoal-light">
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                          {formatDate(event.date, locale)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                          {formatTime(event.time)}
+                        </span>
+                      </div>
+                      <div className="mt-4 flex items-center gap-3">
+                        <span className="rounded-full bg-rose/15 px-3 py-1 text-sm font-medium text-rose-deep">
+                          {event.price === 0 ? t("free") : `${event.price} RON`}
+                        </span>
+                        <SeatCount
+                          locale={locale}
+                          info={availability.get(event.id)}
+                          fullLabel={t("full")}
+                          compact
+                        />
+                      </div>
+                    </GlassCard>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-8">
+              <Link href="/events" className={buttonClasses({ variant: "secondary" })}>
+                  {t("view_all_events")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Link>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section id="events" className="bg-white/50 py-16 backdrop-blur-sm">
+          <div className="mx-auto max-w-6xl px-4">
+            <h2 className="font-serif text-3xl text-charcoal">{t("events_title")}</h2>
+            <p className="mt-3 text-charcoal-light">
+              {locale === "ro"
+                ? "Momentan nu sunt evenimente programate. Revino curând."
+                : "No events scheduled right now. Check back soon."}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 3. Her story — the research is unanimous that people book a       */}
+      {/*    teacher rather than a studio                                   */}
+      {/* ---------------------------------------------------------------- */}
+      <section className="py-16">
+        <div className="mx-auto max-w-3xl px-4 text-center">
+          <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
+            {locale === "ro" ? "Cine sunt" : "Who I am"}
+          </h2>
+          {content["home.intro"] ? (
+            <div
+              className="prose prose-sage mx-auto mt-5 max-w-none text-lg text-charcoal-light"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["home.intro"]) }}
+            />
+          ) : (
+            <div className="mt-5">
+              <TextPlaceholder label="Scurtă prezentare (2–3 fraze) — adaugă din panoul de administrare" />
+            </div>
+          )}
+          <div className="mt-8">
+            <Link href="/about" className={buttonClasses({ variant: "secondary" })}>
+                {locale === "ro" ? "Citește povestea mea" : "Read my story"}
+                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 4. Testimonials                                                   */}
+      {/* ---------------------------------------------------------------- */}
+      {testimonials && testimonials.length > 0 && (
+        <section className="bg-white/50 py-16 backdrop-blur-sm">
+          <div className="mx-auto max-w-6xl px-4">
+            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+              {t("testimonials_title")}
+            </h2>
+            <div className="mt-8 grid gap-5 md:grid-cols-3">
+              {testimonials.map((item) => (
+                <GlassCard key={item.id} className="h-full">
+                  <Quote className="h-6 w-6 text-rose-deep/40" aria-hidden="true" />
+                  <p className="mt-3 text-charcoal">{item.content}</p>
+                </GlassCard>
+              ))}
+            </div>
+            <div className="mt-8 text-center">
+              <Link href="/testimonials" className={buttonClasses({ variant: "secondary" })}>
+                  {t("view_all_testimonials")}
+                  <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 5. FAQ — answers the practical worries that stall a booking       */}
+      {/* ---------------------------------------------------------------- */}
+      {faqs.length > 0 && (
+        <section className="py-16">
+          <div className="mx-auto max-w-3xl px-4">
+            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+              {locale === "ro" ? "Întrebări frecvente" : "Frequently asked questions"}
+            </h2>
+            <div className="mt-8">
+              <FaqList faqs={faqs} />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* 6. Recent writing                                                 */}
+      {/* ---------------------------------------------------------------- */}
+      {posts && posts.length > 0 && (
+        <section className="bg-white/50 py-16 backdrop-blur-sm">
+          <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
               {t("blog_title")}
             </h2>
-            <div className="mt-8 grid gap-6 sm:grid-cols-3">
+            <div className="mt-8 grid gap-5 sm:grid-cols-3">
               {posts.map((post) => (
                 <Link key={post.id} href={`/blog/${post.slug}`}>
                   <GlassCard className="h-full transition-transform hover:scale-[1.02]">
                     <h3 className="font-serif text-lg text-charcoal">
-                      {locale === "ro" ? post.title_ro : (post.title_en || post.title_ro)}
+                      {locale === "ro" ? post.title_ro : post.title_en || post.title_ro}
                     </h3>
                     <p className="mt-2 text-sm text-charcoal-light">
                       {formatDate(post.created_at, locale)}
@@ -215,95 +376,46 @@ export default function HomePage() {
               ))}
             </div>
             <div className="mt-8 text-center">
-              <Link href="/blog">
-                <Button variant="secondary">
-                  {t("view_all_posts")} <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {events.length > 0 && (
-        <section id="events" className="bg-white/40 py-20 backdrop-blur-sm">
-          <div className="mx-auto max-w-7xl px-4">
-            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {t("events_title")}
-            </h2>
-            <div className="mt-8 grid gap-6 sm:grid-cols-3">
-              {events.map((event) => {
-                const isFull = event.max_participants != null && (event.registration_count || 0) >= event.max_participants;
-                return (
-                <Link key={event.id} href={`/events/${event.slug}`}>
-                  <GlassCard className="h-full transition-transform hover:scale-[1.02]">
-                    <h3 className="font-serif text-lg text-charcoal">
-                      {locale === "ro" ? event.title_ro : (event.title_en || event.title_ro)}
-                    </h3>
-                    <div className="mt-3 flex flex-wrap gap-3 text-sm text-charcoal-light">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" /> {formatDate(event.date, locale)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {formatTime(event.time)}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <span className="rounded-full bg-rose/10 px-3 py-1 text-sm font-medium text-rose">
-                        {event.price === 0 ? t("free") : `${event.price} RON`}
-                      </span>
-                      {event.max_participants && (
-                        <span className={`flex items-center gap-1 text-xs ${isFull ? "text-error" : "text-charcoal-light"}`}>
-                          <Users className="h-3 w-3" />
-                          {isFull ? t("full") : `${event.registration_count || 0}/${event.max_participants}`}
-                        </span>
-                      )}
-                    </div>
-                  </GlassCard>
+              <Link href="/blog" className={buttonClasses({ variant: "secondary" })}>
+                  {t("view_all_posts")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>
-                );
-              })}
-            </div>
-            <div className="mt-8 text-center">
-              <Link href="/events">
-                <Button variant="secondary">
-                  {t("view_all_events")} <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
             </div>
           </div>
         </section>
       )}
 
-      {testimonials.length > 0 && (
-        <section className="py-20">
-          <div className="mx-auto max-w-7xl px-4">
-            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {t("testimonials_title")}
-            </h2>
-            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {testimonials.map((testimonial) => (
-                <GlassCard key={testimonial.id}>
-                  <div className="mb-3 flex gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-rose text-rose" />
-                    ))}
-                  </div>
-                  <p className="text-charcoal">&ldquo;{testimonial.content}&rdquo;</p>
-                </GlassCard>
-              ))}
-            </div>
-            <div className="mt-8 text-center">
-              <Link href="/testimonials">
-                <Button variant="secondary">
-                  {t("view_all_testimonials")} <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </section>
-      )}
       <StickyCta />
     </div>
+  );
+}
+
+/** Seats remaining, or a "full" marker. Hidden entirely for uncapped events. */
+function SeatCount({
+  info,
+  locale,
+  fullLabel,
+  compact = false,
+}: {
+  info?: { capacity: number | null; taken: number };
+  locale: string;
+  fullLabel: string;
+  compact?: boolean;
+}) {
+  if (!info?.capacity) return null;
+
+  const isFull = info.taken >= info.capacity;
+  const left = Math.max(info.capacity - info.taken, 0);
+
+  return (
+    <span
+      className={`flex items-center gap-1.5 text-sm ${isFull ? "text-error" : "text-charcoal-light"}`}
+    >
+      <Users className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
+      {isFull
+        ? fullLabel
+        : locale === "ro"
+          ? `${left} locuri libere`
+          : `${left} spots left`}
+    </span>
   );
 }
