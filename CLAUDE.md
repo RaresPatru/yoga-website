@@ -68,3 +68,9 @@ npm run test:e2e                 # production build; PW_DEV=1 for the fast loop
   may render a client component but may not call a function exported from one.
 - The Turnstile widget is `inert` + `h-0 opacity-0` once verified, so Playwright
   must wait for it with `state: "attached"`, not the default `"visible"`.
+- **Flex and grid items default to `min-width: auto`**, so they refuse to shrink
+  below their content's minimum — and an `<input>` claims about 20 characters.
+  The overflow therefore does not stay local: the column grows, then the grid,
+  then the document, and the whole page scrolls sideways on a phone. Put
+  `min-w-0` on flex/grid children that hold text or inputs, and `break-words` on
+  anything the instructor types.

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { seedEvent, deleteEventBySlug } from "./helpers";
 
 test.describe("home page (RO)", () => {
   test.beforeEach(async ({ page }) => {
@@ -156,6 +157,110 @@ test.describe("home page language switching", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Îți ghidez călătoria către echilibru" })
     ).toBeVisible();
+  });
+});
+
+/**
+ * The floating "book now" bar, which only exists below `lg`.
+ *
+ * Three conditions gate it: an event with seats left, the hero's own call to
+ * action scrolled out of view, and the page standing still. The last one is
+ * what most of this covers — the bar sits over the bottom of the screen, which
+ * is exactly where the content someone is scrolling towards keeps appearing.
+ */
+test.describe("home page sticky call to action", () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  const bar = (page: import("@playwright/test").Page) => page.locator("[data-visible]");
+
+  test("stays hidden until the hero CTA is scrolled past, and while scrolling", async ({
+    page,
+  }) => {
+    // Seeded so the bar has something to offer. It decides for itself by
+    // querying Supabase from the browser, so it does not matter that the home
+    // page itself is served from a 300-second cache.
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto("/ro");
+
+      // Present in the DOM but hidden: the hero's own "Explorează" button is
+      // still on screen, so a second copy floating over it is just clutter.
+      await expect(bar(page)).toHaveAttribute("data-visible", "false");
+
+      // Scrolled past the hero and left alone, it appears.
+      await page.evaluate(() => window.scrollTo(0, 1600));
+      await expect(bar(page)).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
+      await expect(page.getByRole("button", { name: "Înscrie-te acum" })).toBeVisible();
+
+      // Now the part that matters: it gets out of the way again the moment the
+      // page starts moving.
+      //
+      // Sampled every frame from inside the page while genuinely scrolling,
+      // rather than scrolling and then asserting from the test after a sleep.
+      // Wall-clock timing from outside is a coin toss — the first version of
+      // this waited 120ms and read `true`, because by the time Playwright
+      // actually queried the DOM the scroll had finished and the idle timer had
+      // fired. Scrolling every frame keeps the timer permanently reset, so
+      // "hidden throughout" is a fact about the whole window, not a snapshot.
+      //
+      // It bounces up and down a few pixels instead of scrolling one way so the
+      // page cannot run out of content and stop firing scroll events.
+      const samples = await page.evaluate(async () => {
+        const el = document.querySelector("[data-visible]")!;
+        const seen: { at: number; value: string | null }[] = [];
+        const start = performance.now();
+        let step = 0;
+        while (performance.now() - start < 900) {
+          window.scrollBy(0, step++ % 2 ? 6 : -6);
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          seen.push({ at: performance.now() - start, value: el.getAttribute("data-visible") });
+        }
+        return seen;
+      });
+
+      // Timestamped rather than counted, because frame rate varies a lot
+      // between the projects — the emulated phone manages about a third of the
+      // frames desktop Chromium does in the same window, so "skip the first
+      // five frames" means two different durations.
+      //
+      // The opening frames are allowed to still read "true": the scroll handler
+      // sets state and React needs a render to get that into the DOM. What must
+      // not happen is the bar sitting there through a sustained scroll.
+      const settled = samples.filter((s) => s.at > 250);
+      expect(settled.length, "expected several frames of scrolling").toBeGreaterThan(3);
+      expect(
+        [...new Set(settled.map((s) => s.value))],
+        "the bar must stay hidden for as long as the page keeps moving"
+      ).toEqual(["false"]);
+
+      // Still is again, so it comes back.
+      await expect(bar(page)).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
+
+      // Back at the top the hero CTA is on screen again, so it goes away.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect(bar(page)).toHaveAttribute("data-visible", "false");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  // A control that slides in and out must not be reachable while it is out of
+  // frame. `inert` is what keeps it out of the tab order and the accessibility
+  // tree; without it a keyboard user tabs into an invisible button and a screen
+  // reader announces one that is not there.
+  test("is inert while hidden and reachable once shown", async ({ page }) => {
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto("/ro");
+      await expect(bar(page)).toHaveAttribute("data-visible", "false");
+      expect(await bar(page).evaluate((el) => el.hasAttribute("inert"))).toBe(true);
+
+      await page.evaluate(() => window.scrollTo({ top: 1600 }));
+      await expect(bar(page)).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
+      expect(await bar(page).evaluate((el) => el.hasAttribute("inert"))).toBe(false);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
   });
 });
 

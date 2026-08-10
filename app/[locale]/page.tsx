@@ -158,6 +158,16 @@ export default async function HomePage({
               <Link href="/events" className={buttonClasses({ size: "lg" })}>{t("cta")}</Link>
               <Link href="/about" className={buttonClasses({ variant: "secondary", size: "lg" })}>{locale === "ro" ? "Despre mine" : "About me"}</Link>
             </div>
+            {/*
+              A zero-height marker directly below the hero buttons.
+              <StickyCta> watches it to decide when the floating "book now" bar
+              is worth showing: while this is still on screen the real call to
+              action is too, and a second copy of it floating over the page is
+              just clutter. Marking the end of the hero rather than measuring a
+              scroll distance means it stays correct when the headline wraps to
+              a different number of lines.
+            */}
+            <div id="hero-cta-end" aria-hidden="true" className="h-px w-full" />
           </div>
         </div>
       </section>

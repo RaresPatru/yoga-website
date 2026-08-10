@@ -67,8 +67,20 @@
   --color-error: #B3261E;   /* 6.21:1 on cream (was #D9534F, 3.9:1) */
   --color-warning: #8A5A00; /* readable amber for waiting-list states */
 
-  --font-serif: "Fraunces", serif;
-  --font-sans: "Inter", sans-serif;
+  /*
+   * Pointed at the variables next/font defines on <html>, not at family names
+   * typed out again here.
+   *
+   * next/font expands each of these to the real family plus a generated
+   * fallback face — "Playfair Display", "Playfair Display Fallback" — whose
+   * metrics are adjusted to match the webfont. That is what stops headings
+   * jumping around as the font finishes loading, which is most visible on a
+   * phone on a slow connection. Hardcoding `"Playfair Display", serif` here
+   * instead would skip that fallback and, worse, silently render in the
+   * system serif for anyone whose browser never fetched the webfont.
+   */
+  --font-serif: var(--font-playfair), serif;
+  --font-sans: var(--font-inter), sans-serif;
 }
 
 body {

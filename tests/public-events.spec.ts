@@ -191,3 +191,76 @@ test.describe("events", () => {
     }
   });
 });
+
+/**
+ * The event page on a narrow screen.
+ *
+ * Pinned to 375px rather than left to the project's viewport so this runs on
+ * every browser project, not only the mobile one — this is the layout almost
+ * every real visitor gets, arriving from an Instagram story on a phone.
+ */
+test.describe("event page at phone width", () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  // The page used to lay out 435px wide inside a 390px screen, so opening any
+  // event with an open registration form scrolled sideways: you had to pinch
+  // out or drag left-to-right to read it.
+  //
+  // The cause was two defaults compounding. The phone field is a flex row, and
+  // an <input> reports a minimum intrinsic width of about 20 characters; a flex
+  // item will not shrink below that because `min-width` defaults to `auto`. The
+  // card holding it is a grid item, which defaults the same way — so instead of
+  // the input overflowing its own box, the column grew, then the grid, then the
+  // document. A single unshrinkable input widened the entire page.
+  //
+  // Asserted on scrollWidth rather than by looking at a screenshot, because a
+  // sideways-scrolling page looks completely normal until you try to scroll it.
+  test("does not scroll sideways", async ({ page }) => {
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+      const { viewport, content } = await page.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        content: document.documentElement.scrollWidth,
+      }));
+
+      expect(
+        content,
+        `page content is ${content}px wide in a ${viewport}px viewport`
+      ).toBeLessThanOrEqual(viewport);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  test("the phone field shows a flag and the dialling code, and still validates", async ({
+    page,
+  }) => {
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+
+      const picker = page.getByLabel("Country code");
+      await expect(picker).toBeAttached();
+      await expect(picker).toHaveValue("RO");
+
+      // The flag is an emoji built from the country code, so asserting on the
+      // codepoints is the only honest check — whether the platform draws 🇷🇴 or
+      // falls back to the letters "RO" is the font's business, and both read
+      // correctly next to "+40".
+      const flag = String.fromCodePoint(0x1f1f7, 0x1f1f4);
+      await expect(page.getByText(`${flag}+40`)).toBeAttached();
+
+      // Changing the country must re-parse the number against it, not just
+      // relabel the box.
+      await picker.selectOption("GB");
+      const number = page.getByPlaceholder("+40 7XX XXX XXX");
+      await number.fill("07911123456");
+      await expect(number).toHaveValue("+44 7911 123456");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+});

@@ -166,8 +166,22 @@ export default async function EventDetailPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
       />
 
+      {/*
+        `min-w-0` on both columns.
+
+        A grid item defaults to `min-width: auto`, meaning it refuses to shrink
+        below the widest thing inside it. Anything unshrinkable — a long URL in
+        the description, a wide embed, or the phone field that actually caused
+        this — therefore does not overflow its own column; it widens the column,
+        then the grid, then the page. The symptom is the entire event page
+        scrolling sideways on a phone, which is how it was found: 435px of
+        layout on a 390px screen, with the header stretched along with it.
+
+        `min-w-0` opts out of that, so overflow stays a local problem instead of
+        becoming the whole document's.
+      */}
       <div className="grid gap-12 md:grid-cols-5">
-        <div className="md:col-span-3">
+        <div className="min-w-0 md:col-span-3">
           {event.image_url && (
             <div className="relative mb-8 aspect-video overflow-hidden rounded-3xl bg-sage/10">
               <Image
@@ -182,7 +196,18 @@ export default async function EventDetailPage({
           )}
 
           <div className="flex items-start justify-between gap-4">
-            <h1 className="font-serif text-4xl text-charcoal md:text-5xl">{title}</h1>
+            {/*
+              `min-w-0 break-words` because the title is whatever the instructor
+              typed. A flex item will not shrink below its longest unbreakable
+              word, and the share button beside it refuses to wrap, so one long
+              token — a hashtag, a URL, a compound word — pushed this row past
+              the screen edge and took the whole page with it. `break-words`
+              lets the word split as a last resort; `min-w-0` lets the heading
+              shrink far enough to need to.
+            */}
+            <h1 className="min-w-0 break-words font-serif text-4xl text-charcoal md:text-5xl">
+              {title}
+            </h1>
             <ShareButton title={title} />
           </div>
 
@@ -212,7 +237,10 @@ export default async function EventDetailPage({
 
           {description && (
             <div
-              className="prose prose-sage blog-content mt-8 max-w-none"
+              // break-words for the same reason as the heading: this is
+              // instructor-written HTML and may contain a bare URL, which is
+              // one long unbreakable token.
+              className="prose prose-sage blog-content mt-8 max-w-none break-words"
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }}
             />
           )}
@@ -236,7 +264,7 @@ export default async function EventDetailPage({
           </div>
         </div>
 
-        <div className="md:col-span-2">
+        <div className="min-w-0 md:col-span-2">
           <EventRegistration
             eventId={event.id}
             price={event.price}

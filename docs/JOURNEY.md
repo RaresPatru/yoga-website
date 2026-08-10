@@ -675,6 +675,61 @@ in the keyboard tab order after collapsing to zero height.
 
 ---
 
+## Part 7 — One default, three symptoms
+
+Reported as: opening any event on a phone scrolls sideways, and you have to
+pinch out or drag left-to-right to read the page.
+
+Measured rather than guessed at. Loading the page at 390px and asking every
+element for its minimum width found the culprit immediately:
+
+```
+document scrollWidth  435   (viewport 390)
+div.flex.gap-2        min-content 369   <- the phone field
+```
+
+**`min-width: auto` is the default for flex and grid items**, and it means an
+item will not shrink below the minimum width of its content. An `<input>`
+reports a minimum of roughly 20 characters — about 250px. Next to a 128px
+country picker that is 369px of unshrinkable content inside a 310px card.
+
+The interesting part is what happened next. Because the card is *also* a grid
+item, it could not shrink either. So instead of the input overflowing its own
+box — a small, local, visible problem — the column grew, then the grid, then the
+document. One stubborn input widened the entire page, and the fixed header
+stretched along with it. Overflow does not stay where you put it.
+
+Three fixes, all the same idea: `min-w-0` on the input so it can shrink, and on
+both grid columns so a future offender stays local.
+
+Writing the regression test then found two more of the same family, which is the
+argument for writing it at all rather than eyeballing the screenshot:
+
+- **The title row.** `<h1>` and the share button are a flex row, the button
+  refuses to wrap, and the heading would not shrink below its longest word. Any
+  long token in a title the instructor types — a hashtag, a URL — pushes the row
+  past the screen edge. `break-words` plus `min-w-0`.
+- **The floating "book now" bar was asking the wrong question.** It ran
+  `.limit(1)` with no `ORDER BY`, then decided from that one row whether any
+  seats were left. Postgres may return any upcoming event for that query, so a
+  single sold-out event could answer on behalf of all the others and hide the
+  bar while seats went spare elsewhere. It now asks whether *any* upcoming event
+  has room.
+
+None of these three produced an error. The page rendered, the query succeeded,
+the bar was simply absent — the same shape as everything in Part 2.
+
+Worth recording about the test itself, too. The first version scrolled the page,
+slept 120ms and asserted the bar was hidden; it failed, because by the time
+Playwright queried the DOM the scroll had finished and the idle timer had
+already fired. The second version counted frames, and failed on the emulated
+phone, which renders about a third as many frames in the same window as desktop
+Chromium. The version that holds samples the DOM every frame *while genuinely
+scrolling* and asserts on everything after the first 250ms — a fact about a
+duration rather than about a sleep or a frame count.
+
+---
+
 ## Decisions worth defending
 
 **Keeping the tech stack.** Next.js + Supabase + Stripe was the right call and
@@ -713,7 +768,7 @@ noted as the upgrade path if abuse becomes real.
 
 | | before | after |
 |---|---|---|
-| Tests | 55 (core booking flow uncovered) | 148 |
+| Tests | 55 (core booking flow uncovered) | 156 |
 | Test database | production | local, with a guard |
 | Critical vulnerabilities | 3 | 0 |
 | Pages with real metadata | 0 | all |

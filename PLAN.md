@@ -61,9 +61,9 @@ She fills it in herself at `/admin/content` — no developer needed.
 
 ### Share images should use the brand typeface
 
-The generated Open Graph and story images render in a system sans. Fraunces needs
-loading into Satori as font data. Cosmetic, but these images are the first thing
-anyone sees of the site.
+The generated Open Graph and story images render in a system sans. Playfair
+Display needs loading into Satori as font data. Cosmetic, but these images are
+the first thing anyone sees of the site.
 
 ### Re-notify a waiting list that goes quiet
 
