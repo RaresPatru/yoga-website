@@ -23,7 +23,7 @@ What is left to do. Forward-looking only.
 
 | | |
 |---|---|
-| Tests | 148 passing, 1 skipped |
+| Tests | 164 passing, 6 skipped |
 | Critical vulnerabilities | 0 open |
 | Deployed | production is public; preview deployments require Vercel login |
 | Blocking launch | real content from the instructor |
@@ -56,6 +56,32 @@ She fills it in herself at `/admin/content` — no developer needed.
       covered by the test suite; the webview itself is not.
 
 ---
+
+## Before the next deploy
+
+- [ ] **Delete the `test-workshop` event.** It is published on production with
+      `max_participants = -2`, which reads as permanently sold out, so visitors
+      see a "test workshop" card marked *Locuri epuizate*.
+- [ ] **Apply `20260810000001_event_money_guards_and_whatsapp_links.sql`, then
+      deploy — in that order.** Every event query now selects `currency`, so
+      deploying first would break the home page, the events list and every event
+      page at once. The migration is safe to run against the current code.
+
+      This is the first migration here that can fail on *data* rather than
+      schema: a CHECK is validated against every existing row, and the first
+      attempt was rejected by the row above. It now repairs any non-positive
+      capacity to NULL before adding the constraint, and re-running it after a
+      failed attempt is safe — every statement is `if not exists` or
+      `drop … if exists` first.
+
+## Paused
+
+### The floating "book now" bar
+
+Built, tested and switched off at the owner's request — one commented-out
+`<StickyCta />` in `app/[locale]/page.tsx`. The component, the `#hero-cta-end`
+marker and its two Playwright tests are intact; uncommenting the line and
+changing `test.describe.skip` back to `test.describe` restores it.
 
 ## Next
 

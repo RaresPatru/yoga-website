@@ -131,6 +131,24 @@ test.describe("home page language switching", () => {
     await page.locator("#mobile-menu").getByRole("button", { name: label }).click();
   };
 
+  // The button reports where you are, not where you would go. Both readings of
+  // a single-language toggle are plausible to a visitor, so the visible text is
+  // the current language and the accessible name is the action — which is also
+  // what a screen reader announces.
+  test("shows the current language and its flag", async ({ page, viewport }) => {
+    test.skip((viewport?.width ?? 0) < 768, "the switcher is inside the mobile menu below md");
+
+    await page.goto("/ro");
+    const ro = page.getByRole("banner").getByRole("button", { name: "Switch to English" });
+    await expect(ro).toHaveText("RO");
+    await expect(ro.locator("img")).toHaveAttribute("src", "/flags/RO.svg");
+
+    await page.goto("/en");
+    const en = page.getByRole("banner").getByRole("button", { name: "Treci la română" });
+    await expect(en).toHaveText("EN");
+    await expect(en.locator("img")).toHaveAttribute("src", "/flags/GB.svg");
+  });
+
   test("switching to English updates lang and content, and back", async ({ page }) => {
     await page.goto("/ro");
 
@@ -168,7 +186,9 @@ test.describe("home page language switching", () => {
  * what most of this covers — the bar sits over the bottom of the screen, which
  * is exactly where the content someone is scrolling towards keeps appearing.
  */
-test.describe("home page sticky call to action", () => {
+// Skipped, not deleted: the bar is switched off in app/[locale]/page.tsx and
+// these go green again the moment that line is uncommented.
+test.describe.skip("home page sticky call to action", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
   const bar = (page: import("@playwright/test").Page) => page.locator("[data-visible]");

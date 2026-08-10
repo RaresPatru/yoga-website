@@ -205,6 +205,18 @@
     "translating": "Se traduce...",
     "translate_error": "Eroare la traducere",
     "video_unsupported": "Link nesuportat. Folosește YouTube, Vimeo sau Instagram.",
-    "content": "Conținut site"
+    "content": "Conținut site",
+    "currency": "Monedă",
+    "saved_links": "Linkuri salvate",
+    "saved_links_hint": "Alege un link folosit anterior sau salvează-l pe cel curent pentru data viitoare.",
+    "no_saved_links": "Niciun link salvat încă.",
+    "link_label": "Denumire",
+    "link_label_placeholder": "ex. Grup general",
+    "link_url": "Link",
+    "save_link": "Salvează linkul",
+    "use_link": "Folosește",
+    "delete_link": "Șterge",
+    "confirm_delete_link": "Ștergi acest link salvat? Evenimentele care îl folosesc deja nu sunt afectate.",
+    "manage_saved_links": "Gestionează linkurile salvate"
   }
 }

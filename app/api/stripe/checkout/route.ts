@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { toCurrency, toStripeAmount } from "@/lib/money";
 
 export async function POST(req: Request) {
   try {
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
 
     const { data: event, error: eventError } = await supabase
       .from("events")
-      .select("id, title_ro, price, slug")
+      .select("id, title_ro, price, slug, currency")
       .eq("id", eventId)
       .eq("published", true)
       .single();
@@ -72,11 +73,20 @@ export async function POST(req: Request) {
       line_items: [
         {
           price_data: {
-            currency: "ron",
+            // Both the amount and the currency come from the row we just read,
+            // never from the request. This was hardcoded to "ron", so an event
+            // priced in euro would have been charged as if the number were lei
+            // — roughly a fifth of the intended amount.
+            //
+            // `toCurrency` narrows whatever is in the column to one of the four
+            // we support. The database has a CHECK constraint saying the same
+            // thing; this is the belt to its braces, because Stripe rejects an
+            // unknown code at the worst possible moment.
+            currency: toCurrency(event.currency).toLowerCase(),
             product_data: {
               name: event.title_ro,
             },
-            unit_amount: event.price * 100,
+            unit_amount: toStripeAmount(event.price),
           },
           quantity: 1,
         },

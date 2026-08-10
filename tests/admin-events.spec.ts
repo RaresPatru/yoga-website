@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { deleteEventBySlug, seedWaitingEntry, seedEvent, unique } from "./helpers";
+import {
+  deleteEventBySlug,
+  deleteWhatsappLink,
+  eventsBySlug,
+  seedWaitingEntry,
+  seedEvent,
+  tryInsertEvent,
+  unique,
+  anonStorageClient,
+} from "./helpers";
 
 test.describe("admin events CRUD", () => {
   let slug = "";
@@ -74,5 +83,133 @@ test.describe("admin events CRUD", () => {
 
     await dialog.getByRole("button", { name: "Închide" }).click();
     await expect(dialog).not.toBeVisible();
+  });
+});
+
+/**
+ * Money guards, asserted against the database rather than the form.
+ *
+ * The admin panel writes to Supabase straight from the browser, so `min="0"` on
+ * an input is advice to the person typing and nothing more — anyone holding an
+ * admin session can POST whatever they like to PostgREST. A negative price
+ * would reach Stripe as a negative charge, and a capacity of zero or less makes
+ * `taken >= max_participants` true for every event, marking the whole calendar
+ * sold out.
+ *
+ * So these go through the same client the panel uses and assert the write is
+ * refused. Testing the form's `min` attribute would prove only that the
+ * attribute is spelled correctly.
+ */
+test.describe("event money and capacity constraints", () => {
+  test("a negative price is rejected by the database", async () => {
+    const { error, slug } = await tryInsertEvent({ price: -50 });
+    try {
+      expect(error?.message ?? "").toContain("events_price_non_negative");
+    } finally {
+      await deleteEventBySlug(slug);
+    }
+  });
+
+  test("a negative or zero capacity is rejected by the database", async () => {
+    for (const capacity of [-5, 0]) {
+      const { error, slug } = await tryInsertEvent({ max_participants: capacity });
+      try {
+        expect(
+          error?.message ?? "",
+          `max_participants=${capacity} should be refused`
+        ).toContain("events_capacity_positive");
+      } finally {
+        await deleteEventBySlug(slug);
+      }
+    }
+  });
+
+  // NULL still means "no limit" — the constraint must not have taken that away.
+  test("an unlimited event is still allowed", async () => {
+    const { error, slug } = await tryInsertEvent({ max_participants: null });
+    try {
+      expect(error).toBeNull();
+    } finally {
+      await deleteEventBySlug(slug);
+    }
+  });
+
+  test("only the four supported currencies are accepted", async () => {
+    const bad = await tryInsertEvent({ currency: "XYZ" });
+    try {
+      expect(bad.error?.message ?? "").toContain("events_currency_supported");
+    } finally {
+      await deleteEventBySlug(bad.slug);
+    }
+
+    for (const currency of ["RON", "EUR", "USD", "GBP"]) {
+      const ok = await tryInsertEvent({ currency, price: 80 });
+      try {
+        expect(ok.error, `${currency} should be accepted`).toBeNull();
+      } finally {
+        await deleteEventBySlug(ok.slug);
+      }
+    }
+  });
+
+  // Existing rows predate the column, so the default is what keeps every event
+  // that was created before this migration rendering a price at all.
+  test("currency defaults to RON", async () => {
+    const { slug } = await tryInsertEvent({ price: 100 });
+    try {
+      const rows = await eventsBySlug(slug);
+      expect(rows[0]?.currency).toBe("RON");
+    } finally {
+      await deleteEventBySlug(slug);
+    }
+  });
+});
+
+/**
+ * The saved WhatsApp link library.
+ *
+ * A WhatsApp invite URL is a capability — anyone holding it can join the group
+ * — so unlike almost every other table on this site there is no public read
+ * policy, and the check below is that an anonymous caller really is refused.
+ */
+test.describe("saved WhatsApp links", () => {
+  test("an admin can save a link and use it on an event", async ({ page }) => {
+    const label = unique("Grup");
+    const url = `https://chat.whatsapp.com/${unique("invite")}`;
+
+    await page.goto("/admin/events");
+    await page.getByRole("button", { name: "Eveniment Nou" }).click();
+
+    const linkField = page.getByLabel("Link WhatsApp");
+    await linkField.fill(url);
+
+    await page.getByRole("button", { name: "Gestionează linkurile salvate" }).click();
+    const dialog = page.locator("dialog[open]");
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByLabel("Denumire").fill(label);
+    await dialog.getByRole("button", { name: "Salvează linkul" }).click();
+    await expect(dialog.getByText(label)).toBeVisible();
+
+    // Clearing the field and picking the saved link must put it back.
+    await dialog.getByRole("button", { name: "Închide" }).click();
+    await linkField.fill("");
+    await page.getByRole("button", { name: "Gestionează linkurile salvate" }).click();
+    await page.locator("dialog[open]").getByRole("button", { name: "Folosește" }).first().click();
+    await expect(linkField).toHaveValue(url);
+
+    await deleteWhatsappLink(label);
+  });
+
+  test("the link library is not readable anonymously", async () => {
+    const client = await anonStorageClient();
+    const { data, error } = await client.from("whatsapp_links").select("*");
+
+    // A hard permission error, not an empty list. There is no GRANT for anon,
+    // and Postgres refuses before RLS is even consulted — which is the failure
+    // mode you want, because RLS on its own filters silently and an empty
+    // result is indistinguishable from "there is nothing here".
+    expect(error, "anon must be refused outright").not.toBeNull();
+    expect(data).toBeNull();
   });
 });

@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-flags.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-flags.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -41,8 +43,8 @@
     "@next/swc-darwin-x64": "16.2.12",
     "@next/swc-linux-x64-gnu": "16.2.12",
     "@next/swc-linux-x64-musl": "16.2.12",
-    "@next/swc-win32-x64-msvc": "16.2.12",
-    "@next/swc-win32-arm64-msvc": "16.2.12"
+    "@next/swc-win32-arm64-msvc": "16.2.12",
+    "@next/swc-win32-x64-msvc": "16.2.12"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -51,6 +53,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "country-flag-icons": "^1.6.20",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
@@ -65,7 +68,6 @@
   },
   "overrides": {
     "next": {
-      "postcss": "8.5.25",
       "sharp": "0.35.3"
     },
     "minimatch": "10.2.6",
@@ -73,6 +75,8 @@
     "isomorphic-dompurify": {
       "dompurify": "3.4.13"
     },
-    "nanoid": "^3.3.17"
+    "nanoid": "^3.3.17",
+    "postcss": "^8.5.26",
+    "js-yaml": "^4.3.1"
   }
 }

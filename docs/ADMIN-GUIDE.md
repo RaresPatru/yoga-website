@@ -78,11 +78,37 @@ Debifezi **Vizibil pe site** dacă vrei să ascunzi temporar o întrebare.
 | Slug | Partea din adresă: `/events/atelier-de-yoga`. Litere mici și liniuțe. |
 | Data, Ora | Ora la care începe, ora României. |
 | Locație | Orașul sau adresa. |
-| Preț | **0 înseamnă gratuit.** Orice număr mai mare cere plata prin card. |
-| Participanți maxim | Câte locuri sunt. Lasă gol dacă nu limitezi. |
+| Preț | **0 înseamnă gratuit.** Orice număr mai mare cere plata prin card. Nu poate fi negativ. |
+| Moneda | RON, EUR, USD sau GBP. Implicit RON. Clientul plătește exact în moneda aleasă aici. |
+| Participanți maxim | Câte locuri sunt. Lasă gol dacă nu limitezi. Minim 1. |
 | URL Imagine | Alegi din Biblioteca Media. |
-| Link WhatsApp | Grupul evenimentului. Se trimite automat în emailul de confirmare. |
+| Link WhatsApp | Grupul evenimentului. Se trimite automat în emailul de confirmare. Vezi mai jos. |
 | Publicat | **Cât timp e debifat, evenimentul nu se vede pe site.** |
+
+### Moneda
+
+Alege moneda din căsuța de lângă preț. Este important: **suma introdusă se
+încasează în moneda aleasă**. Dacă scrii `80` și alegi `EUR`, clientul plătește
+80 de euro, nu 80 de lei. Prețul apare peste tot pe site în moneda aleasă —
+inclusiv în imaginea pentru Instagram și în rezultatele Google.
+
+Dacă nu atingi această căsuță, rămâne pe RON. Toate evenimentele create înainte
+de această modificare sunt în RON.
+
+### Linkuri WhatsApp salvate
+
+Fiindcă folosești aproape mereu același grup, nu mai e nevoie să lipești linkul
+de fiecare dată.
+
+- Lipește linkul o dată, apasă butonul **🔖** de lângă câmp, scrie-i un nume
+  (de exemplu „Grup general") și apasă **Salvează linkul**.
+- La următorul eveniment apeși **🔖** și apoi **Folosește** — linkul se
+  completează singur.
+- Un link care nu mai e folosit se șterge cu coșul de gunoi.
+
+**Ștergerea unui link salvat nu strică evenimentele existente.** Linkul se
+copiază în eveniment în momentul în care îl alegi, deci evenimentele trimise
+deja rămân exact cum au fost trimise.
 
 ### Locuri și lista de așteptare
 

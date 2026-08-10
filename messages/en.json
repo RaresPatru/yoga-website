@@ -205,6 +205,18 @@
     "translating": "Translating...",
     "translate_error": "Translation error",
     "video_unsupported": "Unsupported link. Use YouTube, Vimeo or Instagram.",
-    "content": "Site content"
+    "content": "Site content",
+    "currency": "Currency",
+    "saved_links": "Saved links",
+    "saved_links_hint": "Pick a link you have used before, or save the current one for next time.",
+    "no_saved_links": "No saved links yet.",
+    "link_label": "Name",
+    "link_label_placeholder": "e.g. General group",
+    "link_url": "Link",
+    "save_link": "Save link",
+    "use_link": "Use",
+    "delete_link": "Delete",
+    "confirm_delete_link": "Delete this saved link? Events already using it are unaffected.",
+    "manage_saved_links": "Manage saved links"
   }
 }

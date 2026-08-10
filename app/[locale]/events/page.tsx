@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate, formatTime } from "@/lib/utils";
+import { formatPrice } from "@/lib/money";
 import { getLocale, getTranslations } from "next-intl/server";
 import { buildPageMetadata } from "@/lib/metadata";
 import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
@@ -36,7 +37,7 @@ export default async function EventsPage() {
 
   const { data: events } = await supabase
     .from("events")
-    .select("id, slug, title_ro, title_en, date, time, location, price, max_participants, image_url, description_ro, description_en")
+    .select("id, slug, title_ro, title_en, date, time, location, price, currency, max_participants, image_url, description_ro, description_en")
     .eq("published", true)
     .gte("date", today)
     .order("date", { ascending: true });
@@ -85,7 +86,7 @@ export default async function EventsPage() {
                 </div>
                 <div className="mt-4">
                   <span className="rounded-full bg-rose/10 px-3 py-1 text-sm font-medium text-rose">
-                    {event.price === 0 ? t("free") : `${event.price} RON`}
+                    {event.price === 0 ? t("free") : formatPrice(event.price, event.currency, locale)}
                   </span>
                 </div>
               </GlassCard>

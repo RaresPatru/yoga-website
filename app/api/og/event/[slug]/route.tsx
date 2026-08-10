@@ -3,6 +3,7 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { LandscapeCard, OG_SIZE } from "@/lib/og-card";
 import { SITE_NAME } from "@/lib/site-config";
 import { formatDate } from "@/lib/utils";
+import { formatPrice } from "@/lib/money";
 
 /**
  * Renders the 1200x630 preview card for an event.
@@ -27,7 +28,7 @@ export async function GET(
   const supabase = createPublicClient();
   const { data: event } = await supabase
     .from("events")
-    .select("title_ro, title_en, date, time, location, price")
+    .select("title_ro, title_en, date, time, location, price, currency")
     .eq("slug", slug)
     .eq("published", true)
     .maybeSingle();
@@ -50,7 +51,7 @@ export async function GET(
         eyebrow={`${formatDate(event.date, locale)} · ${event.time.slice(0, 5)}`}
         title={title}
         subtitle={event.location ?? undefined}
-        badge={event.price === 0 ? free : `${event.price} RON`}
+        badge={event.price === 0 ? free : formatPrice(event.price, event.currency, locale)}
         siteName={SITE_NAME}
       />
     ),

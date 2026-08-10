@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AdminLocaleProvider, useAdminLocale } from "@/components/admin/locale-provider";
+import { Flag } from "@/components/ui/flag";
 import {
   LayoutDashboard,
   FileText,
@@ -19,7 +20,6 @@ import {
   LogOut,
   Menu,
   X,
-  Globe,
 } from "lucide-react";
 
 function AdminLayoutInner({ children }: { children: React.ReactNode }) {
@@ -96,12 +96,20 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="border-t border-sage/20 p-4">
+          {/*
+            Shows the language the panel is currently in, matching the public
+            switcher. It used to name the *other* language, which reads as a
+            label rather than as an action and left you pressing it to find out
+            which way round it was. The accessible name says what pressing it
+            does; the visible text says where you are.
+          */}
           <button
             onClick={() => setLocale(locale === "ro" ? "en" : "ro")}
+            aria-label={locale === "ro" ? "Switch to English" : "Treci la română"}
             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm text-charcoal-light transition-colors hover:bg-white/40 hover:text-charcoal mb-1"
           >
-            <Globe className="h-4 w-4" />
-            {locale === "ro" ? "English" : "Română"}
+            <Flag code={locale === "ro" ? "RO" : "GB"} />
+            {locale === "ro" ? "Română" : "English"}
           </button>
           <button
             onClick={handleLogout}

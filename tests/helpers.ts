@@ -154,6 +154,42 @@ export async function seedEvent(overrides: Record<string, unknown> = {}): Promis
   return data as SeededEvent;
 }
 
+/**
+ * Insert an event row directly and hand back whatever the database said.
+ *
+ * Unlike seedEvent this does not throw on failure — the point is to assert that
+ * a write *is* rejected, which is the only way to test a CHECK constraint.
+ */
+export async function tryInsertEvent(
+  overrides: Record<string, unknown> = {}
+): Promise<{ error: { message: string } | null; slug: string }> {
+  const slug = unique("eveniment-guard");
+  const { error } = await (await adminScoped()).from("events").insert({
+    slug,
+    title_ro: `Guard ${slug}`,
+    date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+    time: "10:00",
+    price: 0,
+    published: false,
+    ...overrides,
+  });
+  return { error, slug };
+}
+
+/** Read back a seeded event, for asserting on columns the UI does not show. */
+export async function eventsBySlug(slug: string) {
+  const { data } = await (await adminScoped())
+    .from("events")
+    .select("id, slug, price, currency, max_participants")
+    .eq("slug", slug);
+  return data ?? [];
+}
+
+/** Tidy up a saved WhatsApp link created by a test. */
+export async function deleteWhatsappLink(label: string) {
+  await (await adminScoped()).from("whatsapp_links").delete().eq("label", label);
+}
+
 export async function deleteEventBySlug(slug: string) {
   const { error } = await (await adminScoped()).from("events").delete().eq("slug", slug);
   if (error) throw new Error(`deleteEventBySlug failed: ${error.message}`);

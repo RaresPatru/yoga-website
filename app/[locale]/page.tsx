@@ -5,12 +5,14 @@ import { Link } from "@/i18n/navigation";
 import { buttonClasses } from "@/lib/button-styles";
 import { GlassCard } from "@/components/ui/glass-card";
 import { TextPlaceholder, ImagePlaceholder } from "@/components/ui/content-placeholder";
-import { StickyCta } from "@/components/sticky-cta";
+// Disabled — see the note at <StickyCta /> near the bottom of this file.
+// import { StickyCta } from "@/components/sticky-cta";
 import { FaqList } from "@/components/faq-list";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getSiteContent, getFaqs } from "@/lib/site-content";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { formatDate, formatTime } from "@/lib/utils";
+import { formatPrice } from "@/lib/money";
 
 /**
  * Home page — a server component.
@@ -48,6 +50,7 @@ interface EventCard {
   time: string;
   location: string | null;
   price: number;
+  currency: string | null;
   max_participants: number | null;
   image_url: string | null;
 }
@@ -67,7 +70,7 @@ export default async function HomePage({
   const [{ data: upcoming }, { data: testimonials }, { data: posts }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, slug, title_ro, title_en, date, time, location, price, max_participants, image_url")
+      .select("id, slug, title_ro, title_en, date, time, location, price, currency, max_participants, image_url")
       .eq("published", true)
       .gte("date", today)
       .order("date", { ascending: true })
@@ -221,7 +224,7 @@ export default async function HomePage({
                     </div>
                     <div className="mt-5 flex flex-wrap items-center gap-3">
                       <span className="rounded-full bg-rose/15 px-4 py-1.5 font-medium text-rose-deep">
-                        {nextEvent.price === 0 ? t("free") : `${nextEvent.price} RON`}
+                        {nextEvent.price === 0 ? t("free") : formatPrice(nextEvent.price, nextEvent.currency, locale)}
                       </span>
                       <SeatCount
                         locale={locale}
@@ -256,7 +259,7 @@ export default async function HomePage({
                       </div>
                       <div className="mt-4 flex items-center gap-3">
                         <span className="rounded-full bg-rose/15 px-3 py-1 text-sm font-medium text-rose-deep">
-                          {event.price === 0 ? t("free") : `${event.price} RON`}
+                          {event.price === 0 ? t("free") : formatPrice(event.price, event.currency, locale)}
                         </span>
                         <SeatCount
                           locale={locale}
@@ -394,7 +397,19 @@ export default async function HomePage({
         </section>
       )}
 
-      <StickyCta />
+      {/*
+        The floating "book now" bar is switched off for now, at the owner's
+        request. Left commented rather than deleted because the component and
+        its tests are intact and this is the only line that turns it back on:
+
+            <StickyCta />
+
+        To re-enable: uncomment the line above, restore the import at the top of
+        this file, and change `test.describe.skip` back to `test.describe` in
+        tests/public-home.spec.ts. The `#hero-cta-end` marker below the hero
+        buttons is what the bar watches to decide when to appear; it costs
+        nothing and stays put.
+      */}
     </div>
   );
 }

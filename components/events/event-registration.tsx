@@ -8,6 +8,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { Turnstile } from "@/components/ui/turnstile";
 import { useTurnstileScript } from "@/lib/use-turnstile";
 import { GlassCard } from "@/components/ui/glass-card";
+import { formatPrice } from "@/lib/money";
 import { Users, Check, AlertCircle } from "lucide-react";
 
 /**
@@ -61,6 +62,8 @@ function Outcome({
 interface EventRegistrationProps {
   eventId: string;
   price: number;
+  /** ISO code from the event row — never assumed, since it decides what is charged. */
+  currency: string;
   maxParticipants: number | null;
   /** Seats already taken, counted server-side from the availability view. */
   taken: number;
@@ -90,6 +93,7 @@ interface EventRegistrationProps {
 export function EventRegistration({
   eventId,
   price,
+  currency,
   maxParticipants,
   taken,
   whatsappLink,
@@ -347,7 +351,7 @@ export function EventRegistration({
     <GlassCard hover={false} className="sticky top-24">
       <div className="mb-6 text-center">
         <p className="text-3xl font-semibold text-rose-deep">
-          {price === 0 ? t("Gratuit", "Free") : `${price} RON`}
+          {price === 0 ? t("Gratuit", "Free") : formatPrice(price, currency, locale)}
         </p>
         {maxParticipants && (
           <div className="mt-3">

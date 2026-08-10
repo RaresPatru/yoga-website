@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Edit2, Trash2, Users, X, Loader2, Languages, Info } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { WhatsappLinkField } from "@/components/admin/whatsapp-link-field";
+import { CURRENCIES, CURRENCY_SYMBOLS, DEFAULT_CURRENCY, formatPrice } from "@/lib/money";
 
 type SpellcheckLang = "ro" | "en" | "off";
 
@@ -22,6 +24,7 @@ interface Event {
   time: string;
   location: string | null;
   price: number;
+  currency: string | null;
   max_participants: number | null;
   image_url: string | null;
   whatsapp_group_link: string | null;
@@ -150,6 +153,7 @@ function EventForm({
     time: event?.time || "",
     location: event?.location || "",
     price: event?.price?.toString() || "0",
+    currency: event?.currency || DEFAULT_CURRENCY,
     max_participants: event?.max_participants?.toString() || "",
     image_url: event?.image_url || "",
     whatsapp_group_link: event?.whatsapp_group_link || "",
@@ -217,13 +221,33 @@ function EventForm({
 
   const spellLabel = spell === "ro" ? "RO" : spell === "en" ? "EN" : "ABC";
 
+  /**
+   * Clamped here as well as in the database.
+   *
+   * The CHECK constraints in 20260810000001 are what actually make a negative
+   * price impossible — this form writes to Supabase directly, so nothing in
+   * JavaScript can be the guarantee. But a constraint violation surfaces as an
+   * opaque failed save, and "why won't it save" is a bad way to discover you
+   * typed a minus sign. `Math.max(0, …)` and the `min` attributes below mean
+   * she never reaches the constraint by accident; the constraint is there for
+   * everything that is not an accident.
+   *
+   * Capacity is clamped to 1 rather than 0: a zero-capacity event is
+   * indistinguishable from a sold-out one, so it would quietly stop anyone
+   * booking. Blank still means "no limit".
+   */
   const handleSave = async () => {
     setSaving(true);
+    const price = Math.max(0, Math.trunc(Number(form.price) || 0));
+    const capacity = form.max_participants
+      ? Math.max(1, Math.trunc(Number(form.max_participants)))
+      : null;
+
     await onSave({
       id: event?.id,
       ...form,
-      price: parseInt(form.price) || 0,
-      max_participants: form.max_participants ? parseInt(form.max_participants) : null,
+      price,
+      max_participants: capacity,
     });
     setSaving(false);
   };
@@ -338,13 +362,59 @@ function EventForm({
         <Input label={t("admin.date")} type="date" value={form.date} onChange={(e) => setForm({...form, date: e.target.value})} />
         <Input label={t("admin.time")} type="time" value={form.time} onChange={(e) => setForm({...form, time: e.target.value})} />
         <Input label={t("admin.location")} value={form.location} onChange={(e) => setForm({...form, location: e.target.value})} />
-        <Input label={t("admin.price")} type="number" value={form.price} onChange={(e) => setForm({...form, price: e.target.value})} />
+
+        {/* Price and its currency read as one field, so they sit in one box. */}
+        <div className="space-y-1.5">
+          <label htmlFor="event-price" className="text-sm font-medium text-charcoal-light">
+            {t("admin.price")}
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="event-price"
+              type="number"
+              // `min` and `step` are the browser's own guard rails: the spinner
+              // will not go below zero and a decimal is rejected on submit.
+              // They are a convenience, not the rule — see handleSave.
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: e.target.value })}
+              className="min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+            />
+            <select
+              value={form.currency}
+              onChange={(e) => setForm({ ...form, currency: e.target.value })}
+              aria-label={t("admin.currency")}
+              className="w-24 shrink-0 rounded-xl border border-sage/30 bg-white/60 px-2 py-3 text-sm text-charcoal backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+            >
+              {CURRENCIES.map((code) => (
+                <option key={code} value={code}>
+                  {code} {CURRENCY_SYMBOLS[code]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Input label={t("admin.max_participants")} type="number" value={form.max_participants} onChange={(e) => setForm({...form, max_participants: e.target.value})} />
+        <Input
+          label={t("admin.max_participants")}
+          type="number"
+          // Blank means no limit; 1 is the smallest event that can actually be
+          // booked. Zero would mark the event permanently sold out.
+          min={1}
+          step={1}
+          inputMode="numeric"
+          value={form.max_participants}
+          onChange={(e) => setForm({...form, max_participants: e.target.value})}
+        />
         <Input label={t("admin.image_url")} value={form.image_url} onChange={(e) => setForm({...form, image_url: e.target.value})} />
-        <Input label={t("admin.whatsapp_link")} value={form.whatsapp_group_link} onChange={(e) => setForm({...form, whatsapp_group_link: e.target.value})} />
+        <WhatsappLinkField
+          value={form.whatsapp_group_link}
+          onChange={(url) => setForm({ ...form, whatsapp_group_link: url })}
+        />
       </div>
 
       <label className="flex items-center gap-3">
@@ -361,7 +431,7 @@ function EventForm({
 }
 
 export default function AdminEventsPage() {
-  const { t } = useAdminLocale();
+  const { t, locale } = useAdminLocale();
   const [events, setEvents] = useState<Event[]>([]);
   const [editing, setEditing] = useState<Event | null>(null);
   const [creating, setCreating] = useState(false);
@@ -513,7 +583,7 @@ export default function AdminEventsPage() {
                     )}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-charcoal-light">
-                    <span>{event.date} | {event.price === 0 ? t("admin.free") : `${event.price} RON`}</span>
+                    <span>{event.date} | {event.price === 0 ? t("admin.free") : formatPrice(event.price, event.currency, locale)}</span>
                     <span>{event.slug}</span>
                     {c && (
                       <>

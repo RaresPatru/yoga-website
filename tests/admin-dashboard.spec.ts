@@ -47,12 +47,27 @@ test.describe("admin dashboard", () => {
     }
   });
 
+  // Located by accessible name, which is the action ("Switch to English"),
+  // while the visible text is the language you are currently reading. Those
+  // used to be the same string and the same direction, so the button announced
+  // and displayed the language you were *not* in — ambiguous enough that the
+  // only way to know was to press it.
   test("locale toggle switches the sidebar between RO and EN", async ({ page }) => {
     const sidebar = page.locator("nav");
-    await page.getByRole("button", { name: "English" }).click();
+    const toggle = page.getByRole("button", { name: "Switch to English" });
+
+    await expect(toggle, "shows the language in use, not the other one").toHaveText("Română");
+    await expect(toggle.locator("img")).toHaveAttribute("src", "/flags/RO.svg");
+
+    await toggle.click();
     await expect(sidebar.getByRole("link", { name: "Blog Posts" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Registrations" })).toBeVisible();
-    await page.getByRole("button", { name: "Română" }).click();
+
+    const back = page.getByRole("button", { name: "Treci la română" });
+    await expect(back).toHaveText("English");
+    await expect(back.locator("img")).toHaveAttribute("src", "/flags/GB.svg");
+
+    await back.click();
     await expect(sidebar.getByRole("link", { name: "Articole" })).toBeVisible();
   });
 });

@@ -4,6 +4,7 @@ import { Calendar, Clock, MapPin, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
+import { toCurrency } from "@/lib/money";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
 import { absoluteUrl, SITE_NAME, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
 import { ShareButton } from "@/components/ui/share-button";
@@ -36,6 +37,7 @@ interface EventRow {
   time: string;
   location: string | null;
   price: number;
+  currency: string | null;
   max_participants: number | null;
   image_url: string | null;
   whatsapp_group_link: string | null;
@@ -47,7 +49,7 @@ async function getEvent(slug: string): Promise<EventRow | null> {
   const { data } = await supabase
     .from("events")
     .select(
-      "id, slug, title_ro, title_en, description_ro, description_en, date, time, location, price, max_participants, image_url, whatsapp_group_link"
+      "id, slug, title_ro, title_en, description_ro, description_en, date, time, location, price, currency, max_participants, image_url, whatsapp_group_link"
     )
     .eq("slug", slug)
     .eq("published", true)
@@ -150,7 +152,7 @@ export default async function EventDetailPage({
     offers: {
       "@type": "Offer",
       price: event.price,
-      priceCurrency: "RON",
+      priceCurrency: toCurrency(event.currency),
       availability: isFull
         ? "https://schema.org/SoldOut"
         : "https://schema.org/InStock",
@@ -268,6 +270,7 @@ export default async function EventDetailPage({
           <EventRegistration
             eventId={event.id}
             price={event.price}
+            currency={toCurrency(event.currency)}
             maxParticipants={event.max_participants}
             taken={taken}
             whatsappLink={event.whatsapp_group_link}

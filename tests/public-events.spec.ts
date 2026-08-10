@@ -30,7 +30,7 @@ test.describe("events", () => {
 
       await expect(page.getByLabel("Nume complet")).toBeVisible();
       await expect(page.getByLabel("Email")).toBeVisible();
-      await expect(page.getByPlaceholder("+40 7XX XXX XXX")).toBeVisible();
+      await expect(page.getByLabel("Telefon")).toBeVisible();
 
       const downloadPromise = page.waitForEvent("download");
       await page.getByRole("button", { name: "Adaugă în Calendar" }).click();
@@ -58,7 +58,7 @@ test.describe("events", () => {
 
       await page.getByLabel("Nume complet").fill("Test E2E");
       await page.getByLabel("Email").fill("e2e@example.com");
-      await page.getByPlaceholder("+40 7XX XXX XXX").fill("07221112233");
+      await page.getByLabel("Telefon").fill("07221112233");
 
       // Regression guard: the Turnstile widget used to be torn down and
       // re-rendered on every keystroke, because the effect that created it
@@ -108,7 +108,7 @@ test.describe("events", () => {
 
       await page.getByLabel("Nume complet").fill("Ana Popescu");
       await page.getByLabel("Email").fill(`ana-${Date.now()}@example.com`);
-      await page.getByPlaceholder("+40 7XX XXX XXX").fill("0722111222");
+      await page.getByLabel("Telefon").fill("0722111222");
 
       await page.getByRole("button", { name: "Înscrie-te gratuit" }).click();
 
@@ -145,7 +145,7 @@ test.describe("events", () => {
       await expect(page.locator('[data-verified="true"]')).toBeAttached();
       await page.getByLabel("Nume complet").fill("Maria Ionescu");
       await page.getByLabel("Email").fill(`maria-${Date.now()}@example.com`);
-      await page.getByPlaceholder("+40 7XX XXX XXX").fill("0722333444");
+      await page.getByLabel("Telefon").fill("0722333444");
       await page.getByRole("button", { name: "Înscrie-te pe lista de așteptare" }).click();
 
       await expect(page.getByRole("heading", { name: "Listă de așteptare" })).toBeVisible();
@@ -160,7 +160,7 @@ test.describe("events", () => {
       await page.goto(`/ro/events/${event.slug}`);
       await page.getByLabel("Nume complet").fill("Test E2E");
       await page.getByLabel("Email").fill("e2e@example.com");
-      await page.getByPlaceholder("+40 7XX XXX XXX").fill("0722");
+      await page.getByLabel("Telefon").fill("0722");
       await expect(page.getByText("Număr de telefon invalid / Invalid phone number")).toBeVisible();
     } finally {
       await deleteEventBySlug(event.slug);
@@ -235,30 +235,82 @@ test.describe("event page at phone width", () => {
     }
   });
 
-  test("the phone field shows a flag and the dialling code, and still validates", async ({
-    page,
-  }) => {
+  test("the country picker searches, shows a flag, and reparses the number", async ({ page }) => {
     const event = await seedEvent({ price: 0, max_participants: 10 });
     try {
       await page.goto(`/ro/events/${event.slug}`);
 
-      const picker = page.getByLabel("Country code");
-      await expect(picker).toBeAttached();
-      await expect(picker).toHaveValue("RO");
+      // Romania is preselected and the trigger shows a real image, not a text
+      // glyph. The flags used to be emoji, which Windows draws as the bare
+      // letters "RO" — fine on the phone, wrong on the desktop she administers
+      // the site from.
+      const picker = page.getByRole("button", { name: /Prefix țară/ });
+      await expect(picker).toContainText("+40");
+      await expect(picker.locator("img")).toHaveAttribute("src", "/flags/RO.svg");
 
-      // The flag is an emoji built from the country code, so asserting on the
-      // codepoints is the only honest check — whether the platform draws 🇷🇴 or
-      // falls back to the letters "RO" is the font's business, and both read
-      // correctly next to "+40".
-      const flag = String.fromCodePoint(0x1f1f7, 0x1f1f4);
-      await expect(page.getByText(`${flag}+40`)).toBeAttached();
+      await picker.click();
 
-      // Changing the country must re-parse the number against it, not just
+      // Searching by name, with no diacritics — which is how people type on a
+      // phone. "Regatul Unit" is the United Kingdom in Romanian.
+      const search = page.getByRole("combobox", { name: "Caută țara" });
+      await search.fill("regatul");
+      const option = page.getByRole("option", { name: /Regatul Unit/ });
+      await expect(option).toBeVisible();
+      await option.click();
+
+      await expect(picker).toContainText("+44");
+      await expect(picker.locator("img")).toHaveAttribute("src", "/flags/GB.svg");
+
+      // Choosing a country must re-parse the number against it, not just
       // relabel the box.
-      await picker.selectOption("GB");
-      const number = page.getByPlaceholder("+40 7XX XXX XXX");
+      const number = page.getByLabel("Telefon");
       await number.fill("07911123456");
       await expect(number).toHaveValue("+44 7911 123456");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  // The dialling code is the other way in: someone who knows "+33" should not
+  // have to know it is called France.
+  test("the country picker can be searched by dialling code", async ({ page }) => {
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+      await page.getByRole("button", { name: /Prefix țară/ }).click();
+
+      await page.getByRole("combobox", { name: "Caută țara" }).fill("+33");
+      await page.getByRole("option", { name: /\+33$/ }).first().click();
+
+      await expect(page.getByRole("button", { name: /Prefix țară/ })).toContainText("+33");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  // A native <select> draws its options outside the page, so on a desktop
+  // browser the 240-entry country list spilled past the window edge. The
+  // replacement is an ordinary element anchored to the field, so it cannot.
+  test("the open country list stays inside the viewport", async ({ page }) => {
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+      await page.getByRole("button", { name: /Prefix țară/ }).click();
+      await expect(page.getByRole("listbox")).toBeVisible();
+
+      const { listRight, listLeft, viewport, scrollWidth } = await page.evaluate(() => {
+        const box = document.querySelector('[role="listbox"]')!.getBoundingClientRect();
+        return {
+          listLeft: box.left,
+          listRight: box.right,
+          viewport: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+        };
+      });
+
+      expect(listLeft).toBeGreaterThanOrEqual(0);
+      expect(listRight).toBeLessThanOrEqual(viewport);
+      expect(scrollWidth, "an open list must not widen the page").toBeLessThanOrEqual(viewport);
     } finally {
       await deleteEventBySlug(event.slug);
     }

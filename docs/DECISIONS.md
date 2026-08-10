@@ -272,3 +272,86 @@ learns to ignore red.
 Playwright considers the server ready when `/` responds, but every other route
 still compiles on first request. Cold starts were pushing simple page loads past
 the navigation timeout.
+
+---
+
+## Flags, money and links
+
+### Flag SVGs on disk, not emoji and not a CDN
+
+The country picker started with flag emoji, which are pure arithmetic from the
+ISO code — no files, no dependency, no Content Security Policy entry. They look
+perfect on iOS and Android and render as the bare letters "RO" on Windows, which
+ships no flag glyphs. That was acceptable while the argument was "the audience is
+on phones", and stopped being acceptable once the same component had to look
+right in the admin panel, which she uses from a desktop.
+
+The replacement is 265 SVGs copied out of `country-flag-icons` into
+`public/flags` by `scripts/copy-flags.mjs`, referenced as plain `<img>`. Not
+`country-flag-icons/react`, which bundles every flag into the JavaScript — about
+a megabyte shipped to a phone to draw one 20px image. As static files the browser
+fetches only the selected flag plus whichever rows are scrolled into view.
+
+The script runs from `predev` and `prebuild` rather than `postinstall`, because
+Vercel can restore a cached `node_modules` and skip the install step while
+`public/` is not cached — which would ship a picker full of broken images. It
+throws rather than warning if the source is missing, for the same reason.
+
+### A custom combobox instead of a native `<select>`
+
+A native select is almost always the right answer on mobile: it opens the
+platform's own picker and arrives with keyboard, screen-reader and type-ahead
+behaviour for free. It was replaced anyway, for two reasons it cannot solve.
+
+Its options are drawn by the OS *outside the page*, so a 240-entry list spilled
+past the browser window on desktop, and nothing in CSS can constrain it. And a
+closed select can only display the selected option's text, so that one string had
+to be both readable in a long list and short enough for a 105px box.
+
+The replacement is anchored `left-0 right-0` to the phone field, which means it
+is exactly as wide as the field and provably cannot escape the card — no
+magic widths, no viewport arithmetic. It adds a search box matching country name,
+ISO code or dialling code, with diacritics folded so "romania" finds "România".
+
+### Currency on the event, checked in three places
+
+`price` was a bare number rendered as `${price} RON` in eight files, with
+`currency: "ron"` hardcoded in the Stripe session. The currency now lives on the
+event row, with a CHECK constraint listing the four supported codes, and every
+render goes through `formatPrice` in `lib/money.ts`.
+
+The Stripe route reads both the amount and the code from the row it just fetched,
+never from the request body — the same rule as the rest of the payment path. It
+narrows the value again on the way out, because Stripe rejects an unknown
+currency at checkout, which is the worst possible moment to discover one.
+
+### Negative prices are a database problem, not a form problem
+
+The admin panel writes to Supabase directly from the browser, so `min="0"` on an
+input is advice to whoever is typing and nothing more. A negative price would
+reach Stripe as a negative charge; a capacity of zero makes
+`taken >= max_participants` true for every event and marks the whole calendar
+sold out. Both are CHECK constraints, and the tests assert the *write* is
+refused rather than that the attribute is spelled correctly.
+
+### The WhatsApp link library copies, it does not reference
+
+Events keep their own `whatsapp_group_link` text rather than pointing at a row in
+`whatsapp_links`. Choosing a saved link copies it. That means deleting a link, or
+editing it because the group moved, cannot retroactively change what an event
+says — including events whose attendees were emailed the old link weeks ago. The
+library is a convenience for filling in a field, not the record of what someone
+was told.
+
+The table is also the one place with no public read policy. A WhatsApp invite URL
+is a capability: anyone holding it can join the group. Anonymous callers get a
+hard permission error rather than an empty list, because there is no GRANT — a
+better failure than RLS filtering silently.
+
+### The language switcher shows where you are, not where you would go
+
+It displayed "EN" while the page was in Romanian. Both readings of a
+single-language toggle are plausible and the only way to settle it was to press
+it. The visible text is now the current language and the accessible name is the
+action ("Switch to English"), which also means a screen reader announces what the
+button does rather than reading out two letters.
