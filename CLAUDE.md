@@ -7,6 +7,14 @@ most of the odd-looking things are deliberate and explained there.
 
 ## Non-negotiables
 
+- **Never push to `main`, and never commit or push without being asked.**
+  `main` is wired to Vercel production, so pushing it *is* a deploy — there is no
+  separate release step. All work goes on `feature`, which gets a preview URL.
+  Ask before every `git add` / `commit` / `push`, every time, even when the task
+  obviously ends in a commit; "fix X" is not permission to publish X. Only push
+  `main` when told to in those words. `.githooks/pre-push` enforces the branch
+  half of this — enable it once per clone with
+  `git config core.hooksPath .githooks`.
 - **Schema changes go in `supabase/migrations`, never the Supabase dashboard.**
   Declare `GRANT`s alongside RLS policies; Postgres checks both and missing
   grants have shipped broken features here twice.

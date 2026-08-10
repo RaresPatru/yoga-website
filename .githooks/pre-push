@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# Refuse to push to main.
+#
+# Pushing main deploys to production immediately — Vercel's Git integration is
+# wired to this branch, so `git push origin main` is a deploy, not a save. Work
+# goes to `feature`, which gets a preview URL instead.
+#
+# This is a safety net, not a policy statement: the policy lives in CLAUDE.md.
+#
+# To push main deliberately:
+#     git push --no-verify origin main
+#
+# Enabled with:
+#     git config core.hooksPath .githooks
+
+remote="$1"
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      echo "pre-push: refusing to push to main on '$remote'." >&2
+      echo "          main is wired to Vercel production, so this would deploy." >&2
+      echo "          Push to feature instead, or use --no-verify if you mean it." >&2
+      exit 1
+      ;;
+  esac
+done
+
+exit 0
