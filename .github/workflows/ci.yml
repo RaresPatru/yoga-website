@@ -150,8 +150,24 @@ jobs:
           } >> "$GITHUB_ENV"
           rm supabase-status.env
 
+      # Both engines, because playwright.config.ts runs two.
+      #
+      # The `mobile` project uses devices["iPhone 14"], whose defaultBrowserType
+      # is webkit — that project exists precisely because almost every visitor
+      # arrives from Instagram on a phone, and on iOS that is a WKWebView. It is
+      # the half of the suite that catches the bugs desktop Chrome cannot see,
+      # so skipping it is not an option.
+      #
+      # This list has to match the devices used in playwright.config.ts. If a
+      # project is ever added on a third engine, add it here too; the failure is
+      # loud but happens 55 tests deep:
+      #
+      #   Executable doesn't exist at .../webkit-2336/pw_run.sh
+      #
+      # Firefox is deliberately absent — no project uses it, and installing it
+      # would cost a download on every run for nothing.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Run Playwright
         run: npx playwright test
