@@ -159,6 +159,8 @@
     "registration_confirmation": "Confirmare înscriere",
     "payment_confirmation": "Confirmare plată",
     "testimonial_request": "Cerere testimonial",
+    "spot_available": "Loc disponibil (listă de așteptare)",
+    "waiting_list_variables": "Doar pentru emailul de listă de așteptare:",
     "no_messages": "Nu există mesaje.",
     "confirm_delete_message": "Sigur dorești să ștergi acest mesaj?",
     "new_post": "Articol Nou",

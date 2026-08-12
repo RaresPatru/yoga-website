@@ -159,6 +159,8 @@
     "registration_confirmation": "Registration Confirmation",
     "payment_confirmation": "Payment Confirmation",
     "testimonial_request": "Testimonial Request",
+    "spot_available": "Spot Available (waiting list)",
+    "waiting_list_variables": "Waiting-list email only:",
     "no_messages": "No messages.",
     "confirm_delete_message": "Are you sure you want to delete this message?",
     "new_post": "New Post",

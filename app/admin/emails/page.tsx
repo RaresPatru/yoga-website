@@ -20,7 +20,24 @@ const typeLabelKey: Record<string, string> = {
   registration_confirmation: "admin.registration_confirmation",
   payment_confirmation: "admin.payment_confirmation",
   testimonial_request: "admin.testimonial_request",
+  spot_available: "admin.spot_available",
 };
+
+/**
+ * The set of template types lives in the database, behind a CHECK constraint,
+ * so it can grow without this file changing. When that happened — a
+ * `spot_available` row was added for the waiting-list email — the lookup
+ * returned `undefined`, `t()` called `.split(".")` on it, and the whole page
+ * threw rather than rendering three templates and one odd label.
+ *
+ * Falling back to the raw type keeps an unlabelled template editable, which is
+ * the useful failure: the instructor sees "spot_available" instead of a blank
+ * screen, and the missing translation is obvious rather than fatal.
+ */
+function labelFor(type: string, t: (key: string) => string): string {
+  const key = typeLabelKey[type];
+  return key ? t(key) : type;
+}
 
 export default function AdminEmailsPage() {
   const { t } = useAdminLocale();
@@ -31,7 +48,7 @@ export default function AdminEmailsPage() {
 
   const load = useCallback(async () => {
     const supabase = createClient();
-    const { data } = await supabase.from("email_templates").select("*");
+    const { data } = await supabase.from("email_templates").select("*").order("type");
     if (data) setTemplates(data);
     setLoading(false);
   }, []);
@@ -39,7 +56,7 @@ export default function AdminEmailsPage() {
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
-    supabase.from("email_templates").select("*").then(({ data }) => {
+    supabase.from("email_templates").select("*").order("type").then(({ data }) => {
       if (cancelled) return;
       if (data) setTemplates(data);
       setLoading(false);
@@ -65,6 +82,15 @@ export default function AdminEmailsPage() {
       <p className="mt-2 text-sm text-charcoal-light">
         {t("admin.available_variables")} <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}user_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_date{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_time{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_location{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}whatsapp_link{'}'}{'}'}</code>
       </p>
+      {/*
+        Listed separately because they are substituted only in the waiting-list
+        email — putting them in the line above would suggest they work
+        everywhere, and an unrecognised placeholder renders literally rather
+        than failing, so the mistake would reach an attendee's inbox.
+      */}
+      <p className="mt-1 text-sm text-charcoal-light">
+        {t("admin.waiting_list_variables")} <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}claim_url{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}expires_at{'}'}{'}'}</code>
+      </p>
 
       {loading ? (
         <div className="mt-8 flex justify-center">
@@ -76,7 +102,7 @@ export default function AdminEmailsPage() {
             <GlassCard key={tpl.id} hover={false}>
               {editing === tpl.id ? (
                 <div className="space-y-4">
-                  <h3 className="font-serif text-lg text-charcoal">{t(typeLabelKey[tpl.type])}</h3>
+                  <h3 className="font-serif text-lg text-charcoal">{labelFor(tpl.type, t)}</h3>
                   <Input label="Subiect (RO)" value={form.subject_ro} onChange={(e) => setForm({...form, subject_ro: e.target.value})} />
                   <Input label="Subject (EN)" value={form.subject_en} onChange={(e) => setForm({...form, subject_en: e.target.value})} />
                   <div>
@@ -105,7 +131,7 @@ export default function AdminEmailsPage() {
               ) : (
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-charcoal">{t(typeLabelKey[tpl.type])}</h3>
+                    <h3 className="font-medium text-charcoal">{labelFor(tpl.type, t)}</h3>
                     <p className="mt-1 text-sm text-charcoal-light">{tpl.subject_ro}</p>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(tpl)}>{t("admin.edit")}</Button>
