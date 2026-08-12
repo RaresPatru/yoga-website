@@ -14,6 +14,13 @@
 #
 # The e2e job runs against a LOCAL database. It used to be possible to run the
 # suite against production, which left test data on the live website.
+#
+# Action versions are pinned to a major and kept current. GitHub retires the
+# Node runtime an action targets — v4 targeted Node 20, which was forced onto
+# Node 24 with a deprecation warning before being removed — so a stale major
+# eventually stops the workflow rather than just warning about it. Only
+# `node-version`, `cache`, `name`, `path` and `retention-days` are used here,
+# and none of those have changed across these majors.
 
 name: CI
 
@@ -34,11 +41,17 @@ jobs:
     name: Lint, types, build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # Matches the development machine. package-lock.json is written by
+          # whichever npm the developer runs, and npm major versions disagree
+          # about how optional peer dependencies are recorded — npm 12 resolves
+          # a nested @swc/helpers for next-intl's @swc/core that npm 10 does
+          # not. `npm ci` then refuses the lock it was handed. Keeping the two
+          # on the same major is what stops that class of failure.
+          node-version: 24
           cache: npm
 
       # `npm ci` installs exactly what package-lock.json specifies, unlike
@@ -65,11 +78,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          # Matches the development machine. package-lock.json is written by
+          # whichever npm the developer runs, and npm major versions disagree
+          # about how optional peer dependencies are recorded — npm 12 resolves
+          # a nested @swc/helpers for next-intl's @swc/core that npm 10 does
+          # not. `npm ci` then refuses the lock it was handed. Keeping the two
+          # on the same major is what stops that class of failure.
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -110,7 +129,7 @@ jobs:
 
       # Traces and screenshots from failures, so a red build can be diagnosed
       # without reproducing it locally.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
