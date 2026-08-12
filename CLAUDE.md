@@ -4,6 +4,8 @@ Bilingual booking site for a solo yoga instructor. Next.js 16 + Supabase +
 Stripe on Vercel. Read [PLAN.md](PLAN.md) for what is outstanding and
 [docs/DECISIONS.md](docs/DECISIONS.md) before changing anything that looks odd —
 most of the odd-looking things are deliberate and explained there.
+[docs/DATABASE.md](docs/DATABASE.md) maps the schema: what exists, who can read
+it, and the checklist for adding to it.
 
 ## Non-negotiables
 
@@ -17,7 +19,11 @@ most of the odd-looking things are deliberate and explained there.
   `git config core.hooksPath .githooks`.
 - **Schema changes go in `supabase/migrations`, never the Supabase dashboard.**
   Declare `GRANT`s alongside RLS policies; Postgres checks both and missing
-  grants have shipped broken features here twice.
+  grants have shipped broken features here twice. The current schema is one
+  file, `supabase/migrations/00000000000000_baseline.sql`; do not edit it, add a
+  dated migration alongside it. The SQL Editor is a scratchpad — paste a
+  migration into a new tab, run it, delete the tab. Anything saved there is a
+  record of what you typed, not of what the database is.
 - **Tests must never point at the production database.** `tests/helpers.ts`
   enforces this and the guard is a hard crash. Do not soften it.
 - **Security checks fail closed.** If a check cannot run, the answer is no.

@@ -138,6 +138,38 @@ separately, and both must pass. Grants had been applied ad-hoc in the dashboard,
 so the schema could not be rebuilt from the repository — and two features shipped
 broken with `permission denied` as a direct result.
 
+### Sixteen migrations squashed into one baseline
+
+The dated migrations that built the database are kept, verbatim and unreplayed,
+in `supabase/migrations-archive/`. `supabase/migrations/` now holds a single
+`00000000000000_baseline.sql` describing the current state.
+
+The trade-off is real and was taken deliberately. A per-change history tells you
+*why* something is the way it is, which is worth a lot; a baseline tells you
+*what exists*, which is what you need far more often. Splitting them gets both,
+at the cost of the two being able to drift apart — mitigated by the archive
+being frozen, so there is nothing in it to keep in sync.
+
+What forced the issue: reading the schema meant reading sixteen files in date
+order and mentally applying the overrides, because `register_for_event` was
+defined three times and `event_availability` twice. Nobody does that
+consistently, which is how a grant on `storage.objects` lived in production for
+a month without existing in any migration.
+
+Equivalence was proved mechanically rather than by reading — the schema was
+dumped before and after, and the 88 structural statements compared.
+
+### The Supabase SQL Editor holds no schema
+
+Only four read-only diagnostics, named. The editor records what you typed, not
+what the database is; twenty tabs called "Untitled query" is how three versions
+of the same function came to look equally authoritative. Worse, they were
+ordered newest-first, so running them top to bottom would have reinstated the
+oldest — reverting the RLS hardening and reopening every registration's name,
+email and phone to any account that signed up.
+
+Full reasoning in [DATABASE.md](DATABASE.md).
+
 ---
 
 ## Security
