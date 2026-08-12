@@ -1,5 +1,47 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { seedEvent, deleteEventBySlug, seedRegistrationFor } from "./helpers";
+
+/**
+ * Asserts the document is no wider than the screen showing it.
+ *
+ * Measured rather than eyeballed, because a sideways-scrolling page looks
+ * completely normal in a screenshot until you try to scroll it. `clientWidth`
+ * is the viewport; `scrollWidth` is how far the content actually reaches.
+ */
+async function expectNoSidewaysScroll(page: Page) {
+  const { viewport, content } = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth,
+  }));
+
+  expect(
+    content,
+    `page content is ${content}px wide in a ${viewport}px viewport`
+  ).toBeLessThanOrEqual(viewport);
+}
+
+/**
+ * Asserts the open country list is fully on screen and has not widened the page.
+ *
+ * Both halves matter. An element can sit inside the viewport and still push the
+ * document wider, and it can leave the document alone while hanging off the
+ * left edge where nobody can reach it.
+ */
+async function expectCountryListInsideViewport(page: Page) {
+  const { listLeft, listRight, viewport, scrollWidth } = await page.evaluate(() => {
+    const box = document.querySelector('[role="listbox"]')!.getBoundingClientRect();
+    return {
+      listLeft: box.left,
+      listRight: box.right,
+      viewport: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    };
+  });
+
+  expect(listLeft, "the list must not hang off the left edge").toBeGreaterThanOrEqual(0);
+  expect(listRight, "the list must not run past the right edge").toBeLessThanOrEqual(viewport);
+  expect(scrollWidth, "an open list must not widen the page").toBeLessThanOrEqual(viewport);
+}
 
 test.describe("events", () => {
   test("list page renders seeded event card with details", async ({ page }) => {
@@ -221,15 +263,7 @@ test.describe("event page at phone width", () => {
       await page.goto(`/ro/events/${event.slug}`);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-      const { viewport, content } = await page.evaluate(() => ({
-        viewport: document.documentElement.clientWidth,
-        content: document.documentElement.scrollWidth,
-      }));
-
-      expect(
-        content,
-        `page content is ${content}px wide in a ${viewport}px viewport`
-      ).toBeLessThanOrEqual(viewport);
+      await expectNoSidewaysScroll(page);
     } finally {
       await deleteEventBySlug(event.slug);
     }
@@ -298,19 +332,54 @@ test.describe("event page at phone width", () => {
       await page.getByRole("button", { name: /Prefix țară/ }).click();
       await expect(page.getByRole("listbox")).toBeVisible();
 
-      const { listRight, listLeft, viewport, scrollWidth } = await page.evaluate(() => {
-        const box = document.querySelector('[role="listbox"]')!.getBoundingClientRect();
-        return {
-          listLeft: box.left,
-          listRight: box.right,
-          viewport: document.documentElement.clientWidth,
-          scrollWidth: document.documentElement.scrollWidth,
-        };
-      });
+      await expectCountryListInsideViewport(page);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+});
 
-      expect(listLeft).toBeGreaterThanOrEqual(0);
-      expect(listRight).toBeLessThanOrEqual(viewport);
-      expect(scrollWidth, "an open list must not widen the page").toBeLessThanOrEqual(viewport);
+/**
+ * The same page at 320px.
+ *
+ * 320 is the floor worth supporting — the width of an iPhone SE, and still what
+ * a phone reports with the largest accessibility text size, which shrinks the
+ * CSS viewport. It is deliberately narrower than the 375px block above, because
+ * overflow is a min-content problem: an element that refuses to shrink below
+ * its content shows up first on the narrowest screen, and only at some widths.
+ * A layout can pass at 375 and still scroll sideways at 320.
+ *
+ * Only the two layout assertions run here. The picker's search and parsing
+ * behaviour is not viewport-sensitive and is already covered above; repeating
+ * it would double the runtime of this file for nothing.
+ *
+ * Like the block above this is pinned rather than left to the project, so it
+ * runs on both engines — WebKit and Chromium disagree about intrinsic sizing
+ * often enough that testing one is not testing the other.
+ */
+test.describe("event page at 320px, the narrowest supported width", () => {
+  test.use({ viewport: { width: 320, height: 658 } });
+
+  test("does not scroll sideways", async ({ page }) => {
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+      await expectNoSidewaysScroll(page);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  test("the open country list stays inside the viewport", async ({ page }) => {
+    const event = await seedEvent({ price: 0, max_participants: 10 });
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+      await page.getByRole("button", { name: /Prefix țară/ }).click();
+      await expect(page.getByRole("listbox")).toBeVisible();
+
+      await expectCountryListInsideViewport(page);
     } finally {
       await deleteEventBySlug(event.slug);
     }
