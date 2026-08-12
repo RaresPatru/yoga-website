@@ -23,7 +23,7 @@ What is left to do. Forward-looking only.
 
 | | |
 |---|---|
-| Tests | 164 passing, 6 skipped |
+| Tests | 168 passing, 6 skipped |
 | Critical vulnerabilities | 0 open |
 | Deployed | production is public; preview deployments require Vercel login |
 | Blocking launch | real content from the instructor |
@@ -59,20 +59,67 @@ She fills it in herself at `/admin/content` — no developer needed.
 
 ## Before the next deploy
 
-- [ ] **Delete the `test-workshop` event.** It is published on production with
-      `max_participants = -2`, which reads as permanently sold out, so visitors
-      see a "test workshop" card marked *Locuri epuizate*.
-- [ ] **Apply `20260810000001_event_money_guards_and_whatsapp_links.sql`, then
-      deploy — in that order.** Every event query now selects `currency`, so
-      deploying first would break the home page, the events list and every event
-      page at once. The migration is safe to run against the current code.
+- [x] **Seed the `spot_available` email template.** Applied to
+      production 12 August 2026. The Stripe webhook looks up an
+      `email_templates` row of type `spot_available` to email the waiting list
+      when a seat frees up, but the `type` CHECK constraint never listed that
+      value, so the row could not exist and the lookup always came back empty.
+      Everything around it worked — the seat was released, the batch chosen,
+      claim windows written, and the audit log recorded that people had been
+      notified. The only thing that never happened was the email.
 
-      This is the first migration here that can fail on *data* rather than
-      schema: a CHECK is validated against every existing row, and the first
-      attempt was rejected by the row above. It now repairs any non-positive
-      capacity to NULL before adding the constraint, and re-running it after a
-      failed attempt is safe — every statement is `if not exists` or
-      `drop … if exists` first.
+- [x] **Confirm production matches the baseline.** Done 12 August 2026, by
+      diffing a linked `db dump` against a local one. Every table, column,
+      constraint, index, grant and policy matched except two things, both since
+      fixed: three RLS policies that existed only in production, and the object
+      descriptions. `supabase_migrations.schema_migrations` does not exist in
+      production, which confirms the CLI has never driven it — there is no
+      migration ledger to repair, and `db push` must never be run against it.
+
+- [x] **Drop three stale waiting-list policies.** Applied 12 August 2026. They
+      existed in production and in no migration: the August hardening ran
+      `drop policy if exists` against the names used in the repo, while
+      production had been built from a dashboard paste using different lowercase
+      names, so it matched nothing and reported success.
+      `"authenticated can read waiting_list" ... using (true)` meant any
+      logged-in account could read every waiting-list row — name, email, phone —
+      regardless of `is_admin()`.
+
+- [x] **Describe every object.** Applied 12 August 2026. The Supabase Table
+      Editor now shows what each table and column is for. Maintained in
+      `supabase/migrations/99999999999999_object_comments.sql`, which is edited
+      in place rather than superseded — re-paste it after each edit.
+
+- [x] **Close the `register_for_event` exposure.** Applied 12 August 2026.
+      Anyone holding the publishable key — which ships in the site's JavaScript
+      — could call `/rest/v1/rpc/register_for_event` directly: no CAPTCHA, no
+      rate limit, no validation, and `p_payment_status => 'completed'` booked a
+      paid event without paying. Reproduced locally before fixing: a 350 RON
+      retreat, marked paid, no payment.
+
+      `revoke ... from anon, authenticated` looked like it closed this and did
+      not. Postgres grants EXECUTE to `PUBLIC` at creation, and revoking named
+      roles leaves that inherited grant in place; `pg_dump` omits default PUBLIC
+      grants, so the schema dump looked correct. Confirmed gone from the Supabase
+      advisor panel. Regression covered by `tests/rpc-exposure.spec.ts`.
+
+- [x] **Advisor policy tuning.** Applied 12 August 2026. Anonymous listing of
+      the media bucket closed, `auth.uid()` evaluated once per query, and the
+      eleven admin policies scoped to `to authenticated`. The
+      `multiple_permissive_policies` findings dropped from ~24 to 5, and the
+      `auth_rls_initplan` findings are gone.
+
+- [ ] **Enable leaked-password protection.** Dashboard → Authentication →
+      Passwords → check against HaveIBeenPwned. The only remaining advisor
+      finding that is actionable; everything else on that panel is deliberate
+      and documented in `migrations-archive/20260812000004_advisor_policy_tuning.sql`.
+      Pairs with rotating the admin password below.
+
+- [ ] **Rotate the admin password.** It was sitting in plaintext in
+      `ProductionQuery.SQL` on disk (since redacted, and the file is
+      gitignored). Never committed — verified with `git log --all -S`. Deferred
+      deliberately: it is currently in use for testing, and the account is the
+      only one on the project.
 
 ## Paused
 

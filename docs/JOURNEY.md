@@ -730,6 +730,113 @@ duration rather than about a sleep or a frame count.
 
 ---
 
+## Part 8 — What twenty untitled tabs were hiding
+
+The Supabase SQL Editor had accumulated twenty tabs, all called "Untitled
+query". Pasted into one file they came to 1,468 lines, ordered newest-first:
+`register_for_event` defined three times, `event_availability` twice, sixty-one
+`grant` statements covering about twenty-five distinct grants.
+
+The first thing worth noticing is what running that file top to bottom would
+have done. Because the newest paste sat at the top, the *last* definition of
+each object was the oldest one — so a tidy-up would have reinstated the
+unhardened `register_for_event`, restored seven `auth.role() = 'authenticated'`
+policies, re-granted `insert` on `registrations` to `anon`, and finished by
+deleting the admin account. The obvious action was the destructive one.
+
+Squashing to a single baseline was straightforward. Proving the baseline was
+*right* was the interesting part, and reading it would not have been enough.
+Dumping the schema before and after and comparing the structural statements
+turned up five differences, all intentional, and — more usefully — proved the
+other eighty-three were identical.
+
+Then the same technique against production found the thing nobody was looking
+for. Three RLS policies existed on the live database and in no migration:
+
+```sql
+CREATE POLICY "authenticated can read waiting_list"
+  ON public.waiting_list FOR SELECT TO authenticated USING (true);
+```
+
+Policies are OR'd. The admin policy required `is_admin()`; this one required
+only a login. Any account could read every waiting-list row — name, email,
+phone.
+
+They survived because production had been built from a dashboard paste whose
+policies were named in lowercase, while the repo's migration used different
+wording. The August hardening dropped the repo's names:
+
+```sql
+drop policy if exists "Authenticated users can view waiting list" on ...
+```
+
+`if exists` matched nothing and said nothing. The migration reported success,
+and on every database built from the migrations it *had* succeeded. Only
+production disagreed, and nothing was in a position to notice.
+
+Two lessons, and the second is the one I keep relearning. The first: `drop
+policy if exists` is load-bearing for idempotency and silently useless as a
+guarantee — it cannot tell you that the thing you meant to remove is gone. The
+second: the fix for schema drift is not more careful reading. It is making the
+two things comparable by machine and then actually comparing them. A month of
+looking at both halves of this had not surfaced it; one `comm` between two
+sorted dumps did, in about a second.
+
+### The revoke that revoked nothing
+
+Then the Supabase advisor panel produced thirty-odd findings, and one of them
+was real.
+
+`register_for_event()` is the only thing that writes to `registrations`. It is
+SECURITY DEFINER, and the website reaches it through `/api/register`, which is
+where the CAPTCHA, the rate limiter and the validation live. Two migrations back
+I had written what looked like the lock on that door:
+
+```sql
+revoke all on function public.register_for_event(...) from anon, authenticated;
+grant  execute on function public.register_for_event(...) to service_role;
+```
+
+That revokes the *named* grants. When Postgres creates a function it also grants
+EXECUTE to `PUBLIC`, the implicit group containing every role, and revoking
+`anon` by name does not touch it. Both roles still had EXECUTE, inherited.
+
+What made it invisible is that `pg_dump` omits default PUBLIC grants. The
+production dump showed exactly one line — the `service_role` grant — so the
+schema I had just spent a day verifying against production looked right, and
+was. The grant that mattered was not in the file.
+
+The advisor caught it because it reports *reachability* rather than grants:
+"callable by the `anon` role via `/rest/v1/rpc/register_for_event`". I did not
+believe it, checked `pg_proc.proacl`, and found the tell — a leading `=X`, an
+empty grantee, meaning PUBLIC:
+
+```
+register_for_event | =X/postgres | postgres=X/postgres | service_role=X/postgres
+```
+
+Then I stopped reasoning and tried it. `set role anon`, call the function with
+`p_payment_status => 'completed'`, and a 350 RON retreat booked itself with no
+payment, no CAPTCHA and no rate limit. Anyone with the publishable key — which
+is public by design and sits in the site's JavaScript — could have done that,
+for a month.
+
+The fix is one line I should have written the first time:
+
+```sql
+revoke all on function public.register_for_event(...) from public;
+```
+
+Three things worth keeping from this. Every function in the `public` schema is
+an HTTP endpoint, so its ACL is attack surface and not housekeeping. `revoke ...
+from anon, authenticated` is not the same statement as `revoke ... from public`,
+and only one of them is a lock. And thirty warnings is a place for a real
+finding to hide — the advisor had been reporting this the whole time, in a list
+that also contained a view we deliberately keep and an index nobody has queried
+yet. Clearing the noise is not tidiness; it is how the signal becomes visible.
+
+---
+
 ## Decisions worth defending
 
 **Keeping the tech stack.** Next.js + Supabase + Stripe was the right call and
