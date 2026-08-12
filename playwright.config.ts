@@ -50,7 +50,14 @@ export default defineConfig({
   // for reasons that have nothing to do with the code, and a developer who sees
   // a red suite they cannot reproduce learns to ignore red suites.
   retries: 1,
-  reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
+  // `github` annotates the failing lines in the PR diff; `list` keeps the raw
+  // log readable. `html` exists only so CI has something to attach — the
+  // workflow uploads `playwright-report/` on failure, and without this reporter
+  // that directory is never created, so every red build ended with "No files
+  // were found with the provided path" and no trace to open.
+  reporter: process.env.CI
+    ? [["github"], ["list"], ["html", { open: "never" }]]
+    : [["list"]],
   use: {
     baseURL: "http://localhost:3100",
     navigationTimeout: 30_000,

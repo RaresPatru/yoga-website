@@ -98,7 +98,57 @@ jobs:
         # everything in supabase/migrations plus supabase/seed.sql. This is the
         # same schema the live project runs, which is only true because the
         # migrations are now complete — grants included.
+        #
+        # `npx` resolves to the version in package-lock.json, because `supabase`
+        # is a devDependency. It was not always: this used to download whatever
+        # the latest CLI happened to be on the day the job ran, so a release
+        # upstream could turn CI red with no change in this repository. The
+        # binary itself arrives as a platform optionalDependency rather than a
+        # postinstall download, which is why nothing needs adding to the
+        # `allowScripts` allowlist in package.json.
         run: npx supabase start
+
+      # Read the keys back out of the stack that just started, rather than
+      # storing them.
+      #
+      # These used to come from `secrets.LOCAL_SUPABASE_ANON_KEY` and
+      # `secrets.LOCAL_SUPABASE_SERVICE_KEY`, which were never set on the
+      # repository. An unset secret interpolates to an empty string rather than
+      # failing, so the web server started with no Supabase key, died with
+      # "supabaseKey is required", and the job spent five minutes timing out
+      # waiting for a server that had already exited. The cause was five minutes
+      # upstream of the error.
+      #
+      # Asking the CLI is better than a secret or a hardcoded value: it needs no
+      # repository configuration, works on a fork, and cannot go stale when the
+      # CLI changes its key format — which it has. The project moved from the
+      # legacy `ANON_KEY` JWT to `PUBLISHABLE_KEY` (`sb_publishable_…`), and the
+      # secret names above still referred to the old pair.
+      #
+      # Nothing secret is being handled. These keys reach a Postgres on
+      # 127.0.0.1 inside this runner, which is destroyed with the job.
+      - name: Export local Supabase keys
+        run: |
+          set -euo pipefail
+          npx supabase status -o env | grep -E '^[A-Z0-9_]+=' > supabase-status.env
+          val() { grep "^$1=" supabase-status.env | head -1 | cut -d= -f2- | tr -d '"'; }
+          url=$(val API_URL)
+          pub=$(val PUBLISHABLE_KEY)
+          sec=$(val SECRET_KEY)
+          # Fail here, loudly, rather than letting an empty value travel onwards
+          # and surface as a web server timeout. That is the whole lesson of the
+          # bug this step replaces.
+          if [ -z "$url" ] || [ -z "$pub" ] || [ -z "$sec" ]; then
+            echo "::error::supabase status returned no keys — did the stack start?"
+            cat supabase-status.env
+            exit 1
+          fi
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$url"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$pub"
+            echo "SUPABASE_SECRET_KEY=$sec"
+          } >> "$GITHUB_ENV"
+          rm supabase-status.env
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -107,11 +157,10 @@ jobs:
         run: npx playwright test
         env:
           CI: "true"
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          # Fixed keys the Supabase CLI always issues for local development.
-          # They grant nothing anywhere else, so they are safe in a public repo.
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.LOCAL_SUPABASE_ANON_KEY }}
-          SUPABASE_SECRET_KEY: ${{ secrets.LOCAL_SUPABASE_SERVICE_KEY }}
+          # NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY and
+          # SUPABASE_SECRET_KEY arrive from $GITHUB_ENV above. They must not be
+          # repeated here — a step-level `env:` overrides $GITHUB_ENV, so
+          # restating them is how the empty values won in the first place.
           TEST_ADMIN_EMAIL: playwright-admin@test.local
           TEST_ADMIN_PASSWORD: playwright-test-password
           # Cloudflare's always-pass test pair, which is what allows the booking
@@ -129,6 +178,16 @@ jobs:
 
       # Traces and screenshots from failures, so a red build can be diagnosed
       # without reproducing it locally.
+      #
+      # `playwright-report/` only exists because the CI reporter list includes
+      # `html`. Without it this step had nothing to collect and said so on every
+      # red build — "No files were found with the provided path" — which reads
+      # like a misconfigured path and is really a missing reporter.
+      #
+      # `if-no-files-found: ignore` covers the case where Playwright dies before
+      # writing anything at all, as it does when the web server never starts.
+      # There is genuinely nothing to upload then, and a warning about it only
+      # distracts from the real error further up the log.
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -137,3 +196,4 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+          if-no-files-found: ignore
