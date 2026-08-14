@@ -109,11 +109,22 @@ She fills it in herself at `/admin/content` — no developer needed.
       `multiple_permissive_policies` findings dropped from ~24 to 5, and the
       `auth_rls_initplan` findings are gone.
 
-- [ ] **Enable leaked-password protection.** Dashboard → Authentication →
-      Passwords → check against HaveIBeenPwned. The only remaining advisor
-      finding that is actionable; everything else on that panel is deliberate
-      and documented in `migrations-archive/20260812000004_advisor_policy_tuning.sql`.
-      Pairs with rotating the admin password below.
+- **Not actionable — leaked-password protection needs a paid plan.** The advisor
+      reports it as a warning, and it stays there: the setting lives under
+      Authentication → Sign In / Providers → Email, and Supabase gates it behind
+      the Pro plan. This project is on Free.
+
+      It is a check against HaveIBeenPwned at sign-in and password-change, so
+      what it actually prevents is *choosing* a password that already appears in
+      a public breach corpus. With one account and a deliberate rotation, the
+      same protection is available by hand: paste the candidate into
+      <https://haveibeenpwned.com/Passwords> before setting it. Same corpus,
+      same k-anonymity model, no plan required.
+
+      So the advisor panel now has two permanent residents — this and
+      `security_definer_view`. Both are understood; neither is neglect. The rest
+      is documented in
+      `migrations-archive/20260812000004_advisor_policy_tuning.sql`.
 
 - [ ] **Rotate the admin password.** It was sitting in plaintext in
       `ProductionQuery.SQL` on disk (since redacted, and the file is
