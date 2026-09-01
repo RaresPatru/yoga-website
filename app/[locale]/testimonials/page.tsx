@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { GlassCard } from "@/components/ui/glass-card";
 import { getLocale, getTranslations } from "next-intl/server";
 import { formatDate } from "@/lib/utils";
@@ -72,7 +72,7 @@ function Rating({ value, locale }: { value: number | null; locale: string }) {
 export default async function TestimonialsPage() {
   const locale = await getLocale();
   const t = await getTranslations("testimonials");
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const { data } = await supabase
     .from("testimonials")

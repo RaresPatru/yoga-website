@@ -88,3 +88,21 @@ npm run test:e2e                 # production build; PW_DEV=1 for the fast loop
   then the document, and the whole page scrolls sideways on a phone. Put
   `min-w-0` on flex/grid children that hold text or inputs, and `break-words` on
   anything the instructor types.
+- **Public pages must not use `lib/supabase/server.ts`.** It reads the visitor's
+  cookies, so a visitor carrying an expired session makes Supabase refresh it
+  mid-render — which writes a cookie, which a Server Component may not do. The
+  throw escapes while gotrue-js is holding its refresh lock, nothing releases the
+  lock, and the request hangs until Vercel answers 504. That took `/events`,
+  `/blog` and `/testimonials` down while incognito windows stayed perfectly
+  healthy, so the only people who could see it were the two with admin accounts.
+  Use `createPublicClient()` from `lib/supabase/public.ts` — RLS still applies.
+  `tests/stale-session.spec.ts` guards the behaviour and the import rule.
+- **A stale `.next` makes the build lie.** `npm run build` reported `Failed to
+  type check` with parse errors inside the `validator.ts` that Next generates —
+  a file overwritten without being truncated, so it resumed mid-token from a
+  longer earlier version. `rm -rf .next` and rebuild before believing a type
+  error you cannot find anywhere in your own source.
+- **Pin `next` exactly and keep `@next/swc-*` in step with it.** Vercel runs
+  `npm install`, not `npm ci`, so a floating range can resolve there to a version
+  CI never saw. A caret on `next` beside literal `optionalDependencies` pins
+  installed two different versions of the same native binary at once.

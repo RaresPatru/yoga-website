@@ -837,6 +837,114 @@ yet. Clearing the noise is not tidiness; it is how the signal becomes visible.
 
 ---
 
+## Part 9 — The outage only the two of us could see
+
+Three pages went down in production: `/events`, `/blog` and `/testimonials`.
+Clicking them from the header did nothing for a while and then produced a
+Vercel error page. `/`, `/about` and `/contact` were fine. An incognito window
+was fine. A hard reload changed nothing.
+
+The first description of the symptom was "a 404 from Next.js, not the custom one
+we built". That sent me looking at routing, at the deployment, at a lockfile that
+had been regenerated the same day. All of it was wrong, and the thing that
+corrected it was reading the actual error page rather than a memory of it:
+
+```
+504: GATEWAY_TIMEOUT
+Code: FUNCTION_INVOCATION_TIMEOUT
+```
+
+Not a 404 at all. The pages were not missing; they were hanging until the
+platform killed them. That single correction turned an unbounded search into a
+narrow one, and it is the reason the rest of this section is short.
+
+### Why those three pages and not the others
+
+Every page reads from Supabase, but not through the same client. The three that
+hung imported `lib/supabase/server.ts`, which reads the visitor's cookies. The
+three that worked imported `lib/supabase/public.ts`, which has no session at all.
+The split in the symptom matched the split in the imports exactly, with nothing
+left over — and a correspondence that clean is a diagnosis, not a coincidence.
+
+### What the cookie actually did
+
+Supabase decides an access token needs refreshing, refreshes it, and then calls
+`setAll` to write the new token back. Writing a cookie is legal in a Server
+Action, a Route Handler or the proxy — all of them own the outgoing response.
+It is not legal while a Server Component is rendering, and Next says so:
+
+```
+Error: Cookies can only be modified in a Server Action or Route Handler
+    at setAll (.next/server/chunks/ssr/…)
+    at async Object.callback (.next/server/chunks/ssr/…)
+```
+
+The throw did not produce a clean 500, which is why this took a while to place.
+It escaped from inside gotrue-js's refresh routine, which holds a lock that
+serialises refreshes so two of them cannot race. Nothing released the lock, so
+every later call on that client waited on it forever. The request did not fail;
+it stopped.
+
+### The reason nobody saw it coming
+
+Only someone carrying a Supabase session cookie could trigger it, and the only
+accounts that have ever signed in are the instructor's and mine. Ordinary
+visitors have no cookie, never refresh anything, and got a perfectly healthy
+site. So "works for me" was inverted: it worked for strangers and failed for
+the two people who look at it most, and the incognito window that seemed to
+prove the site was fine was in fact the clearest evidence of the cause.
+
+### Proving it rather than believing it
+
+The explanation was convincing enough to act on, which is exactly when it is
+worth checking. I reverted the two files, rebuilt, and replayed the request with
+a forged session cookie: it hung for the full sixty seconds and printed a stack
+trace whose byte offsets — `23:6119`, `23:6079`, `23:5798` — matched the
+production log character for character. Restoring the fix took the same request
+to 0.11 seconds.
+
+The first forged cookie was worthless and passed against the broken code. It
+carried an obviously-fake access token, which Supabase discards without ever
+attempting a refresh. The token has to be a *syntactically valid* JWT that has
+merely expired, because the refresh attempt is the thing being tested. A
+reproduction that does not fail against the bug is not a reproduction, and the
+regression test in `tests/stale-session.spec.ts` says so at the point where the
+next person would otherwise simplify it.
+
+### The fix, in two layers
+
+`setAll` now swallows the error, which is the documented Supabase pattern and
+what should have been there from the start. That alone would have closed the
+outage.
+
+The public pages were also moved onto the sessionless client, which is the part
+that matters more. Their queries had always filtered to public rows explicitly —
+`published`, `approved`, `hidden` — so they never needed a session; they merely
+happened to hold one. A page built on a client with no session has nothing to
+refresh, so no cookie a visitor sends can affect it. The first layer fixes the
+bug; the second makes that class of bug unreachable from the public site.
+
+### Two things found on the way past
+
+The build was lying. `npm run build` reported `Failed to type check` with parse
+errors inside `.next/dev/types/validator.ts`, a file Next generates. The file was
+genuinely corrupt — blank padding, then a line resuming mid-token from a longer
+earlier version, written over without being truncated. Deleting `.next` and
+rebuilding was clean. TypeScript was innocent; a stale build directory produces
+errors that point at nothing and cost real time.
+
+And `next` had drifted. `package.json` floated it at `^16.2.12` while pinning
+`@next/swc-*` to a literal `16.2.12`, so once npm resolved 16.3.4 the project
+installed two different versions of the same native binary — the stale pin at the
+top level and the correct one nested underneath. It worked only because
+resolution happened to prefer the nested copy. `next` is now pinned exactly, the
+platform binaries track it, and `engines.node` pins Vercel to the same major that
+CI and the development machine already use. Vercel runs `npm install` rather than
+`npm ci`, so it is free to resolve a floating range differently from CI — which
+makes an exact pin the only thing that guarantees the two agree.
+
+---
+
 ## Decisions worth defending
 
 **Keeping the tech stack.** Next.js + Supabase + Stripe was the right call and
