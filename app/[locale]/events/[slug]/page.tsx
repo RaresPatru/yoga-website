@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Calendar, Clock, MapPin, Users } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
 import { toCurrency } from "@/lib/money";
@@ -45,7 +45,7 @@ interface EventRow {
 
 /** Shared by the page and generateMetadata so the event is fetched once. */
 async function getEvent(slug: string): Promise<EventRow | null> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data } = await supabase
     .from("events")
     .select(
@@ -108,7 +108,7 @@ export default async function EventDetailPage({
 
   // Seat count comes from the aggregate view, which exposes numbers but no
   // personal data, so it is readable without being logged in.
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data: availability } = await supabase
     .from("event_availability")
     .select("taken")

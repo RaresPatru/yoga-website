@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { getLocale, getTranslations } from "next-intl/server";
 import { formatDate } from "@/lib/utils";
 import { sanitizeHtml } from "@/lib/sanitize";
@@ -23,7 +23,7 @@ interface PostRow {
 }
 
 async function getPost(slug: string): Promise<PostRow | null> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data } = await supabase
     .from("blog_posts")
     .select("id, slug, title_ro, title_en, content_ro, content_en, created_at")

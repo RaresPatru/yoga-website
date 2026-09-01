@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate } from "@/lib/utils";
@@ -28,7 +28,7 @@ export async function generateMetadata({
 export default async function BlogPage() {
   const locale = await getLocale();
   const t = await getTranslations("blog");
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const { data: posts } = await supabase
     .from("blog_posts")

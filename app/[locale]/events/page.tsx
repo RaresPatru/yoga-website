@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate, formatTime } from "@/lib/utils";
@@ -31,7 +31,7 @@ export async function generateMetadata({
 export default async function EventsPage() {
   const locale = await getLocale();
   const t = await getTranslations("events");
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const today = new Date().toISOString().split("T")[0];
 

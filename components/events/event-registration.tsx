@@ -337,7 +337,11 @@ export function EventRegistration({
         required
       />
       {turnstileLoaded && (
-        <Turnstile onVerify={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
+        <Turnstile
+          token={captchaToken}
+          onVerify={setCaptchaToken}
+          onExpire={() => setCaptchaToken(null)}
+        />
       )}
       {error && (
         <p className="text-sm text-error" role="alert">

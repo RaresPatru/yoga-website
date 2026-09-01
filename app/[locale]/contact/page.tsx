@@ -107,6 +107,7 @@ export default function ContactPage() {
           </div>
           {turnstileLoaded && (
             <Turnstile
+              token={captchaToken}
               onVerify={setCaptchaToken}
               onExpire={() => setCaptchaToken(null)}
             />
