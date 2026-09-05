@@ -387,3 +387,56 @@ single-language toggle are plausible and the only way to settle it was to press
 it. The visible text is now the current language and the accessible name is the
 action ("Switch to English"), which also means a screen reader announces what the
 button does rather than reading out two letters.
+
+---
+
+## Dependencies
+
+### Four packages are deliberately held back
+
+Everything else tracks the latest release. These four do not, and each has a
+reason that outlived the upgrade that produced it. Re-checking them is cheap;
+raising them because they look stale is how the site breaks.
+
+**`isomorphic-dompurify` stays on 2.x.** Version 3 moved to a jsdom that depends
+on `@exodus/bytes`, which is `"type": "module"` — ESM only. Vercel traces the
+serverless bundle with `require()`, so the sanitizer 500'd every page that
+renders stored HTML: blog posts, event descriptions, About and the home page.
+Version 4 pulls jsdom 30, and jsdom 30 still lists `@exodus/bytes`, so the
+condition that caused the outage is unchanged. The `.nft.json` files under
+`.next/server` confirm jsdom really is traced into those routes, so this is not
+theoretical. Check the dependency, not the version number: this unblocks when
+jsdom drops that package or ships a CommonJS entry point, not when the major
+number changes again.
+
+**`typescript` is `~6.0.3`, not `^6`.** `@typescript-eslint/parser` declares
+`typescript: ">=4.8.4 <6.1.0"` as a *required* peer. A caret would let
+`npm install` pick 6.1 the day it ships and break the lint chain — and Vercel
+runs `npm install`, not `npm ci`, so it is free to resolve differently from CI.
+The tilde keeps us inside the peer range no matter what is published. TypeScript
+7 is out for the same reason, one major further along.
+
+**`eslint` stays on 9.** ESLint 10 itself would be fine — the config is already
+flat, there are no `eslint-env` comments, and Node 24 satisfies its engines. The
+blocker is Next's lint preset: `eslint-config-next` pulls
+`eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, and
+all three cap their peer at `^9`. Only `eslint-plugin-react-hooks` accepts `^10`.
+This unblocks when those three ship v10 support, which is not ours to do.
+
+**`@types/node` tracks the runtime, not the registry.** `engines.node` pins
+Vercel to 24.x, so the types must describe Node 24. Taking `@types/node` 26
+would type APIs the deployed runtime does not have — a build that passes and a
+function that throws.
+
+### `sharp` is overridden to a floor, and the floor has to move
+
+The override exists to force `sharp` *up* past some libvips CVEs, from whatever
+version Next asked for at the time. That made it a security floor. It then
+silently became a ceiling: Next moved to `sharp: "^0.35.4"` while the override
+still said `0.35.3`, so npm was holding the image optimiser *below* what Next
+declared — the opposite of the intent. When Next raises its own range past the
+floor, raise the override to match rather than leaving it pinned underneath.
+
+The `allowScripts` key moves with it. Those keys are `name@version` on purpose:
+an approval to run a build script is an approval for *that* build, so it expires
+when the version changes rather than carrying over to code nobody looked at.
