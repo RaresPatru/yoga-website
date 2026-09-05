@@ -173,6 +173,7 @@ Checklist for a new table — the third item is the one people forget:
 
 - [ ] `create table if not exists`
 - [ ] `alter table ... enable row level security`
+- [ ] **`revoke all ... from anon`, then grant back only what is public**
 - [ ] **`grant`** for each of `anon` / `authenticated` / `service_role`
 - [ ] `drop policy if exists` then `create policy` (idempotent, so it re-runs)
 - [ ] Index anything a query filters or orders on
@@ -180,10 +181,45 @@ Checklist for a new table — the third item is the one people forget:
 - [ ] A row in the tables above
 - [ ] A test that asserts the *refusal*, not just the success path
 
-On that last point: `tests/admin-events.spec.ts` checks that an anonymous client
-is **refused outright** on `whatsapp_links` — a hard error, not an empty list.
-That distinction is the whole point. An empty list would also pass a naive test
-while the table was wide open to a role that simply had no rows to see yet.
+**Why the revoke comes first, and is not optional.** Supabase's project setup
+runs `alter default privileges in schema public grant all on tables to anon`.
+Every table you create inherits *all* privileges for `anon` — SELECT, INSERT,
+UPDATE and DELETE — before you have written a single grant. Nothing in this
+repository says so, and `pg_dump` does not print default privileges as table
+grants, so the only way to see it is to ask a freshly built database:
+
+```sql
+select table_name, string_agg(privilege_type, ', ' order by privilege_type)
+from information_schema.role_table_grants
+where grantee = 'anon' and table_schema = 'public'
+group by table_name order by table_name;
+```
+
+Anything other than `SELECT` in that output is a table that was never revoked.
+Five were found this way in September 2026 — `whatsapp_links`, `site_content`,
+`faqs`, `profiles` and `event_availability` — all closed by
+`20260905000000_revoke_default_anon_grants.sql`.
+
+**Run it against both databases, because they answered differently.** Production
+carried `REFERENCES, TRIGGER, TRUNCATE` on those five and never had anon
+INSERT/UPDATE/DELETE; the same migrations replayed on a current CLI produced
+full DML for anon instead. Neither was exploitable — RLS held in both — but the
+baseline exists to rebuild production exactly, and on these five objects it had
+stopped doing that. A CI failure was the only thing that noticed, because CI is
+the only place that builds the schema from scratch every time.
+
+That is also the limit of the `db dump` comparison described above: `pg_dump`
+does not print default privileges as table grants, so a diff of two dumps shows
+these tables as identical while the live privileges differ. The August
+verification reported a clean match and was reading a file that could not
+contain the discrepancy. Ask `information_schema`, not the dump, whenever the
+question is "who can do what".
+
+On the last checklist item: `tests/admin-events.spec.ts` checks that an
+anonymous client is **refused outright** on `whatsapp_links` — a hard error, not
+an empty list. That distinction is the whole point, and it is what caught the
+grants above. An empty list would also pass a naive test while the table was
+wide open to a role that simply had no rows to see yet.
 
 ### Constraints that can fail on data
 

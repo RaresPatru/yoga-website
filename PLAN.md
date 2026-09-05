@@ -109,6 +109,30 @@ She fills it in herself at `/admin/content` — no developer needed.
       `multiple_permissive_policies` findings dropped from ~24 to 5, and the
       `auth_rls_initplan` findings are gone.
 
+- [x] **Revoke the inherited `anon` grants.** Applied 5 September 2026.
+      Supabase's `alter default privileges ... grant all on tables to anon` had
+      left `whatsapp_links`, `site_content`, `faqs`, `profiles` and
+      `event_availability` holding privileges nobody wrote down. Production and
+      a rebuilt database disagreed about which ones: production carried
+      `REFERENCES, TRIGGER, TRUNCATE`, while replaying the migrations on a
+      current CLI produced full `INSERT/UPDATE/DELETE` for `anon`. Neither was
+      exploitable — RLS held in both, verified against seeded canary rows rather
+      than trusting PostgREST's status code — so this was a rebuild-fidelity
+      defect rather than a live hole. The baseline is meant to reconstruct
+      production and on these five objects it had quietly stopped.
+
+      Found by a CI failure, because CI is the only place that builds the schema
+      from scratch on every run; a developer machine restores from a backup and
+      keeps whatever state it already had. The August `db dump` comparison could
+      not have caught it — `pg_dump` does not print default privileges as table
+      grants, the same blind spot that hid the PUBLIC execute grant on
+      `register_for_event`.
+
+      Both databases now return `SELECT` and nothing else on seven objects, with
+      `whatsapp_links` absent entirely. `TRUNCATE` was the one privilege worth
+      removing on its own merit: it ignores RLS, so no policy would have
+      contained it.
+
 - **Not actionable — leaked-password protection needs a paid plan.** The advisor
       reports it as a warning, and it stays there: the setting lives under
       Authentication → Sign In / Providers → Email, and Supabase gates it behind
