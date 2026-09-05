@@ -102,6 +102,19 @@ npm run test:e2e                 # production build; PW_DEV=1 for the fast loop
   a file overwritten without being truncated, so it resumed mid-token from a
   longer earlier version. `rm -rf .next` and rebuild before believing a type
   error you cannot find anywhere in your own source.
+- **Upgrading `@playwright/test` needs `npx playwright install`.** Browser
+  binaries are pinned per Playwright version, so a bump leaves the old build
+  behind and *every* test fails in ~2ms with "Executable doesn't exist at
+  ...chromium_headless_shell-####". It reads like the suite is broken; nothing
+  is. Reinstall the two engines CI uses: `npx playwright install chromium
+  webkit`. A green CI run alongside a red local one is this, every time —
+  the workflow installs browsers on a fresh runner.
+- **A red suite is usually Docker, not the code.** If tests fail instantly with
+  `TypeError: fetch failed`, or `supabase status` says
+  `No such container: supabase_db_yoga-website`, the local stack is down rather
+  than the app being wrong. `npx supabase stop && npx supabase start` also
+  clears the `container is not ready: unhealthy` failure that storage and studio
+  hit periodically.
 - **Pin `next` exactly and keep `@next/swc-*` in step with it.** Vercel runs
   `npm install`, not `npm ci`, so a floating range can resolve there to a version
   CI never saw. A caret on `next` beside literal `optionalDependencies` pins

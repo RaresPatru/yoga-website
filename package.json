@@ -15,31 +15,31 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@stripe/stripe-js": "^9.12.0",
-    "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.110.2",
+    "@stripe/stripe-js": "^9.15.0",
+    "@supabase/ssr": "^0.12.6",
+    "@supabase/supabase-js": "^2.115.0",
     "@tailwindcss/typography": "^0.5.20",
-    "@tiptap/extension-image": "^3.27.3",
-    "@tiptap/extension-link": "^3.27.3",
-    "@tiptap/react": "^3.27.3",
-    "@tiptap/starter-kit": "^3.27.3",
+    "@tiptap/extension-image": "^3.31.3",
+    "@tiptap/extension-link": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "google-translate-api-x": "^10.7.3",
     "ics": "^3.12.0",
     "isomorphic-dompurify": "2.26.0",
-    "libphonenumber-js": "^1.13.9",
-    "lucide-react": "^1.25.0",
-    "motion": "^13.1.0",
+    "libphonenumber-js": "^1.13.12",
+    "lucide-react": "^1.41.0",
+    "motion": "^13.2.0",
     "next": "16.3.4",
-    "next-intl": "^4.13.2",
-    "posthog-js": "^1.405.3",
-    "posthog-node": "^5.46.0",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
-    "resend": "^6.17.2",
-    "stripe": "^22.3.2",
-    "uuid": "^14.0.1"
+    "next-intl": "^4.14.2",
+    "posthog-js": "^1.427.2",
+    "posthog-node": "^5.51.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "resend": "^6.26.0",
+    "stripe": "^22.6.1",
+    "uuid": "^14.0.2"
   },
   "optionalDependencies": {
     "@next/swc-darwin-arm64": "16.3.4",
@@ -52,29 +52,29 @@
     "@next/swc-win32-x64-msvc": "16.3.4"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^24",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "@types/uuid": "^10.0.0",
     "country-flag-icons": "^1.6.20",
     "eslint": "^9.39.5",
-    "eslint-config-next": "16.3.0",
-    "supabase": "^2.114.0",
-    "tailwindcss": "^4",
-    "typescript": "^6.0.0"
+    "eslint-config-next": "16.3.4",
+    "supabase": "^2.116.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3"
   },
   "allowScripts": {
     "@parcel/watcher@2.6.0": true,
     "core-js": false,
-    "sharp@0.35.3": true,
     "unrs-resolver@1.12.2": true,
-    "@swc/core": true
+    "@swc/core": true,
+    "sharp@0.35.4": true
   },
   "overrides": {
     "next": {
-      "sharp": "0.35.3"
+      "sharp": "0.35.4"
     },
     "minimatch": "10.2.6",
     "brace-expansion": "5.0.9",
