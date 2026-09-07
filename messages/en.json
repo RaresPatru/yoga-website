@@ -219,6 +219,24 @@
     "use_link": "Use",
     "delete_link": "Delete",
     "confirm_delete_link": "Delete this saved link? Events already using it are unaffected.",
-    "manage_saved_links": "Manage saved links"
+    "manage_saved_links": "Manage saved links",
+    "forgot_link": "Forgot your password?",
+    "forgot_title": "Reset password",
+    "forgot_intro": "Enter the account email address. We will send a link you can use to choose a new password.",
+    "forgot_submit": "Send the link",
+    "forgot_sending": "Sending...",
+    "forgot_sent": "If an account exists for that address, we have sent an email with the reset link. Check the spam folder too — the link expires in 15 minutes.",
+    "back_to_login": "Back to login",
+    "reset_title": "Choose a new password",
+    "reset_checking": "Checking the link...",
+    "reset_intro": "Choose a password of at least {min} characters. A long passphrase you can remember works best.",
+    "reset_invalid": "This link is invalid or has expired. Reset links can be used once and expire after 15 minutes. Request a new one.",
+    "reset_submit": "Save password",
+    "reset_saving": "Saving...",
+    "reset_done": "Your password has been changed. You have been signed out everywhere — log in with the new password. The reset link can no longer be used.",
+    "new_password": "New password",
+    "confirm_password": "Confirm password",
+    "password_too_short": "The password must be at least 15 characters.",
+    "password_mismatch": "The two passwords do not match."
   }
 }

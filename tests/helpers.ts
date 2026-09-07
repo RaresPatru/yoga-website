@@ -101,6 +101,117 @@ export async function anonStorageClient(): Promise<SupabaseClient> {
   return createClient(url, key);
 }
 
+/**
+ * Where the local stack catches outgoing mail. Nothing is delivered anywhere
+ * real; Supabase points its SMTP at this in development, and the port comes
+ * from `[inbucket]` in supabase/config.toml.
+ */
+const MAILBOX_URL = "http://127.0.0.1:54324";
+
+/**
+ * Creates a throwaway account for the password-reset test.
+ *
+ * Deliberately *not* the shared Playwright admin. That account's password lives
+ * in TEST_ADMIN_PASSWORD and the entire admin suite signs in with it, so a test
+ * that changes it would break every other spec the moment it ran in parallel —
+ * or leave the suite unrunnable if it failed halfway and never restored it.
+ * A user created and destroyed inside one test cannot do that to anything.
+ *
+ * No `admins` row: the reset flow deliberately does not require one. Resetting
+ * a password proves control of a mailbox, which is a different question from
+ * whether the account may enter /admin — that is still `is_admin()`, checked by
+ * proxy.ts on every other route.
+ */
+export async function createThrowawayUser(password: string) {
+  const email = `${unique("reset-e2e")}@test.local`;
+  const { data, error } = await (await serviceClient()).auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (error) throw new Error(`createThrowawayUser failed: ${error.message}`);
+  return { id: data.user.id, email };
+}
+
+/**
+ * Puts a throwaway account on the admin list, so it can actually reach /admin.
+ *
+ * Signing in is not the same as being authorised here — `is_admin()` is, and
+ * proxy.ts checks it on every request. A test about admin sessions needs an
+ * account that passes both.
+ */
+export async function grantAdmin(userId: string, email: string) {
+  const { error } = await (await serviceClient())
+    .from("admins")
+    .insert({ user_id: userId, email });
+  if (error) throw new Error(`grantAdmin failed: ${error.message}`);
+}
+
+export async function deleteThrowawayUser(id: string) {
+  const { error } = await (await serviceClient()).auth.admin.deleteUser(id);
+  if (error) throw new Error(`deleteThrowawayUser failed: ${error.message}`);
+}
+
+/** Signs in over the API, to assert a password works without driving the UI. */
+export async function passwordWorks(
+  email: string,
+  password: string
+): Promise<boolean> {
+  const client = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  return !error;
+}
+
+/**
+ * Pulls the most recent recovery link out of the local mailbox.
+ *
+ * Polls rather than sleeping: the email is sent asynchronously after the API
+ * call returns, so a fixed wait is either flaky or slow. The link is read from
+ * the message body exactly as a person would receive it, which is the point —
+ * asserting on a token generated inside the test would prove nothing about
+ * whether the email itself is usable.
+ */
+export async function recoveryLinkFor(
+  email: string,
+  timeoutMs = 15_000
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const list = await fetch(`${MAILBOX_URL}/api/v1/messages`).then((r) =>
+      r.json()
+    );
+
+    for (const summary of list.messages ?? []) {
+      const to = (summary.To ?? []).map(
+        (t: { Address: string }) => t.Address?.toLowerCase()
+      );
+      if (!to.includes(email.toLowerCase())) continue;
+
+      const message = await fetch(
+        `${MAILBOX_URL}/api/v1/message/${summary.ID}`
+      ).then((r) => r.json());
+
+      const body: string = message.HTML || message.Text || "";
+      const match = body.match(
+        /https?:\/\/[^"'<>\s]*\/auth\/v1\/verify[^"'<>\s]*/
+      );
+      // Mail bodies are HTML, so `&` arrives as `&amp;` and the URL is unusable
+      // until that is undone. Following it verbatim drops every parameter after
+      // the first and produces a confusing "token is invalid".
+      if (match) return match[0].replace(/&amp;/g, "&");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+
+  throw new Error(`no recovery email arrived for ${email} within ${timeoutMs}ms`);
+}
+
 export function unique(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 }

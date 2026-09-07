@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,12 @@ function AdminLoginForm() {
             {loading ? t("admin.logging_in") : t("admin.login")}
           </Button>
         </form>
+        <Link
+          href="/admin/forgot-password"
+          className="mt-6 block text-center text-sm text-charcoal-light underline hover:text-charcoal"
+        >
+          {t("admin.forgot_link")}
+        </Link>
       </div>
     </div>
   );
