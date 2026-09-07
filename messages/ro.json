@@ -219,6 +219,24 @@
     "use_link": "Folosește",
     "delete_link": "Șterge",
     "confirm_delete_link": "Ștergi acest link salvat? Evenimentele care îl folosesc deja nu sunt afectate.",
-    "manage_saved_links": "Gestionează linkurile salvate"
+    "manage_saved_links": "Gestionează linkurile salvate",
+    "forgot_link": "Ai uitat parola?",
+    "forgot_title": "Resetare parolă",
+    "forgot_intro": "Introdu adresa de email a contului. Îți trimitem un link prin care îți poți alege o parolă nouă.",
+    "forgot_submit": "Trimite linkul",
+    "forgot_sending": "Se trimite...",
+    "forgot_sent": "Dacă există un cont cu această adresă, am trimis un email cu linkul de resetare. Verifică și folderul Spam — linkul expiră în 15 minute.",
+    "back_to_login": "Înapoi la autentificare",
+    "reset_title": "Alege o parolă nouă",
+    "reset_checking": "Se verifică linkul...",
+    "reset_intro": "Alege o parolă de cel puțin {min} caractere. Folosește o frază lungă, ușor de ținut minte.",
+    "reset_invalid": "Linkul este invalid sau a expirat. Linkurile de resetare pot fi folosite o singură dată și expiră în 15 minute. Cere unul nou.",
+    "reset_submit": "Salvează parola",
+    "reset_saving": "Se salvează...",
+    "reset_done": "Parola a fost schimbată. Te-am deconectat de pe toate dispozitivele — autentifică-te cu parola nouă. Linkul de resetare nu mai poate fi folosit.",
+    "new_password": "Parolă nouă",
+    "confirm_password": "Confirmă parola",
+    "password_too_short": "Parola trebuie să aibă cel puțin 15 caractere.",
+    "password_mismatch": "Cele două parole nu coincid."
   }
 }

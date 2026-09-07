@@ -102,6 +102,14 @@ npm run test:e2e                 # production build; PW_DEV=1 for the fast loop
   a file overwritten without being truncated, so it resumed mid-token from a
   longer earlier version. `rm -rf .next` and rebuild before believing a type
   error you cannot find anywhere in your own source.
+- **A form that "does nothing" on WebKit is usually a hydration race.** Clicking
+  submit before React has hydrated is swallowed silently — these forms have no
+  `action`, so the native submit is a no-op too — and the test just sees a page
+  that never changed. WebKit hydrates slower than Chromium, so it fails on the
+  `mobile` project only and reads like a WebKit bug in the app. Wait for
+  something that proves the client ran before interacting; on admin pages the
+  translated copy is ideal, because `t()` returns the raw key
+  (`admin.forgot_sent`) until the messages load in a client effect.
 - **Upgrading `@playwright/test` needs `npx playwright install`.** Browser
   binaries are pinned per Playwright version, so a bump leaves the old build
   behind and *every* test fails in ~2ms with "Executable doesn't exist at

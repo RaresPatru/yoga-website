@@ -39,7 +39,16 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
     { href: "/admin/messages", icon: MessageSquare, key: "messages" },
   ];
 
-  const isLoginPage = pathname === "/admin/login";
+  // Pages for someone who is *not* signed in. They render on their own, without
+  // the sidebar: every link in it leads somewhere proxy.ts would bounce them
+  // from, and a logout button is meaningless to a visitor with no session.
+  // Kept in step with PUBLIC_ADMIN_ROUTES in proxy.ts — that list decides what
+  // is reachable, this one decides what it looks like.
+  const isSignedOutPage = [
+    "/admin/login",
+    "/admin/forgot-password",
+    "/admin/reset-password",
+  ].includes(pathname);
 
   // There used to be a useEffect here that fetched the session and redirected
   // to /admin/login if it was missing. That check now lives in proxy.ts, which
@@ -54,7 +63,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
     router.push("/admin/login");
   };
 
-  if (isLoginPage) {
+  if (isSignedOutPage) {
     return <>{children}</>;
   }
 

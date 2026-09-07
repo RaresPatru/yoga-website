@@ -29,10 +29,36 @@ export default async function proxy(request: NextRequest) {
   return intlMiddleware(request);
 }
 
+/**
+ * The three `/admin` routes reachable without an admin session.
+ *
+ * Each one exists to be used by somebody who cannot sign in — that is the whole
+ * point of them — so gating them on being signed in would make them useless.
+ *
+ * `/admin/reset-password` is the subtle one. Supabase puts the recovery token
+ * in the URL *fragment* (`#access_token=...`), and a fragment is never sent to
+ * the server: browsers strip it before the request leaves. So this proxy sees a
+ * bare, sessionless request and would bounce it to the login page before the
+ * page's JavaScript ever got the chance to read the token. The redirect would
+ * happen every time, and the reset link would appear broken while being
+ * perfectly valid.
+ *
+ * Exempting these routes gives away nothing. The gate that matters is not this
+ * one: `updateUser({ password })` needs a session, and the only thing that
+ * mints one here is a signed recovery token that Supabase issued to the
+ * account's own mailbox and that expires. A visitor who opens
+ * /admin/reset-password with no token gets a form that cannot submit.
+ */
+const PUBLIC_ADMIN_ROUTES = new Set([
+  "/admin/login",
+  "/admin/forgot-password",
+  "/admin/reset-password",
+]);
+
 async function handleAdmin(request: NextRequest) {
-  // The login page must stay reachable, otherwise a signed-out admin would be
+  // These must stay reachable, otherwise a signed-out admin would be
   // redirected to the page that redirects them, forever.
-  if (request.nextUrl.pathname === "/admin/login") {
+  if (PUBLIC_ADMIN_ROUTES.has(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
 

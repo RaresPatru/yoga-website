@@ -440,3 +440,121 @@ floor, raise the override to match rather than leaving it pinned underneath.
 The `allowScripts` key moves with it. Those keys are `name@version` on purpose:
 an approval to run a build script is an approval for *that* build, so it expires
 when the version changes rather than carrying over to code nobody looked at.
+
+---
+
+## Password reset
+
+### Reset by email, and nothing else
+
+The instructor is the only account. There is no colleague to reset her password
+and no support desk, so the recovery email is not a convenience — it is the only
+route back in if she forgets it. TOTP, passkeys and email OTP as a second factor
+were all considered and dropped: each adds a way to be permanently locked out of
+a site nobody else can let her back into, which on a one-person project is a
+larger risk than the one it removes.
+
+### The three signed-out `/admin` routes are an explicit list
+
+`proxy.ts` keeps `PUBLIC_ADMIN_ROUTES` as an exact set, not a prefix match, and
+`app/admin/layout.tsx` keeps the same three paths so they render without the
+sidebar. Two lists, deliberately: one decides what is *reachable*, the other
+what it *looks like*. A prefix match would have been shorter and would have
+exempted every future `/admin/...` page somebody added under a similar name.
+
+`/admin/reset-password` has to be on that list for a reason that is easy to miss.
+Supabase returns the recovery token in the URL *fragment*
+(`#access_token=...&type=recovery`), and a fragment is never sent to the server.
+The proxy therefore sees a bare, sessionless request and would redirect to the
+login page before the page's own JavaScript could read the token — every time,
+making a perfectly valid link look broken.
+
+Exempting the route costs nothing. The gate is not the proxy: `updateUser` needs
+a session, and the only thing that mints one is a signed, expiring token that
+Supabase mailed to the account's own address. Opening the page without one gets
+a form that cannot submit.
+
+### The form never says whether an account exists
+
+`/admin/forgot-password` shows the same confirmation for a real address and an
+invented one, and swallows errors rather than reporting them. Anything else is
+an account-enumeration oracle — submit addresses, watch which are rejected,
+learn which ones are registered. The copy is written to stay honest under that
+constraint: it says an email has been sent *if* the address has an account,
+rather than claiming one was sent.
+
+### Other sessions are revoked on reset, explicitly
+
+After a successful change the page calls `signOut({ scope: "others" })`.
+Changing a password does not by itself end sessions that already exist, and the
+reason someone resets one is usually that they believe it is known to somebody
+else. Without this, an attacker holding a stolen refresh token keeps their
+access and the reset accomplishes nothing against the threat that prompted it.
+Supabase's "Secure password change" setting covers part of this and is off on
+this project, so it is done in code where it is visible and testable.
+
+`others` rather than `global`: this browser has just proved control of the
+mailbox, and it is about to be sent to the login page anyway.
+
+### The test uses a throwaway account and the real mailbox
+
+`tests/password-reset.spec.ts` creates a user, drives the actual form, reads the
+actual email out of the local mail catcher, follows the actual link, and then
+checks that the new password signs in and the old one does not. It deliberately
+does **not** touch the shared Playwright admin: that account's password is what
+every other admin spec signs in with, so a test that changed it would break the
+suite the moment it ran in parallel — or leave it unrunnable if it failed
+halfway and never restored it.
+
+Reading the link out of the email rather than minting a token in the test is the
+point. The likeliest way this flow breaks in production is a `redirectTo` origin
+missing from the Supabase allowlist, and that failure is silent: Supabase does
+not error, it quietly falls back to the project's Site URL. Only an assertion
+that follows the real emailed link can catch it.
+
+### What the redirect allowlist actually is
+
+Two settings, and the relationship between them is not obvious from the
+dashboard. Measured against a real project rather than inferred:
+
+| `redirectTo` asked for | Result |
+|---|---|
+| exactly the **Site URL** | honoured |
+| any **path under the Site URL** | honoured |
+| an entry in **Redirect URLs** | honoured |
+| any other origin | **rejected**, silently replaced by the Site URL |
+
+So the allowlist is the Site URL *and everything beneath it*, plus the Redirect
+URLs list. That has a practical consequence worth knowing: once the Site URL is
+the production domain, `/admin/reset-password` on that domain needs no entry of
+its own. Redirect URLs are only for the *other* origins — preview deployments
+and localhost.
+
+The rejection is silent. Supabase does not return an error for an unlisted
+`redirectTo`; it quietly substitutes the Site URL, so a missing entry looks like
+"the email arrived but the link goes to the wrong page" rather than like a
+configuration mistake. That is the failure mode
+`tests/password-reset.spec.ts` guards by following the real emailed link.
+
+### A completed reset ends every session, including the one doing the reset
+
+`signOut({ scope: "global" })`, not `others`. `others` was the first attempt and
+it left two holes, both found by testing rather than reasoning.
+
+The visible one: resetting from the same browser that already had `/admin` open
+did not sign that tab out, because it was the *current* session and `others`
+excludes it by definition. Someone with the old password in a session on that
+machine kept it.
+
+The subtler one: completing a reset left that browser holding the session the
+recovery link had created, and the page treated any session as permission to
+show the form. Supabase consumed the token correctly — a fresh browser following
+the same link is refused — but this browser could keep changing the password
+without a new email until the session expired. The page now checks the `?error=`
+Supabase returns *before* looking for a session, which is the signal that
+actually distinguishes a spent link from a live one.
+
+Revocation is immediate rather than eventual because `proxy.ts` calls
+`getUser()` on every `/admin` request, which revalidates against Supabase
+instead of trusting the cookie. Measured: an access token that answered 200
+before the reset answers 403 after it, and its refresh token 400.
