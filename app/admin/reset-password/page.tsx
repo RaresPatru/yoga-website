@@ -45,6 +45,35 @@ export default function ResetPasswordPage() {
     const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const linkWasRejected = Boolean(search.get("error") || fragment.get("error"));
 
+    // Did this page get opened by a recovery link, or did somebody just walk on
+    // to it while already signed in?
+    //
+    // The distinction is the whole security of this page and it is not
+    // cosmetic. Supabase exempts a *recovery* session from the project's
+    // "Require current password when updating" rule, because clicking a link
+    // sent to the account's mailbox is itself the proof. An ordinary session
+    // gets no such exemption, so `updateUser` refuses it with
+    //
+    //   Current password required when setting new password
+    //
+    // The first version of this page showed the form for any session at all,
+    // which produced exactly that error for a signed-in admin who opened the
+    // page directly — and, with the setting off, would instead have let anyone
+    // sitting at an unlocked, already-signed-in browser change the password
+    // without knowing the old one. Supabase refusing it was the safety net, not
+    // the design.
+    //
+    // Read from the URL before the client is created, because
+    // `detectSessionInUrl` strips these parameters as soon as it runs.
+    const arrivedFromLink =
+      fragment.get("type") === "recovery" ||
+      search.get("type") === "recovery" ||
+      // PKCE puts no `type` in the URL; the code itself is the evidence, and
+      // the PASSWORD_RECOVERY event below confirms it.
+      Boolean(search.get("code"));
+
+    let isRecovery = arrivedFromLink;
+
     const supabase = createClient();
 
     // The token arrives in the URL fragment as `#access_token=...&type=recovery`
@@ -60,7 +89,8 @@ export default function ResetPasswordPage() {
     const { data: subscription } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (linkWasRejected) return;
-        if (event === "PASSWORD_RECOVERY" || session) setStatus("ready");
+        if (event === "PASSWORD_RECOVERY") isRecovery = true;
+        if (isRecovery && session) setStatus("ready");
       }
     );
 
@@ -75,10 +105,17 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      // No session means no usable token: the link was already used, has
-      // expired, or somebody navigated here directly.
+      // Both conditions, not either. A session on its own is not permission to
+      // set a new password here — it also has to have come from the emailed
+      // link. Without a session the link was already used or has expired;
+      // without the link this is an ordinary signed-in visitor who should not
+      // be offered a no-questions-asked password change.
       setStatus((current) =>
-        data.session ? "ready" : current === "checking" ? "invalid" : current
+        isRecovery && data.session
+          ? "ready"
+          : current === "checking"
+            ? "invalid"
+            : current
       );
     });
 
