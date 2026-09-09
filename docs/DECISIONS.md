@@ -585,3 +585,31 @@ it at all. The regression test therefore asserts the rule rather than the error
 — a signed-in admin must not be offered the form — which holds regardless of
 configuration. That is the second time a production-only setting has hidden
 something the local database could not show, after the anon grants.
+
+### The reset page latches itself shut once the password has changed
+
+`finished` is a ref, set the moment `updateUser` succeeds and before the
+sign-out that follows. Until it existed, the page could reopen its own form
+after the reset was complete — reported from production, and worth writing down
+because the mechanism is not obvious.
+
+The auth listener stays subscribed for as long as the page is mounted, and
+`isRecovery` remains true in its closure from the link that opened it. The
+Supabase browser client synchronises sessions between tabs, so signing in
+*anywhere else in the same browser* fires `SIGNED_IN` inside the finished page.
+The listener saw "recovery, and a session" and put the form back — with the
+typed password still in React state, one click from being submitted against an
+ordinary session.
+
+Supabase refused that submission, because "Require current password when
+updating" applies to any session that did not come from a recovery link. That
+refusal was the only thing making it harmless, which is the same dependency on a
+dashboard setting this page had already been rewritten once to remove.
+
+Two tabs in one browser is the reproduction; two Playwright *contexts* do not
+share cookies, so the suite could not see it until the test used
+`context.newPage()`. The regression test was checked against the unfixed page
+first — it fails there, which is the only way to know it tests anything.
+
+The fields are also cleared on success. A form that cannot be resubmitted is
+better than one that can be resubmitted harmlessly.

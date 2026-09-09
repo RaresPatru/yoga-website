@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,16 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  /**
+   * Set once the password has actually been changed. After that this page is
+   * finished and must never show its form again, whatever happens to the
+   * session underneath it.
+   *
+   * A ref rather than state because the auth listener below closes over it and
+   * has to read the current value, not the one captured when it subscribed.
+   */
+  const finished = useRef(false);
 
   useEffect(() => {
     // Supabase reports a dead link by redirecting back here with an error
@@ -88,7 +98,21 @@ export default function ResetPasswordPage() {
     // case; the listener catches the PASSWORD_RECOVERY event if it lands first.
     const { data: subscription } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (linkWasRejected) return;
+        // Once the password has been changed, nothing may reopen the form.
+        //
+        // This listener stays subscribed for as long as the page is mounted,
+        // and `isRecovery` is still true in its closure from the link that
+        // opened it. The Supabase browser client syncs sessions between tabs,
+        // so signing in *anywhere else in the same browser* fired SIGNED_IN
+        // here — and the completed page flipped back to its form, still
+        // holding the typed password, ready to submit against an ordinary
+        // session it had no business using.
+        //
+        // Supabase refused that submission ("Current password required when
+        // setting new password"), which is the only reason it was harmless.
+        // Relying on a project setting for that is precisely the dependency
+        // this page was rewritten to remove.
+        if (finished.current || linkWasRejected) return;
         if (event === "PASSWORD_RECOVERY") isRecovery = true;
         if (isRecovery && session) setStatus("ready");
       }
@@ -145,6 +169,17 @@ export default function ResetPasswordPage() {
       setSaving(false);
       return;
     }
+
+    // Latched before the sign-out below, not after. Revoking the session is
+    // itself an auth state change, and the tab-sync listener would otherwise
+    // still be live to react to it.
+    finished.current = true;
+
+    // Nothing typed here should survive on screen either. The page is about to
+    // show a confirmation, and leaving the fields populated is what let a
+    // resurrected form be submitted with a single click.
+    setPassword("");
+    setConfirm("");
 
     // End every session, including this one.
     //

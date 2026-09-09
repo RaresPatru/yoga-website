@@ -244,6 +244,72 @@ test.describe("password reset", () => {
     }
   });
 
+  test("signing in on another tab does not reopen the finished form", async ({
+    page,
+    context,
+  }) => {
+    // Reported from production, and reproducible only with two tabs in the
+    // *same* browser — two Playwright contexts do not share cookies, which is
+    // why the first version of this suite never saw it.
+    //
+    // The reset page keeps its auth listener subscribed while mounted, and the
+    // Supabase browser client syncs sessions between tabs. Signing in anywhere
+    // else therefore fired SIGNED_IN inside the completed page, which flipped
+    // back to its form with the typed password still in React state — against
+    // an ordinary session, which is not what the form is for. Supabase refused
+    // the submission, and that refusal was the only thing making it harmless.
+    const originalPassword = "original-passphrase-for-e2e-2026";
+    const user = await createThrowawayUser(originalPassword);
+
+    try {
+      await grantAdmin(user.id, user.email);
+
+      await page.goto("/admin/forgot-password");
+      await waitForFormReady(page);
+      await page.getByLabel("Email").fill(user.email);
+      await page.getByRole("button", { name: /Trimite|Send/i }).click();
+      await expect(
+        page.getByText(/Dacă există un cont|If an account exists/i)
+      ).toBeVisible();
+
+      await page.goto(await recoveryLinkFor(user.email));
+      const field = page.getByLabel(/Parolă nouă|New password/i);
+      await expect(field).toBeVisible();
+      await field.fill(NEW_PASSWORD);
+      await page.getByLabel(/Confirmă|Confirm/i).fill(NEW_PASSWORD);
+      await page.getByRole("button", { name: /Salvează|Save/i }).click();
+      await expect(
+        page.getByText(/Parola a fost schimbată|password has been changed/i)
+      ).toBeVisible();
+
+      // A second tab in the same browser, signing in with the new password.
+      const secondTab = await context.newPage();
+      await secondTab.goto("/admin/login");
+      await expect(secondTab.getByLabel("Parolă")).toBeVisible();
+      await secondTab.getByLabel("Email").fill(user.email);
+      await secondTab.getByLabel("Parolă").fill(NEW_PASSWORD);
+      await secondTab
+        .getByRole("button", { name: /Autentificare|Login/i })
+        .click();
+      await expect(secondTab).toHaveURL(/\/admin$/);
+
+      // The finished tab must not have changed underneath.
+      await page.bringToFront();
+      await expect(
+        page.getByText(/Parola a fost schimbată|password has been changed/i),
+        "the completed page must stay completed"
+      ).toBeVisible();
+      await expect(
+        page.getByLabel(/Parolă nouă|New password/i),
+        "the form must not come back"
+      ).toHaveCount(0);
+
+      await secondTab.close();
+    } finally {
+      await deleteThrowawayUser(user.id);
+    }
+  });
+
   test("a reset locks out an admin who was already signed in elsewhere", async ({
     page,
     browser,
