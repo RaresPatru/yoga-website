@@ -201,6 +201,49 @@ test.describe("password reset", () => {
     }
   });
 
+  test("a signed-in admin is not offered the form without a link", async ({
+    page,
+  }) => {
+    // A session is not permission to set a new password here.
+    //
+    // Supabase exempts a *recovery* session from the project's "Require current
+    // password when updating" rule — clicking a link sent to the account's
+    // mailbox is the proof. An ordinary session gets no exemption, so an admin
+    // who opened this page directly hit
+    // "Current password required when setting new password" in production while
+    // every local test passed, because that setting has no equivalent in
+    // supabase/config.toml and cannot be reproduced here.
+    //
+    // The error was Supabase catching what this page should not have offered:
+    // with the setting off, the same form would have let anyone at an unlocked,
+    // already-signed-in browser change the password without knowing the old
+    // one. This asserts the rule the page now enforces, which holds regardless
+    // of how the project is configured.
+    const password = "original-passphrase-for-e2e-2026";
+    const user = await createThrowawayUser(password);
+
+    try {
+      await grantAdmin(user.id, user.email);
+
+      await page.goto("/admin/login");
+      await expect(page.getByLabel("Parolă")).toBeVisible();
+      await page.getByLabel("Email").fill(user.email);
+      await page.getByLabel("Parolă").fill(password);
+      await page.getByRole("button", { name: /Autentificare|Login/i }).click();
+      await expect(page).toHaveURL(/\/admin$/);
+
+      await page.goto("/admin/reset-password");
+
+      await expect(
+        page.getByText(/invalid sau a expirat|invalid or has expired/i),
+        "a signed-in visitor with no recovery link must be refused"
+      ).toBeVisible();
+      await expect(page.getByLabel(/Parolă nouă|New password/i)).toHaveCount(0);
+    } finally {
+      await deleteThrowawayUser(user.id);
+    }
+  });
+
   test("a reset locks out an admin who was already signed in elsewhere", async ({
     page,
     browser,

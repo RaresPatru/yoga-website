@@ -558,3 +558,30 @@ Revocation is immediate rather than eventual because `proxy.ts` calls
 `getUser()` on every `/admin` request, which revalidates against Supabase
 instead of trusting the cookie. Measured: an access token that answered 200
 before the reset answers 403 after it, and its refresh token 400.
+
+### The reset page requires a recovery session, not just any session
+
+Showing the form to anyone holding a session was wrong, and production said so
+before any test did: an admin who opened /admin/reset-password directly, while
+already signed in, got
+
+    Current password required when setting new password
+
+Supabase exempts a *recovery* session from the project's "Require current
+password when updating" rule — clicking a link sent to the account's mailbox is
+itself the proof of control. An ordinary session gets no exemption, so
+`updateUser` refused it.
+
+The error was the safety net catching a design mistake, not the mistake itself.
+With that setting off, the same page would have offered a no-questions-asked
+password change to anyone sitting at an unlocked, already-signed-in browser. The
+page now requires both a session *and* evidence it came from the emailed link
+(`type=recovery` in the URL, or the `PASSWORD_RECOVERY` event), so it behaves the
+same way whichever way the project is configured.
+
+Worth noting how it escaped the suite: "Require current password when updating"
+has no equivalent in `supabase/config.toml`, so the local stack cannot reproduce
+it at all. The regression test therefore asserts the rule rather than the error
+— a signed-in admin must not be offered the form — which holds regardless of
+configuration. That is the second time a production-only setting has hidden
+something the local database could not show, after the anon grants.

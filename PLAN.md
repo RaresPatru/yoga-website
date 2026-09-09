@@ -23,7 +23,7 @@ What is left to do. Forward-looking only.
 
 | | |
 |---|---|
-| Tests | 200 passing, 6 skipped |
+| Tests | 202 passing, 6 skipped |
 | Critical vulnerabilities | 0 open |
 | Deployed | production is public; preview deployments require Vercel login |
 | Blocking launch | real content from the instructor |
