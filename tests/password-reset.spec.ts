@@ -23,6 +23,26 @@ import {
 const NEW_PASSWORD = "corect-cal-baterie-capsator-2026";
 
 /**
+ * How to follow a recovery link.
+ *
+ * `page.goto` waits for `load` by default, and a recovery link is not one
+ * navigation: it hits GoTrue on the Supabase container, which redirects to
+ * /admin/reset-password, whose `load` then waits on every subresource of the
+ * app shell. Three systems have to finish before the promise resolves.
+ *
+ * Nothing here needs the load event. Every one of these navigations is followed
+ * by an assertion that waits for the thing it actually cares about — the
+ * password field, or the invalid-link message — so `domcontentloaded` is both
+ * sufficient and a more honest description of the precondition.
+ *
+ * (This was tried as a fix for a flake and did not fix it — the cause turned
+ * out to be worker contention, see the note on `workers` in
+ * playwright.config.ts. It is kept because the narrower wait is correct on its
+ * own terms, not because it solved anything.)
+ */
+const RECOVERY_NAV = { waitUntil: "domcontentloaded" } as const;
+
+/**
  * Waits for the forgot-password form to be able to receive a click.
  *
  * The submit handler is React's, so it does nothing until the page has
@@ -146,7 +166,7 @@ test.describe("password reset", () => {
       // Following it lands on /admin/reset-password with the token in the URL
       // fragment. The fragment never reaches the server, so everything from
       // here is the browser's own doing.
-      await page.goto(link);
+      await page.goto(link, RECOVERY_NAV);
       await expect(page).toHaveURL(/\/admin\/reset-password/);
 
       const passwordField = page.getByLabel(/Parolă nouă|New password/i);
@@ -272,7 +292,7 @@ test.describe("password reset", () => {
         page.getByText(/Dacă există un cont|If an account exists/i)
       ).toBeVisible();
 
-      await page.goto(await recoveryLinkFor(user.email));
+      await page.goto(await recoveryLinkFor(user.email), RECOVERY_NAV);
       const field = page.getByLabel(/Parolă nouă|New password/i);
       await expect(field).toBeVisible();
       await field.fill(NEW_PASSWORD);
@@ -350,7 +370,7 @@ test.describe("password reset", () => {
         page.getByText(/Dacă există un cont|If an account exists/i)
       ).toBeVisible();
 
-      await page.goto(await recoveryLinkFor(user.email));
+      await page.goto(await recoveryLinkFor(user.email), RECOVERY_NAV);
       const field = page.getByLabel(/Parolă nouă|New password/i);
       await expect(field).toBeVisible();
       await field.fill(NEW_PASSWORD);

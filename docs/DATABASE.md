@@ -9,7 +9,7 @@ the territory. When they disagree, the file is right.
 
 - **Source of truth:** `supabase/migrations/` — the baseline, plus whatever has not been folded into it yet
 - **History:** [`supabase/migrations-archive/`](../supabase/migrations-archive/README.md) — every migration that has been applied, kept for the *why*
-- **Descriptions:** `99999999999999_object_comments.sql` — a living file, numbered to always sort last. Never folded, never archived.
+- **Descriptions:** `20260912000001_object_comments.sql` — 30 `COMMENT ON` statements, collected in one file rather than folded into the baseline. No longer edited in place; a new object needs a new dated migration.
 - **The Supabase SQL Editor holds no schema.** See [Working with production](#working-with-production).
 
 ---
@@ -311,16 +311,81 @@ select grantee, table_name, string_agg(privilege_type, ', ' order by privilege_t
 
 Note there is deliberately **no** "applied migrations" query. The CLI has never
 driven this project and `supabase_migrations.schema_migrations` does not exist
-here — a query against it errors, which is more misleading than useful.
+here — a query against it errors, which is more misleading than useful. That is
+changing; see below.
 
 ### Applying a change
 
 1. Write the migration in `supabase/migrations/`.
 2. `npx supabase db reset` and run the suite.
 3. Commit it.
-4. Paste it into a **new** SQL Editor tab, run it, **delete the tab**.
+4. `npx supabase db push` — applies every migration the remote has no record of,
+   in filename order, inside a transaction. `--dry-run` first to see the list.
+
+   If it ever refuses with `LegacyDbPushMissingRemoteError`, a local migration
+   sorts *before* the last one the remote has applied. `--include-all` overrides
+   that check; prefer renaming the file to a later timestamp, because the check
+   is worth keeping.
 5. Deploy the code, if the change needs any.
 6. Once it is live, it gets folded into the baseline — see below.
+
+The remote has had a migration ledger since 11 September 2026. Before that it
+had none, and every change went in through the SQL Editor by hand.
+`npx supabase migration list --linked` shows the state; every row should carry a
+`remote` version.
+
+**If that column is ever blank again, stop.** `db push` would read "no
+migrations applied", conclude the database is blank, and replay the baseline
+over a live schema.
+
+Two things the ledger changes:
+
+- **A recorded migration is never re-applied.** So
+  `20260912000001_object_comments.sql` can no longer be edited in place and
+  re-run — `db push` will skip it and the change never reaches production. Write
+  a dated migration for comment changes instead.
+- **`supabase db reset --linked` is now a live command.** `--linked` means
+  production, and it drops everything: data, `auth.users` including the account
+  you sign in with, and Storage. If it is ever genuinely wanted, `--no-seed` is
+  not optional — `seed.sql` creates an administrator whose password is written
+  in plain text in this repository.
+
+#### How the ledger was created
+
+With `migration repair`, which records history without touching schema. On
+11 September 2026 that meant the migrations that existed on that day and had
+already been applied by hand through the SQL Editor:
+
+```bash
+npx supabase migration repair --linked --status applied <version> [<version> ...]
+```
+
+The versions are deliberately not written out here. This is a recipe for
+rebuilding a ledger, not a transcript — the set is "whatever is already applied
+at the moment you run it", and copying a list from documentation is how you come
+to assert that a migration written later was applied earlier. Everything added
+since that day reached production through `npx supabase db push` and recorded
+itself, which is the whole point of having a ledger.
+
+`repair --status applied` asserts a migration has already run, so it is only
+honest if it really has. That was checked first, by dumping both schemas and
+diffing:
+
+```bash
+npx supabase db dump --linked -f prod-schema.sql
+npx supabase db dump --local  -f local-schema.sql
+diff prod-schema.sql local-schema.sql
+```
+
+77 lines differed, in three categories and none of them structural: comment text
+inside `register_for_event` (the code is byte-identical), physical column order
+on three tables that had gained columns through `ALTER TABLE ADD COLUMN`, and
+grants where production is *narrower* than local. Object inventories matched
+exactly — 13 tables, 18 policies, 11 indexes, 25 constraints, 3 functions, same
+names on both sides.
+
+Delete the dumps afterwards. They are a snapshot that goes stale immediately,
+and a full one carries real people's names and email addresses.
 
 ### Folding into the baseline
 
@@ -341,9 +406,11 @@ The cycle, per batch:
    permanently.
 4. Run the suite, then commit the fold on its own.
 
-`99999999999999_object_comments.sql` never participates. It is edited in place
-when a table or column is added, and re-pasted into the SQL editor like any
-other change.
+`20260912000001_object_comments.sql` never participates: the descriptions are
+easier to read collected in one file than scattered through a baseline of a
+thousand lines. It is no longer edited in place — `db push` will not re-apply a
+migration it has already recorded — so describing a new object means a new dated
+migration, which the fold will absorb like any other.
 
 ### A note on default privileges
 
@@ -353,3 +420,38 @@ anon`, so every table carries `REFERENCES, TRIGGER, TRUNCATE, MAINTAIN` for
 PostgREST, which only issues `SELECT`/`INSERT`/`UPDATE`/`DELETE`, and no
 `SELECT` is granted on the private tables — so they stay unreadable. It looks
 alarming in a grants dump and is the default posture on every Supabase project.
+
+### A migration that creates a table must state its grants
+
+Do not let a new table inherit whatever the default privileges happen to be.
+The two databases disagree about those, and the disagreement is silent in both
+directions:
+
+```
+production   ALTER DEFAULT PRIVILEGES ... GRANT REFERENCES, TRIGGER, TRUNCATE, MAINTAIN ON TABLES
+local        ALTER DEFAULT PRIVILEGES ... GRANT ALL ON TABLES
+```
+
+A bare `create table public.thing (...)` therefore produces a table `anon` can
+read *and write* on the local stack — measured: `DELETE, INSERT, SELECT,
+UPDATE` — and a table nobody can touch in production. The first looks like it
+works, and the second only fails once it is live.
+
+So every new table gets, in the same migration:
+
+```sql
+create table public.thing (...);
+alter table public.thing enable row level security;
+
+-- Say it, even when the answer is "nothing".
+revoke all on table public.thing from anon, authenticated;
+grant select on table public.thing to anon;          -- if it is public content
+grant all    on table public.thing to service_role;  -- if a server route writes it
+
+create policy "..." on public.thing for select using (...);
+```
+
+`tests/rpc-exposure.spec.ts` enforces the outcome: it asks PostgREST's root
+endpoint with the publishable key — which returns exactly what an anonymous
+visitor can reach — and fails if anything appears that is not on its list. A
+table created the careless way shows up there immediately, by name.

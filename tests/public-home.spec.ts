@@ -1,5 +1,60 @@
 import { test, expect } from "@playwright/test";
-import { seedEvent, deleteEventBySlug } from "./helpers";
+import { seedEvent, deleteEventBySlug, siteContentValue, setSiteContent } from "./helpers";
+
+/**
+ * Unsupplied content must render a visible placeholder rather than nothing.
+ *
+ * Placeholders are deliberately conspicuous rather than filled with plausible
+ * copy, so a gap is obvious and gets closed — see docs/CONTENT-NEEDED.md.
+ *
+ * This used to assert that the home page had placeholders on it, which only
+ * worked while the local database was empty. Once seed.sql started filling the
+ * content in there were none, and the test failed for the best possible reason.
+ * It now empties the two fields itself and puts them back, so it tests the rule
+ * instead of the seed.
+ *
+ * Serial and single-project for the same reason the footer tests are: these are
+ * global rows, and chromium and mobile running the file at once would each read
+ * the other's writes.
+ */
+test.describe("content the instructor has not supplied yet", () => {
+  test.describe.configure({ mode: "serial" });
+  test.skip(({ isMobile }) => Boolean(isMobile), "mutates globally shared content");
+
+  const KEYS = ["home.hero_image", "home.intro"] as const;
+  let original: string[] = [];
+
+  test.beforeAll(async () => {
+    original = await Promise.all(KEYS.map(siteContentValue));
+  });
+
+  test.afterAll(async () => {
+    await Promise.all(KEYS.map((key, i) => setSiteContent(key, original[i])));
+  });
+
+  test("is marked with a visible placeholder", async ({ page }) => {
+    await Promise.all(KEYS.map((key) => setSiteContent(key, "")));
+
+    // Re-navigates on every poll rather than asserting after a single load.
+    //
+    // This is belt and braces, not a workaround for a known cache: `next build`
+    // reports every route here as server-rendered on demand, so a write made a
+    // moment ago is visible on the very next request. The home page does export
+    // `revalidate = 300`, which reads like it would make this test impossible —
+    // it does not, because nothing in this app is statically rendered for that
+    // setting to apply to. Polling costs one extra navigation in the worst case
+    // and keeps the test honest if that ever changes.
+    await expect
+      .poll(
+        async () => {
+          await page.goto("/ro");
+          return page.locator('[data-placeholder="true"]').count();
+        },
+        { message: "placeholders on a page with two empty fields", timeout: 20_000 }
+      )
+      .toBeGreaterThan(0);
+  });
+});
 
 test.describe("home page (RO)", () => {
   test.beforeEach(async ({ page }) => {
@@ -46,13 +101,6 @@ test.describe("home page (RO)", () => {
     for (const invented of ["10+", "500+", "1000+"]) {
       await expect(page.getByText(invented, { exact: true })).toHaveCount(0);
     }
-  });
-
-  test("marks content the instructor has not supplied yet", async ({ page }) => {
-    // Placeholders are deliberately visible rather than filled with plausible
-    // filler, so a gap is obvious and gets closed. See docs/CONTENT-NEEDED.md.
-    const placeholders = page.locator('[data-placeholder="true"]');
-    expect(await placeholders.count()).toBeGreaterThan(0);
   });
 
   test("hero CTA links to events page", async ({ page }) => {
@@ -159,12 +207,16 @@ test.describe("home page language switching", () => {
     // enough to flake under load.
     await expect(page).toHaveURL(/\/en$/, { timeout: 25_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(
-      page.getByRole("heading", { level: 1, name: "I guide your journey to balance" })
-    ).toBeVisible();
+    // The hero call to action, not the headline. The headline comes from
+    // `site_content`, which the instructor edits — asserting her copy here made
+    // this test fail the moment the seed gave her a different English hero
+    // title than the fallback in messages/en.json. "Explore" comes from the
+    // message bundle, so it proves the locale switched without depending on
+    // anything editable.
+    await expect(page.getByRole("link", { name: "Explore", exact: true })).toBeVisible();
     // (No nav-link assertion here: below `md` the links are display:none, and
     // getByRole deliberately ignores anything hidden from the accessibility
-    // tree, so it cannot see them at all. The heading and the lang attribute
+    // tree, so it cannot see them at all. The button and the lang attribute
     // above already prove the locale switched.)
 
     await openSwitcher(page, "Treci la română");
@@ -172,9 +224,7 @@ test.describe("home page language switching", () => {
     // that actually kept timing out.
     await expect(page).toHaveURL(/\/ro$/, { timeout: 25_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "ro");
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Îți ghidez călătoria către echilibru" })
-    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Explorează", exact: true })).toBeVisible();
   });
 });
 

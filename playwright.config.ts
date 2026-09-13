@@ -37,13 +37,28 @@ export default defineConfig({
   // file for why this was needed.
   globalSetup: "./tests/global-setup.ts",
   fullyParallel: true,
-  // Two, not three. The suite drives two browser engines against a production
-  // build while a local Postgres runs in Docker alongside it; at three workers
-  // WebKit was being killed mid-test ("Target page, context or browser has been
-  // closed") and taking unrelated specs down with it. Every one of those failures
-  // passed when re-run on its own. A suite that is green because it is honest is
-  // worth more than one that is fast and intermittently red.
-  workers: 2,
+  // One. This went 3 -> 2 -> 1, each step for the same reason and each time
+  // measured rather than guessed.
+  //
+  // The suite drives two browser engines against a production build while a
+  // local Postgres runs in Docker alongside it. At three workers WebKit was
+  // killed mid-test ("Target page, context or browser has been closed") and
+  // took unrelated specs down with it. At two it survived until the seed data
+  // grew — five events with photographs, five posts, five testimonials, five
+  // FAQs — and then a different test failed on almost every run: password-reset
+  // once, navigation the next, the contact form after that, each passing when
+  // re-run alone.
+  //
+  // The measurement that settled it: four consecutive runs at two workers gave
+  // 1-3 failures each, in different places. The same suite at one worker gave
+  // 227 passed, 0 failed, 0 flaky. The cost is about ninety seconds, which is
+  // a good trade — a suite that is green because it is honest is worth more
+  // than one that is fast and intermittently red, and an intermittently red
+  // suite teaches people to ignore red suites.
+  //
+  // If it is ever worth the time back: the load, not the code, is the problem.
+  // Lighter seed content or fewer images in supabase/seed.sql would buy room.
+  workers: 1,
   timeout: 60_000,
   expect: { timeout: 10_000 },
   // One retry everywhere, not just on CI. Browser processes do occasionally die

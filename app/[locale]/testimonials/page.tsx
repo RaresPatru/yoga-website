@@ -4,7 +4,8 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { formatDate } from "@/lib/utils";
 import { buildPageMetadata } from "@/lib/metadata";
 import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
-import { Star, Quote } from "lucide-react";
+import { Quote } from "lucide-react";
+import { Rating } from "@/components/ui/rating";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -35,40 +36,6 @@ interface TestimonialRow {
   created_at: string;
 }
 
-/**
- * Star rating.
- *
- * Renders nothing at all when `rating` is null, which is the whole point of
- * this change: the previous version drew five filled stars above every quote
- * from a hardcoded array, on a table that had no rating column. Fabricated
- * ratings are worse than no ratings — they devalue the genuine reviews beside
- * them, and a page where everything is five stars is a page nobody believes.
- */
-function Rating({ value, locale }: { value: number | null; locale: string }) {
-  if (!value) return null;
-
-  const label =
-    locale === "ro" ? `${value} din 5 stele` : `${value} out of 5 stars`;
-
-  return (
-    // One accessible label for the group rather than five meaningless icons;
-    // a screen reader announces "4 out of 5 stars", not "star star star star".
-    <div className="flex gap-0.5" role="img" aria-label={label}>
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Star
-          key={star}
-          aria-hidden="true"
-          className={
-            star <= value
-              ? "h-4 w-4 fill-rose-deep text-rose-deep"
-              : "h-4 w-4 text-sage/40"
-          }
-        />
-      ))}
-    </div>
-  );
-}
-
 export default async function TestimonialsPage() {
   const locale = await getLocale();
   const t = await getTranslations("testimonials");
@@ -91,8 +58,13 @@ export default async function TestimonialsPage() {
         <p className="mt-8 text-charcoal-light">{t("no_testimonials")}</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {/*
+            A quote is not a link, so it does not lift. The lift means "this is
+            clickable" everywhere else on the site, and it only keeps meaning
+            that if nothing else borrows it.
+          */}
           {testimonials.map((item) => (
-            <GlassCard key={item.id} className="flex h-full flex-col">
+            <GlassCard key={item.id} hover={false} className="flex h-full flex-col">
               {/* Video testimonials previously rendered their URL as a line of
                   quoted text. They are the highest-converting form of social
                   proof for this kind of business, so they now actually play. */}

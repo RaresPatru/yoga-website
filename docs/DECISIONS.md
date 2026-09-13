@@ -613,3 +613,404 @@ first — it fails there, which is the only way to know it tests anything.
 
 The fields are also cleared on success. A form that cannot be resubmitted is
 better than one that can be resubmitted harmlessly.
+
+---
+
+## Look and feel
+
+### One focus rule, in `@layer base`, wrapped in `:where()`
+
+Nine treatments had grown up across the codebase and most controls had none at
+all, falling through to the browser's black default ring. The replacement is a
+single rule covering links, buttons, `summary` and every form control.
+
+`:where()` is what made it safe to add rather than a migration: zero specificity,
+so every Tailwind `focus-visible:` utility still outranked it while the old ones
+were being removed, and the change could go in one piece instead of one component
+at a time. It also means any control added from here is correct without anybody
+remembering to style it — which is the actual failure mode, since none of the
+unstyled controls were a decision.
+
+`outline` rather than a box-shadow ring, for three reasons. It follows the
+element's own `border-radius`, so a rounded card stops getting a square box. It
+cannot be clipped by an `overflow: hidden` ancestor. And `outline-offset` shows
+the page through the gap, which is what `ring-offset-cream` was simulating by
+naming the background colour at every call site — a thing that silently goes
+wrong the moment a ring appears on a surface that is not cream.
+
+Two exceptions use `focus-visible:-outline-offset-2` because they sit flush
+inside a clipping box and the outward offset would be cut off: the FAQ rows and
+the country-search field inside the phone input's dropdown.
+
+The rich-text editor is the other special case. TipTap's editing surface is a
+`contenteditable` div, which the rule does not cover, so the outline goes on the
+wrapper with `focus-within` — lighting the whole editor including its toolbar,
+the way a text field would. Before that, the only sign the editor had focus was
+the caret.
+
+### The decorative rose was carrying text in fourteen places
+
+`globals.css` splits each hue into a decorative value and an interactive one and
+says the decorative ones must never carry text. Fourteen class strings were using
+`text-rose` — the price badge on the events index, the active navigation item,
+the active admin sidebar item, the editor toolbar's active state — at roughly
+2:1 against their background. They now use `rose-deep`.
+
+Three of them were on checkboxes, where `text-rose` did nothing whatsoever: there
+is no forms plugin, so Tailwind's text colour has no effect on a native control.
+Those use `accent-color` instead, which is the property that actually tints one.
+
+### The hover spring: 300 / 30 / 1, and the effect is a promise of a click
+
+Ten candidates went onto ten event cards and were judged by hovering rather than
+argued about. They separated three questions that had been tangled together —
+what moves, how far, and how it gets there — because only the third is what a
+"spring" decides.
+
+The chosen values are best read as one number, not three:
+
+```
+zeta = damping / (2 * sqrt(stiffness * mass)) = 30 / (2 * sqrt(300)) = 0.87
+```
+
+Below about 0.7 a spring visibly bounces, which reads as playful. At 1.0 and
+above it is inert — a slow slide. 0.87 sits just under critical damping: the card
+arrives, hesitates by a fraction of a pixel, and stops. Predicted overshoot
+`exp(-pi*z/sqrt(1-z^2))` is 0.43% of the travel. The card scales from 1.00 to
+1.02, so that is 0.00009 — a peak of 1.0201, which came back from the browser as
+0.000% overshoot and 0.000px of text springback. The whole animation settles in
+about 330ms.
+
+That last conversion is worth keeping in mind, because getting it wrong made the
+first version of the regression test useless: **overshoot is a percentage of the
+travel, not of the final value.** A bouncy spring at zeta 0.58 overshoots 10.8%,
+which on a 0.02 travel peaks at 1.0222 — so a bound of "less than 1.025", which
+looks generous, sits above both the good case and the bad one and catches
+nothing. The test now bounds at 1.021 and was checked in both directions: it
+passes at damping 30 and fails at damping 20 with `Received: 1.0218`.
+
+`mass` is written out even though 1 is the default, because it is the reference
+the other two are expressed against rather than an independent dial: doubling it
+alone halves the frequency and makes the card feel ponderous. It is what to
+reach for if the lift should ever feel heavier, and what to leave alone
+otherwise.
+
+A spring rather than a tween for a reason that outlives the curve: Motion
+integrates it frame by frame and carries velocity across interruptions, so
+sweeping a pointer along a row resolves each card from wherever it actually was.
+A tween restarts its curve from the top every time, which is what makes a fast
+sweep look mechanical. `modern-web-guidance`'s physics-based-easing guide covers
+the CSS `linear()` alternative; it approximates a spring with sampled stops and
+cannot do the interruption case, so it is the right tool only where no JS
+animation library is already present.
+
+**The effect means the whole card is a link.** Three cards were animating
+without being clickable — both sets of testimonial quotes and, worst of all, the
+contact form, which moved while you were typing in it. They now pass
+`hover={false}`, alongside the admin list rows that already did. A hover effect
+only keeps meaning "click me" for as long as nothing else borrows it.
+
+### The card scales, and the growth is the price of the effect
+
+Reported from the finished site: text and icons on the event and blog cards
+appeared to jitter and bounce in place until the hover finished, while the admin
+dashboard tiles stayed still.
+
+The tiles were not behaving differently. Scaling a card scales the text inside
+it, so every line grows and both of its ends move. Measured at the peak of the
+old spring:
+
+| line | at rest | at the peak |
+|---|---|---|
+| event card description | 303.9px | 310.6px |
+| event card title | 210.3px | 215.0px |
+| blog card date | 128.4px | 131.2px |
+| admin tile label | 77.1px | 78.9px |
+| admin tile number | 15.0px | 15.3px |
+
+The size of it follows how long the line is and how far it sits from the card's
+centre, so it was obvious on a 400px event card carrying a 300px description,
+mild on a blog date, and invisible on a 215px tile whose longest label is 77px —
+four to twenty times smaller, not absent.
+
+**The growth was never the complaint; the springback was.** The old spring had a
+damping ratio of 0.58 and overshot by 10.8%, so every line stretched past its
+final width and came back — a wobble, which reads as a fault rather than as
+motion. The card briefly shipped as a 4px lift instead, which removed the growth
+entirely and read as lacking. It now scales again, on a spring damped to 0.87:
+measured 0.000% overshoot and 0.000px of springback, so each line grows once and
+stops. A card that gets bigger is supposed to make its contents bigger.
+
+There is a way to have the growth without the text moving — split the card into
+a surface layer that scales and a content layer that does not — and it was not
+taken. Every call site passes `className`, and those classes would have to be
+routed to one layer or the other: `h-full` and `mt-8` belong to the outer box,
+`overflow-hidden` and `flex-col` to the inner one. Getting that wrong is a
+layout bug across twenty call sites in exchange for 6.6px. It stays available if
+the growth ever does become the problem.
+
+### GlassCard owns its own hover, and call sites may not add to it
+
+Five public call sites passed `transition-transform hover:scale-[1.02]` through
+`className` to a component that already animates itself. It compounded rather
+than overrode — Tailwind v4 compiles `scale-*` to the individual `scale`
+property, which multiplies with `transform` instead of replacing it — so the
+cards grew 1.0404, took ~1000ms to settle instead of ~250ms, and lost the eased
+shadow because `transition-transform` displaced `box-shadow` from
+`transition-property`.
+
+`cn` is plain `clsx` with no tailwind-merge, so conflicting utilities do not
+resolve; they both land and the cascade decides. That is worth knowing before
+passing any utility to a component that already sets the same one.
+
+The component documents the ban at the top and `tests/ui-consistency.spec.ts`
+enforces it structurally, so it fails on the next attempt rather than waiting for
+somebody to notice a card feels wrong.
+
+`whileHover` is JavaScript and does not respect `prefers-reduced-motion` the way
+the `motion-safe:` variants on the buttons do, so the component reads
+`useReducedMotion()` itself. The shadow still responds — that is a change of
+depth, not of movement.
+
+### One ground with one light source, instead of alternating bands
+
+The home page alternated cream with a `bg-white/50 backdrop-blur-sm` band. The
+band was 1.030:1 against the ground, and a card on it was 1.022:1 against the
+band versus 1.053:1 on plain cream — so removing the bands more than doubled the
+separation of the thing they were meant to frame. The alternation was hardcoded
+per section while three of those sections render conditionally, so the live page
+read cream, band, cream, cream, band.
+
+The `backdrop-blur-sm` blurred a flat colour and therefore produced nothing.
+Diffing the rendered page with and without every `backdrop-filter` moved
+background pixels by at most 11/255 but text pixels by up to 82/255: promoting an
+element to its own compositing layer changes how Chrome antialiases the text on
+it. The blur's only observable effect was making text on two bands render
+differently from text everywhere else. It stays where content genuinely passes
+behind something — the fixed header, the mobile menu, the admin sidebar.
+
+What replaced it is one continuous cream and a single radial light in the
+top-left. It fades to transparent rather than to a colour, so there is no seam
+anywhere and nothing to keep in step with which sections happen to render. Its
+centre is offset by an absolute `-4rem`, not a percentage: percentages resolve
+against the document height, so on a long blog post the light would drift off the
+top of the page. `background-attachment` is left at its default so it scrolls
+away naturally — `fixed` is the variant that costs a repaint per frame on iOS,
+which is most of this audience.
+
+### The footer's social links are content, and absent when unset
+
+The two icons were hardcoded `href="#"` while the admin panel had a field for the
+Instagram address that nothing read. They are now driven by `site_content`, in a
+section renamed from "General" to "Footer" — the heading is generated from the
+rows, so the meaningless name was coming from the data.
+
+`contact.email` was removed rather than wired up. Contact goes through the form
+on `/contact`, which is rate-limited and behind a CAPTCHA; a second address sitting
+in the footer as plain text is the one an address harvester can read.
+
+`lib/social.ts` normalises what she types. `@nume`, `nume`, `instagram.com/nume`
+and a full pasted address all have to work, and the bare-domain case is the one
+that matters: `href="instagram.com/nume"` is a relative path, so the browser
+resolves it against this site and the link 404s on our own domain while looking
+correctly typed. Only `http(s)` is echoed back untouched, which also means a
+`javascript:` string pasted into the field can never reach an href — it falls
+through to the handle branch and becomes a profile path that does not exist.
+
+An icon with no address behind it is not rendered. A social button that looks
+live and goes nowhere tells a visitor something untrue about the business, which
+is the same rule as the one against invented statistics.
+
+---
+
+## Local development
+
+### `npm run dev` reads the local database, and says so
+
+`.env` holds the production values and `.env.local` overrides the three Supabase
+ones with the Docker stack. Next loads `.env.local` after `.env` and lets it win,
+so the safe target is the default and reaching production is
+`npm run dev:prod`, which re-asserts `.env` as real environment variables —
+those outrank every dotenv file Next reads.
+
+The inversion is the point. Before this, "try something in the admin panel" and
+"change the live website" were the same action: editing content at
+`localhost:3000/admin/content` published it, deleting a test event deleted a real
+one, and nothing anywhere said so. Now damage requires typing a different
+command.
+
+Both commands print one line naming the target on startup, because the failure
+this actually caused was not damage but confusion: the footer rendered no social
+links and the obvious reading was that the code was broken, when the code was
+fine and the database was simply the other one. An empty local database and a
+broken query look identical, and no amount of care distinguishes them by eye.
+
+Two things that did **not** change, deliberately. The test suite keeps its own
+resolution order — `playwright.config.ts` reads `.env.test` first and
+`tests/helpers.ts` hard-crashes on a non-local URL — because a guard that
+depends on the developer's dotenv files is not a guard. And Stripe, Resend and
+Turnstile still come from `.env` in both modes, so local development can still
+send a real email through Resend. That is pre-existing and worth fixing
+separately; it is a different blast radius from the database.
+
+### The seed is arranged to prove things, not to fill space
+
+`supabase/seed.sql` builds five events, five posts, five testimonials, five FAQs
+and a complete set of her copy. All of it is invented, which is exactly what the
+rule against invented copy forbids everywhere else — the difference is that this
+file only ever runs against a throwaway local database, and the rule exists to
+stop plausible filler reaching a visitor.
+
+The arrangement carries information:
+
+- **The soonest event is full.** Ten of ten seats on the event five days out, so
+  the home page's ordering rule has something to do and its effect is visible
+  rather than asserted. Delete one registration row and that event should
+  reappear at the top.
+- **The lead event has no photograph.** It is the only card on the home page
+  that renders one, so leaving it empty is the only way to see how that card
+  copes.
+- **One testimonial is left unapproved.** The moderation screen has something
+  waiting in it and the dashboard's pending counter is not zero.
+- **Blog posts are dated across five months** with explicit `created_at` values,
+  because the home page shows the three most recent and every row defaulting to
+  `now()` makes that choice arbitrary.
+
+A page with one blog post does not show what a page with five looks like, and an
+empty page hides every layout problem it has.
+
+### Mock photographs are committed resized, and the originals are not
+
+The source pictures are 2.6 MB screenshots; seven of them is 12 MB of binary in
+git forever and a genuinely slow page. `npm run mock:images` resizes them to
+1400px WebP — 310 KB for the set — and `/public/mock` is what gets committed, so
+a fresh clone and CI both have them without anyone needing the originals.
+`mock-images/` is gitignored.
+
+Deliberately not wired into `predev` or `prebuild`: it would be dead work on
+every build and it needs a folder most clones will not have.
+
+### Which three events the home page leads with
+
+Soonest first, except that an event with no seats left gives up its place to a
+later one somebody can still book. A full event is not hidden — it drops behind
+every bookable date and appears only if there is room on the page.
+
+The reasoning is that this block exists to sell a seat. The nearest date is the
+most compelling thing to show right up until the moment it cannot be bought, at
+which point it is an advert for disappointment and the next available date is
+worth more.
+
+Nothing has to happen when a seat frees up. `hasRoom` is computed per render
+from live registration counts, so a cancellation restores that event to its
+natural place by date on the next render — within the five minutes the page is
+cached for.
+
+Three implementation notes:
+
+- **The ranking is in JavaScript, not the query.** How full an event is lives in
+  the `event_availability` view, one row per event, and PostgREST cannot order a
+  table by a column of an embedded resource. So the page fetches a bounded
+  window of upcoming events — twenty-four — and ranks those. The bound is the
+  compromise: if the next twenty-four were all full, a twenty-fifth with seats
+  would not be found. That is not a state this site can reach.
+- **The cutoff is an instant, not a date.** `date >= today` still matches this
+  morning's class at six in the evening, so the filter runs through
+  `eventStartInstant`, which resolves the stored wall-clock time through
+  Europe/Bucharest and stays right across the daylight-saving switch.
+- **The clock is read once.** `today` for the query floor and the time-of-day
+  cutoff come from the same `new Date()`, so a render that straddles midnight
+  cannot filter against two different days.
+
+`/events` is deliberately left as a plain chronological listing. It is an index,
+not a recommendation, and someone who opens it wants to see the calendar.
+
+### One Playwright worker, measured rather than assumed
+
+This went 3 → 2 → 1, each step for the same reason: the suite drives two browser
+engines against a production build while a local Postgres runs in Docker beside
+it, and WebKit is the thing that dies first. At three workers it was killed
+mid-test and took unrelated specs down with it. At two it held until the seed
+data grew — five events with photographs, five posts, five testimonials, five
+FAQs — and then a different test failed on nearly every run: password-reset once,
+navigation the next, the contact form after that, each passing when re-run alone.
+
+The temptation was to fix the tests, and two attempts were made before measuring:
+narrowing a `page.goto` from `load` to `domcontentloaded`, and raising the expect
+timeout on the assumption that a hydration wait was running out of time. Neither
+helped, because neither was the cause. Four consecutive runs at two workers gave
+one to three failures each, in different places; the same suite at one worker
+gave 227 passed, 0 failed, 0 flaky.
+
+Ninety seconds is a good price. An intermittently red suite teaches people to
+ignore red suites, which costs more than the time it saves. The `waitUntil`
+change was kept — the narrower wait is correct on its own terms — with a note
+saying it did not fix anything, so the next person does not credit it.
+
+### `SeatCount` and `Rating` are shared components, not repeated markup
+
+Both started as local functions inside a single page and both had already gone
+wrong in the same way: the seat count existed on the home page and not on the
+events index at all, so a visitor following "see all events" landed on a listing
+that led with the very date the home page had demoted for being full, with
+nothing to explain why. The rating existed only on the testimonials page, so the
+home page's quotes carried no stars and no names.
+
+Each is now one component with one behaviour. Two details in them are load
+bearing and easy to undo by accident:
+
+- **`Rating` renders nothing when the value is null.** The original site drew
+  five filled stars above every quote from a hardcoded array, on a table with no
+  rating column. Fabricated ratings devalue the real ones beside them.
+- **`SeatCount` owns its own wording.** The two callers sit in different
+  translation namespaces which had two different words for the same state —
+  "Complet" and "Locuri epuizate" — so passing the label in meant the same event
+  read differently depending on the page. One concept, one vocabulary.
+
+### `admins` is sealed off from every role the API can reach
+
+The table decides who may enter `/admin`. It has no grants for `anon` or
+`authenticated`, no RLS policies at all, and since
+`20260912000000_converge_role_grants.sql` nothing for `service_role` either —
+so in production no role reaches it through PostgREST. Only the `postgres`
+superuser and the security-definer `is_admin()` can see it.
+
+That is worth stating as a decision rather than leaving as a curiosity, because
+it looks like an oversight next to the eleven tables where `service_role` holds
+`ALL`. The reasoning is that the service key is the credential most likely to
+escape — it sits in the API routes and in Vercel's environment — and the
+authorisation root is the one thing that should survive its loss. Someone
+holding it gets every row of every other table, including personal data, and
+still cannot write themselves into the admin list and log in as a person.
+
+It costs nothing, because no application code reads the table: `proxy.ts` and
+`lib/is-admin.ts` both authorise through the `is_admin()` RPC, which is
+`security definer` and therefore reads `admins` as its owner regardless of who
+called it.
+
+The local database is deliberately one privilege looser — `supabase/seed.sql`
+grants `service_role` insert, so the password-reset specs can create a throwaway
+administrator per test rather than borrowing the shared one whose password they
+would then change. Putting it in the seed rather than a migration is what keeps
+that honest: seed.sql runs on `db reset` and `supabase start` and nowhere else,
+so the difference is declared and local instead of being an accident. A test in
+`tests/ui-consistency.spec.ts` fails if any application code starts querying the
+table, which is the only way the exception could turn into a bug that works
+locally and fails live.
+
+### Grants converge by narrowing the development database
+
+Five privileges existed locally and not in production — on `is_admin()`,
+`admins`, `profiles` and `event_availability` — and the fix revoked them locally
+rather than granting them live.
+
+The direction matters more than the specific privileges, none of which had a
+consumer. A development database that allows *more* than production is how a
+query passes every test and then fails with `permission denied` on the live
+site, which this repository has shipped twice. A development database that
+allows *less* fails loudly, in front of whoever is writing the code.
+
+The migration is a no-op against production by construction — every statement
+revokes something production had already lost. It runs there anyway, because the
+value is in the migration history: a rebuild from this repository now produces
+production's permissions rather than a looser set that happens to work.

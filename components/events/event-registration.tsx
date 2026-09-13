@@ -377,7 +377,10 @@ export function EventRegistration({
             {isFull && (
               <p className="mt-2 flex items-center justify-center gap-1 text-sm font-medium text-error">
                 <AlertCircle className="h-3.5 w-3.5" />
-                {t("Locuri epuizate", "Fully booked")}
+                {/* "Complet" everywhere: components/events/seat-count.tsx owns
+                    the site's vocabulary for this state, and a card that says
+                    one word must not open a page that says another. */}
+                {t("Complet", "Full")}
               </p>
             )}
           </div>

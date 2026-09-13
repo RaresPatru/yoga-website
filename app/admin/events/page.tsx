@@ -276,7 +276,7 @@ function EventForm({
               onClick={handleTranslateTitle}
               disabled={translatingTitle || !form.title_ro.trim()}
               title={t("admin.translate_to_en")}
-              className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+              className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
               {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               {translatingTitle ? t("admin.translating") : "→ EN"}
@@ -296,7 +296,7 @@ function EventForm({
               onClick={handleTranslateDesc}
               disabled={translatingDesc || !form.description_ro.trim()}
               title={t("admin.translate_to_en")}
-              className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
               {translatingDesc ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               {translatingDesc ? t("admin.translating") : "→ EN"}
@@ -308,7 +308,7 @@ function EventForm({
             rows={4}
             spellCheck={spell !== "off"}
             lang={spell === "ro" ? "ro-RO" : "en"}
-            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm"
           />
         </div>
         <div>
@@ -319,7 +319,7 @@ function EventForm({
             rows={4}
             spellCheck={spell !== "off"}
             lang={spell === "ro" ? "ro-RO" : "en"}
-            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+            className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm"
           />
         </div>
       </div>
@@ -328,7 +328,7 @@ function EventForm({
         <div className="relative">
           <button
             onClick={toggleSpellcheck}
-            className="flex items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 py-2 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose"
+            className="flex items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 py-2 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep"
           >
             <Languages className="h-3.5 w-3.5" />
             <span>{spellLabel}</span>
@@ -380,13 +380,13 @@ function EventForm({
               inputMode="numeric"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
-              className="min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+              className="min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal backdrop-blur-sm"
             />
             <select
               value={form.currency}
               onChange={(e) => setForm({ ...form, currency: e.target.value })}
               aria-label={t("admin.currency")}
-              className="w-24 shrink-0 rounded-xl border border-sage/30 bg-white/60 px-2 py-3 text-sm text-charcoal backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+              className="w-24 shrink-0 rounded-xl border border-sage/30 bg-white/60 px-2 py-3 text-sm text-charcoal backdrop-blur-sm"
             >
               {CURRENCIES.map((code) => (
                 <option key={code} value={code}>
@@ -422,7 +422,7 @@ function EventForm({
           type="checkbox"
           checked={form.published}
           onChange={(e) => setForm({...form, published: e.target.checked})}
-          className="h-4 w-4 rounded border-sage/30 text-rose focus:ring-rose/20"
+          className="h-4 w-4 rounded border-sage/30 accent-rose-deep"
         />
         <span className="text-sm text-charcoal-light">{t("admin.published")}</span>
       </label>

@@ -111,7 +111,7 @@ export default function AdminEmailsPage() {
                       value={form.body_ro}
                       onChange={(e) => setForm({...form, body_ro: e.target.value})}
                       rows={6}
-                      className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-sm text-charcoal backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+                      className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-sm text-charcoal backdrop-blur-sm"
                     />
                   </div>
                   <div>
@@ -120,7 +120,7 @@ export default function AdminEmailsPage() {
                       value={form.body_en}
                       onChange={(e) => setForm({...form, body_en: e.target.value})}
                       rows={6}
-                      className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-sm text-charcoal backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+                      className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-sm text-charcoal backdrop-blur-sm"
                     />
                   </div>
                   <div className="flex gap-2">

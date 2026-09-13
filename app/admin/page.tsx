@@ -62,7 +62,7 @@ export default function AdminDashboard() {
       <h1 className="font-serif text-2xl text-charcoal">{t("admin.dashboard_title")}</h1>
       <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map((card) => (
-          <Link key={card.labelKey} href={card.href} className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-rose/40 rounded-2xl">
+          <Link key={card.labelKey} href={card.href} className="group block rounded-2xl">
             <GlassCard hover>
               <div className="flex items-center gap-4">
                 <card.icon className={`h-8 w-8 transition-transform duration-300 group-hover:scale-110 ${card.color}`} />

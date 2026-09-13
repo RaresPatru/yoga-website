@@ -29,9 +29,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             "w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal",
             "placeholder:text-charcoal-light/50 backdrop-blur-sm",
-            "focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20",
-            "transition-all duration-200",
-            error && "border-error focus:border-error focus:ring-error/20",
+            // `transition-colors`, not `transition-all`. Colour is the only
+            // thing here that changes, and `all` also animates layout
+            // properties — including, since Tailwind v4, `outline-color`, which
+            // made the focus indicator fade in rather than appear.
+            "transition-colors duration-200",
+            // Focus is handled globally — see the rule in globals.css. `error`
+            // still sets the resting border; `aria-invalid` above is what tells
+            // that rule to draw the focus outline in the error colour too.
+            error && "border-error",
             className
           )}
           {...props}

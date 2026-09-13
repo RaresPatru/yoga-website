@@ -38,7 +38,10 @@ export function FaqList({ faqs }: { faqs: Faq[] }) {
       <div className="divide-y divide-sage/20 overflow-hidden rounded-2xl border border-sage/20 bg-white/60 backdrop-blur-sm">
         {faqs.map((faq) => (
           <details key={faq.id} className="group">
-            <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 text-left font-medium text-charcoal marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-deep">
+            {/* The outline is inset here: the rows sit flush inside the list's
+                `overflow-hidden` box, so the global 2px offset would be clipped
+                at the left and right edges. */}
+            <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 text-left font-medium text-charcoal marker:content-none focus-visible:-outline-offset-2">
               {faq.question}
               {/* Rotates when the details element opens. Purely decorative, so
                   it is hidden from assistive tech — <details> already announces

@@ -83,8 +83,51 @@
   --font-sans: var(--font-inter), sans-serif;
 }
 
+/*
+ * ONE GROUND, ONE LIGHT SOURCE
+ *
+ * The page used to alternate between cream and a `bg-white/50` band every other
+ * section. Three things were wrong with that, all measured off the rendered
+ * page rather than guessed:
+ *
+ *   band vs cream ............ 1.030:1
+ *   card on the band ......... 1.022:1
+ *   the same card on cream ... 1.053:1
+ *
+ * So the bands were invisible, and worse than invisible: a near-white card on a
+ * near-white band had less than half the separation it has on plain cream. The
+ * stripes were also decided per section in the markup while three of those
+ * sections only render when she has filled the content in, so the alternation
+ * broke the moment a section was missing — cream, band, cream, cream, band.
+ *
+ * The `backdrop-blur-sm` on those bands blurred nothing: there is only a flat
+ * body colour behind a section, and blurring a flat colour returns it unchanged.
+ * Diffing the page with and without it moved background pixels by at most
+ * 11/255 — but text pixels by up to 82/255, because a backdrop-filter promotes
+ * the element to its own compositing layer and Chrome then drops subpixel
+ * antialiasing. Its only visible effect was that text on two bands was rendered
+ * differently from text everywhere else.
+ *
+ * What replaces it is one continuous cream ground plus a single soft light in
+ * the top-left, where her photograph and the headline are. It fades to
+ * transparent rather than to another colour, so there is no seam anywhere on the
+ * page and no band to keep in step with the content.
+ *
+ * The centre is offset by an absolute `-4rem`, not a percentage: a percentage is
+ * resolved against the whole document height, so the light would drift further
+ * off the top of a long blog post than of a short page. `no-repeat` keeps it to
+ * one pass at the top, and leaving `background-attachment` at its default means
+ * it simply scrolls away — `fixed` is the version that costs a repaint per frame
+ * on iOS, which is most of this audience.
+ */
 body {
   background-color: var(--color-cream);
+  background-image: radial-gradient(
+    70rem 42rem at 20% -4rem,
+    #ffffff 0%,
+    rgba(255, 255, 255, 0) 68%
+  );
+  background-repeat: no-repeat;
   color: var(--color-charcoal);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -94,6 +137,48 @@ body {
 @layer base {
   h1, h2, h3, h4 {
     font-family: var(--font-serif);
+  }
+
+  /*
+   * ONE FOCUS INDICATOR FOR THE WHOLE SITE
+   *
+   * There used to be nine. Buttons had a rose-deep ring with a cream offset, the
+   * FAQ rows an inset ring, the dashboard tiles `rose/40`, the header and the
+   * language switcher `rose/50`, the form fields `rose/20`, the admin content
+   * fields `rose-deep/20`. Two places set a ring colour without a ring width and
+   * two killed the browser outline without replacing it, so focus there was
+   * invisible. Everything else — every navigation link, every card, the footer
+   * icons, the whole admin sidebar — had no focus style at all and fell back to
+   * the browser's own black outline. That is the black border: not a style
+   * anybody chose, but the absence of one.
+   *
+   * `:where()` is what makes this safe to add: it has zero specificity, so any
+   * component that genuinely needs something different still wins, and nothing
+   * has to be audited to adopt it. It also means every control added from here
+   * is correct without anybody remembering to style it.
+   *
+   * `outline` rather than a box-shadow ring, for three reasons. It follows the
+   * element's own border-radius, so a rounded card no longer gets a square box
+   * around it. It cannot be clipped by an `overflow: hidden` ancestor the way a
+   * ring can. And `outline-offset` shows the page through the gap, which is what
+   * the ring's `ring-offset-cream` was faking — the same effect without having
+   * to name the background colour at every call site.
+   *
+   * `:focus-visible` rather than `:focus` keeps it off a mouse click, except on
+   * text fields, where the spec makes it match either way — which is the
+   * behaviour you want there anyway.
+   *
+   * rose-deep is 5.02:1 on cream; WCAG 2.2 asks focus indicators for 3:1.
+   */
+  :where(a:any-link, button, summary, input, textarea, select):focus-visible {
+    outline: 2px solid var(--color-rose-deep);
+    outline-offset: 2px;
+  }
+
+  /* A field that is already showing an error keeps that colour when focused,
+     rather than switching to rose and reading as if the problem went away. */
+  :where(input, textarea, select)[aria-invalid="true"]:focus-visible {
+    outline-color: var(--color-error);
   }
 }
 

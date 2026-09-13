@@ -270,7 +270,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
                 aria-pressed={activeTab === key}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                   activeTab === key
-                    ? "bg-rose/10 text-rose font-medium"
+                    ? "bg-rose/10 text-rose-deep font-medium"
                     : "text-charcoal-light hover:text-charcoal"
                 }`}
               >
@@ -287,7 +287,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
               placeholder={t("admin.media_search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-sage/20 bg-white/60 py-1.5 pl-9 pr-3 text-sm text-charcoal placeholder:text-charcoal-light/50 focus:border-rose/50 focus:outline-none"
+              className="w-full rounded-lg border border-sage/20 bg-white/60 py-1.5 pl-9 pr-3 text-sm text-charcoal placeholder:text-charcoal-light/50"
             />
           </div>
         </div>

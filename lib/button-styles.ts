@@ -45,9 +45,10 @@ export function buttonClasses({
     // `whitespace-nowrap` keeps a label and its trailing arrow on one line.
     "inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-full font-medium",
     "transition-colors transition-transform duration-200",
-    // The focus ring uses the deep rose: a 50%-opacity pastel ring was nearly
-    // invisible against cream, which defeats the purpose for keyboard users.
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-deep focus-visible:ring-offset-2 focus-visible:ring-offset-cream",
+    // No focus classes here on purpose. The rose-deep outline in globals.css
+    // covers every button and link on the site, including this one, and it does
+    // the job the `ring-offset-cream` used to: the offset shows the page through
+    // the gap instead of the ring having to be told what colour the page is.
     "disabled:pointer-events-none disabled:opacity-50",
     {
       // White on rose-deep is 5.29:1. It was 2.08:1 on the old pastel — the

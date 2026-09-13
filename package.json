@@ -6,13 +6,16 @@
     "node": "24.x"
   },
   "scripts": {
-    "predev": "node scripts/copy-flags.mjs",
+    "predev": "node scripts/copy-flags.mjs && node scripts/with-env.mjs --print",
     "dev": "next dev",
+    "predev:prod": "node scripts/copy-flags.mjs",
+    "dev:prod": "node scripts/with-env.mjs --env .env next dev",
     "prebuild": "node scripts/copy-flags.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "mock:images": "node scripts/build-mock-images.mjs"
   },
   "dependencies": {
     "@stripe/stripe-js": "^9.15.0",
@@ -61,6 +64,7 @@
     "country-flag-icons": "^1.6.20",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.3.4",
+    "sharp": "0.35.4",
     "supabase": "^2.117.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3"

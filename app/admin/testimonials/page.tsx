@@ -146,7 +146,7 @@ export default function AdminTestimonialsPage() {
                             rating: e.target.value ? Number(e.target.value) : null,
                           })
                         }
-                        className="h-12 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal focus:border-rose-deep/50 focus:outline-none focus:ring-2 focus:ring-rose-deep/20"
+                        className="h-12 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal"
                       >
                         <option value="">{ro ? "Fără" : "None"}</option>
                         {[5, 4, 3, 2, 1].map((n) => (

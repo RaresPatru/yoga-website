@@ -11,26 +11,35 @@
 -- strange lives in supabase/migrations-archive/, one migration per problem
 -- solved; the broader map is docs/DATABASE.md.
 --
--- WHY THIS FILE IS THE ONE EXCEPTION TO "NEVER EDIT A MIGRATION"
+-- THIS USED TO BE A LIVING FILE. IT IS NOT ANY MORE.
 --
--- It is a living file: when a table or column is added, its description is
--- added here rather than to the migration that created it, so there is one
--- place to check that everything is described. That works because `comment on`
--- is idempotent and order-independent — re-running replaces whatever was there,
--- and nothing else depends on it.
+-- It was numbered 99999999999999 so it always sorted last, and was edited in
+-- place whenever a table or column was added, then re-pasted into the SQL
+-- editor. That worked while production had no migration ledger and every
+-- migration was applied by hand: `comment on` is idempotent and
+-- order-independent, so re-running it was free.
 --
--- The version number is 99999999999999 so it always sorts last. That matters:
--- a comment cannot be written for a table that does not exist yet, so this must
--- run after every migration, including ones written years from now. It is not a
--- date and is not meant to look like one.
+-- Two things ended that arrangement on 12 September 2026.
 --
--- Two consequences worth knowing:
+--   1. Production is now driven by `supabase db push`, which never re-applies a
+--      migration it has already recorded. Editing this file would change
+--      nothing on the live database — silently, which is the worst way for a
+--      documentation file to fail.
 --
---   * editing this file does not change production. Paste it into the SQL
---     editor again after each edit, the same as any other migration.
---   * it is excluded from the periodic fold into the baseline. Everything else
---     in supabase/migrations gets merged in and archived once applied; this
---     file stays.
+--   2. The far-future version number made every *other* migration sort before
+--      the last-applied one, so `db push` refused each of them with
+--      `LegacyDbPushMissingRemoteError` until given `--include-all`. That flag
+--      exists to override an ordering check, and needing it on every push turns
+--      a real safety net into noise.
+--
+-- So it now carries an ordinary timestamp and behaves like any other migration.
+-- **To describe a new object, write a new dated migration** — a file with two
+-- `comment on` lines in it is a perfectly good migration, and the periodic fold
+-- into the baseline will absorb it like the rest.
+--
+-- It is still excluded from that fold for now: the descriptions are easier to
+-- read collected in one place than scattered through a baseline of a thousand
+-- lines.
 -- ============================================================================
 
 

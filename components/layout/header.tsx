@@ -46,7 +46,7 @@ export function Header() {
                   className={cn(
                     "rounded-full px-4 py-2 text-sm transition-colors",
                     isActive
-                      ? "bg-rose/10 text-rose font-medium"
+                      ? "bg-rose/10 text-rose-deep font-medium"
                       : "text-charcoal-light hover:bg-white/40 hover:text-charcoal"
                   )}
                 >
@@ -64,7 +64,7 @@ export function Header() {
             aria-expanded={mobileOpen}
             aria-controls="mobile-menu"
             aria-label={mobileOpen ? t("menu.close") : t("menu.open")}
-            className="rounded-full p-2 text-charcoal-light hover:bg-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose/50 md:hidden"
+            className="rounded-full p-2 text-charcoal-light hover:bg-white/40 md:hidden"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>

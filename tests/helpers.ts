@@ -212,6 +212,32 @@ export async function recoveryLinkFor(
   throw new Error(`no recovery email arrived for ${email} within ${timeoutMs}ms`);
 }
 
+/**
+ * Reads and writes one row of the instructor's editable copy.
+ *
+ * `site_content` is seeded rather than created, so a test that changes a value
+ * has to put the old one back — there is no row to delete. Both halves go
+ * through the signed-in admin client, which is the same path the content screen
+ * uses, so a broken RLS policy fails here rather than silently writing nothing.
+ */
+export async function siteContentValue(key: string): Promise<string> {
+  const { data, error } = await (await adminScoped())
+    .from("site_content")
+    .select("value_ro")
+    .eq("key", key)
+    .single();
+  if (error) throw new Error(`siteContentValue(${key}) failed: ${error.message}`);
+  return (data as { value_ro: string }).value_ro;
+}
+
+export async function setSiteContent(key: string, valueRo: string) {
+  const { error } = await (await adminScoped())
+    .from("site_content")
+    .update({ value_ro: valueRo })
+    .eq("key", key);
+  if (error) throw new Error(`setSiteContent(${key}) failed: ${error.message}`);
+}
+
 export function unique(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 }
