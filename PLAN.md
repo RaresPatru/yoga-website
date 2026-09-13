@@ -23,7 +23,7 @@ What is left to do. Forward-looking only.
 
 | | |
 |---|---|
-| Tests | 204 passing, 6 skipped |
+| Tests | 235 passing, 11 skipped |
 | Critical vulnerabilities | 0 open |
 | Deployed | production is public; preview deployments require Vercel login |
 | Blocking launch | real content from the instructor |
@@ -44,7 +44,9 @@ She fills it in herself at `/admin/content` — no developer needed.
 - [ ] Photograph, intro, and About story (the three that matter most)
 - [ ] A real business name → one line in `lib/site-config.ts`
 - [ ] 4–5 FAQs
-- [ ] Instagram and email links for the footer (currently `#`)
+- [ ] Instagram and Facebook addresses → `/admin/content`, under "Footer". Both
+      fields accept a full address or just `@nume`; an icon with nothing behind
+      it is not rendered, so the footer is honest while they are empty.
 
 ### Verification that has never run against production
 
@@ -58,6 +60,95 @@ She fills it in herself at `/admin/content` — no developer needed.
 ---
 
 ## Before the next deploy
+
+- [x] **Production is CLI-managed.** Done 11 September 2026. The four
+      migrations were adopted with `migration repair --linked --status applied`
+      rather than by resetting the project, so nothing was dropped — no
+      `auth.users`, no Storage, no data.
+
+      The decision rested on a schema diff rather than optimism. Dumps of both
+      databases differed on 77 lines, all in three harmless categories: comment
+      text inside `register_for_event` (the code is byte-identical, 42 lines);
+      physical column order on three tables, because production acquired those
+      columns through `ALTER TABLE ADD COLUMN`, which appends; and grants where
+      **production is narrower** than local on `admins`, `profiles`,
+      `event_availability` and `is_admin()`. Object inventories matched exactly
+      — 13 tables, 18 policies, 11 indexes, 25 constraints, 3 functions.
+
+      `npx supabase db push` is now the way a migration reaches production, and
+      `db push --dry-run` reports the remote up to date.
+
+- [x] **Close the grant drift.** Applied 12 September 2026 via
+      `20260912000000_converge_role_grants.sql`, the first migration to reach
+      production through `db push` rather than a paste. Five privileges that
+      local held and production did not — on `is_admin()`, `admins`, `profiles`
+      and `event_availability` — are revoked. Every statement is a no-op against
+      production, which is the point: it records the state in the migration
+      history so a rebuild from this repository produces production's
+      permissions rather than a looser set.
+
+      Narrowed local rather than widening production because `admins` turned out
+      to be worth sealing. It has no grants for anon or authenticated, no RLS
+      policies at all, and now nothing for service_role either — so no role
+      reaches it through the API. A leaked service key gets every row of every
+      other table and still cannot write itself into the list that decides who
+      may enter `/admin`.
+
+      One documented exception: `supabase/seed.sql` re-grants service_role
+      insert on `admins` locally, because the password-reset specs create a
+      throwaway administrator per test. That file never runs against production.
+      A test in `tests/ui-consistency.spec.ts` asserts no application code reads
+      the table, which is what keeps the exception from growing into a "works
+      locally, fails live" bug.
+
+- [x] **Stop relying on the default privileges, and prove it.** Closed
+      12 September 2026, by guard rather than by changing the default.
+
+      The two databases disagree about what a **newly created** table gets:
+
+      | | new tables | new sequences | new functions |
+      |---|---|---|---|
+      | production | anon/authenticated/service_role get REFERENCES, TRIGGER, TRUNCATE, MAINTAIN | nothing | nothing |
+      | local | all three get **ALL** | **ALL** | **ALL** |
+
+      So a migration that creates a table without saying anything about grants
+      produces a table `anon` can read *and write* locally, and one nobody can
+      touch in production. Demonstrated rather than assumed: a bare
+      `create table` on the local stack came out with `DELETE, INSERT, SELECT,
+      UPDATE` for `anon`.
+
+      The default itself is left alone.
+      `20260905000000_revoke_default_anon_grants.sql` decided that already — it
+      belongs to Supabase's project setup and the platform may re-apply it, in
+      which case a revoke in a migration is silently undone and the drift
+      returns with nobody the wiser.
+
+      Instead, `tests/rpc-exposure.spec.ts` now asks PostgREST's root endpoint
+      with the publishable key, which returns exactly what an anonymous visitor
+      can reach, and fails if the set is not the seven tables and two functions
+      it is supposed to be. It is self-updating — a new table appears there
+      without anyone remembering to add it to a list — and it was checked by
+      creating a table the careless way and watching it fail, naming the table.
+
+      A third test asserts anon can read those tables and cannot write to them,
+      because the enumeration proves *which* tables are reachable and not *what*
+      may be done with them.
+
+      **The rule this leaves:** a migration that creates a table states its
+      grants explicitly. Inheriting the default is how you get a table that
+      works locally and is unreachable live, or one that is world-writable and
+      looks fine.
+
+- [x] **Wire the footer's social links to content she owns.** Applied
+      11 September 2026 via `20260911000000_footer_social_links.sql`. The admin
+      panel had a section headed "General" holding an Instagram address and a
+      public email that no component read, while the footer hardcoded `href="#"`
+      on both its icons — the storage and the editing screen had been built and
+      the consuming half never was. The section is now "Footer",
+      `contact.email` is gone (contact runs through the rate-limited,
+      CAPTCHA-protected form; a second plain-text address in the footer is the
+      one an address harvester can read) and `contact.facebook_url` exists at
+      last, the icon having had no field behind it since the beginning.
 
 - [x] **Seed the `spot_available` email template.** Applied to
       production 12 August 2026. The Stripe webhook looks up an
@@ -87,8 +178,10 @@ She fills it in herself at `/admin/content` — no developer needed.
 
 - [x] **Describe every object.** Applied 12 August 2026. The Supabase Table
       Editor now shows what each table and column is for. Maintained in
-      `supabase/migrations/99999999999999_object_comments.sql`, which is edited
-      in place rather than superseded — re-paste it after each edit.
+      `supabase/migrations/20260912000001_object_comments.sql`, renumbered from
+      99999999999999 on 12 September 2026: it can no longer be edited in place,
+      because `db push` never re-applies a migration it has already recorded, so
+      describing a new object now means a new dated migration.
 
 - [x] **Close the `register_for_event` exposure.** Applied 12 August 2026.
       Anyone holding the publishable key — which ships in the site's JavaScript

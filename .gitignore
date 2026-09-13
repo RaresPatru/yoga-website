@@ -80,3 +80,12 @@ skills-lock.json
 /ProductionQuery.SQL
 /prod.sql
 /*.dump.sql
+
+# The full-size throwaway photographs that seed.sql's content is built from.
+# Twelve megabytes of screenshots that nothing reads at runtime — Next can only
+# serve images out of public/, so what the seed actually points at is the
+# resized WebP copies in /public/mock, and those ARE committed so a fresh clone
+# and CI both have them. Regenerate after dropping new pictures in here:
+#
+#   npm run mock:images
+/mock-images

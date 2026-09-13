@@ -95,7 +95,7 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
               className={cn(
                 "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors",
                 pathname === href
-                  ? "bg-rose/10 text-rose font-medium"
+                  ? "bg-rose/10 text-rose-deep font-medium"
                   : "text-charcoal-light hover:bg-white/40 hover:text-charcoal"
               )}
             >

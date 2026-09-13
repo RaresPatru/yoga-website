@@ -45,9 +45,15 @@ export default async function BlogPage() {
         <p className="mt-4 text-charcoal-light">{t("no_posts")}</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {/*
+            `rounded-2xl` on the link, matching the card inside it. The <a> is
+            what receives focus, and an outline follows the focused element's own
+            radius — so without this a rounded card gets a hard square box drawn
+            around it.
+          */}
           {posts.map((post) => (
-            <Link key={post.id} href={`/blog/${post.slug}`}>
-              <GlassCard className="h-full transition-transform hover:scale-[1.02]">
+            <Link key={post.id} href={`/blog/${post.slug}`} className="block rounded-2xl">
+              <GlassCard className="h-full">
                 <h2 className="font-serif text-xl text-charcoal">
                   {locale === "ro" ? post.title_ro : (post.title_en || post.title_ro)}
                 </h2>

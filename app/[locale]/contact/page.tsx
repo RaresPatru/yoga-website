@@ -48,7 +48,10 @@ export default function ContactPage() {
   if (sent) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12">
-        <GlassCard className="text-center">
+        {/* Not a link, so it does not lift — and this one least of all: it is
+            the form, and a card that rises while you are typing in it is just
+            distracting. */}
+        <GlassCard hover={false} className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
             <Check className="h-8 w-8 text-success" />
           </div>
@@ -102,7 +105,7 @@ export default function ContactPage() {
               onChange={(e) => setForm({ ...form, message: e.target.value })}
               rows={5}
               required
-              className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+              className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm"
             />
           </div>
           {turnstileLoaded && (

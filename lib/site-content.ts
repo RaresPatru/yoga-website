@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createPublicClient } from "@/lib/supabase/public";
 
 /**
@@ -19,7 +20,7 @@ export type SiteContentKey =
   | "about.body"
   | "about.credentials"
   | "contact.instagram_url"
-  | "contact.email";
+  | "contact.facebook_url";
 
 export type SiteContent = Partial<Record<SiteContentKey, string>>;
 
@@ -33,8 +34,15 @@ export type SiteContent = Partial<Record<SiteContentKey, string>>;
  *
  * Empty strings are dropped entirely so callers can use a plain `??` or `||`
  * check to decide between real content and a placeholder.
+ *
+ * Wrapped in React's `cache` so the whole table is fetched once per request no
+ * matter how many components ask for it. The home page and the footer both do,
+ * and the about page and the footer both do — without this, rendering either one
+ * ran the same query twice.
  */
-export async function getSiteContent(locale: string): Promise<SiteContent> {
+export const getSiteContent = cache(async function getSiteContent(
+  locale: string
+): Promise<SiteContent> {
   const supabase = createPublicClient();
 
   const { data, error } = await supabase
@@ -58,7 +66,7 @@ export async function getSiteContent(locale: string): Promise<SiteContent> {
   }
 
   return content;
-}
+});
 
 export interface Faq {
   id: string;

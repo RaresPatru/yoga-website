@@ -18,20 +18,61 @@ it, and the checklist for adding to it.
   half of this — enable it once per clone with
   `git config core.hooksPath .githooks`.
 - **Schema changes go in `supabase/migrations`, never the Supabase dashboard.**
-  Declare `GRANT`s alongside RLS policies; Postgres checks both and missing
-  grants have shipped broken features here twice. The current schema is one
-  file, `supabase/migrations/00000000000000_baseline.sql`; do not edit it, add a
-  dated migration alongside it. The SQL Editor is a scratchpad — paste a
-  migration into a new tab, run it, delete the tab. Anything saved there is a
-  record of what you typed, not of what the database is.
+  The current schema is one file,
+  `supabase/migrations/00000000000000_baseline.sql`; do not edit it, add a dated
+  migration alongside it.
+
+  **State what every role may do, in the migration that creates the object.**
+  Postgres checks `GRANT` and RLS separately and both must pass — missing grants
+  have shipped broken features here twice — and the two databases inherit
+  *different* default privileges, so a bare `create table` produces one that
+  `anon` can read **and write** locally and nobody can touch in production.
+  Neither half announces itself. Write `revoke all … from anon, authenticated`
+  and then grant back what is needed, even when that is nothing.
+  `tests/rpc-exposure.spec.ts` enumerates everything the publishable key can
+  reach and fails on anything unlisted; `docs/DATABASE.md` has the template.
+
+  **Migrations reach production with `npx supabase db push`.** The remote has
+  kept a migration ledger since 11 September 2026, when the migrations existing
+  at the time were adopted with `migration repair --status applied` after
+  diffing both schemas to prove they matched. `npx supabase migration list
+  --linked` should show a `remote` version against every row; if it ever shows
+  blanks again, stop, because `db push` on an empty ledger would try to replay
+  the baseline over the live schema.
+
+  Two consequences of having a ledger:
+  - **`db push` never re-applies a migration it has already recorded**, so
+    nothing in `supabase/migrations` is a living file any more.
+    `20260912000001_object_comments.sql` used to be edited in place; a change to
+    it now reaches production not at all, silently. Describing a new object
+    means a new dated migration.
+  - The SQL Editor is back to being only a scratchpad. Anything saved there is
+    a record of what you typed, not of what the database is.
+- **Never run `supabase db reset --linked` without `--no-seed`.** `--linked`
+  means production. `supabase/seed.sql` creates an administrator whose password
+  is in plain text in the file, which is fine for a throwaway local database and
+  a published credential on a live one.
+- **Authorise through `is_admin()`; never query `admins`.** That table has no
+  grants for any role the API can reach and no RLS policies, so a leaked service
+  key gets every row of every other table and still cannot write itself into the
+  list that decides who may enter `/admin`. `proxy.ts` and `lib/is-admin.ts` both
+  call the RPC, which is `security definer` and reads the table as its owner. The
+  local database has one extra grant so the suite can create a throwaway admin —
+  it lives in `supabase/seed.sql`, never runs against production, and
+  `tests/ui-consistency.spec.ts` fails if application code starts depending on
+  it.
 - **Tests must never point at the production database.** `tests/helpers.ts`
   enforces this and the guard is a hard crash. Do not soften it.
 - **Security checks fail closed.** If a check cannot run, the answer is no.
 - **Never derive money or payment state from the request body.** Read the price
   from the database.
 - **No invented facts in user-facing copy.** No placeholder statistics, no
-  default star ratings. Unsupplied content renders a visible placeholder — see
-  `components/ui/content-placeholder.tsx`.
+  default star ratings, no social icon linking to `#`. Unsupplied content either
+  renders a visible placeholder (`components/ui/content-placeholder.tsx`) or is
+  not rendered at all — `components/ui/rating.tsx` draws nothing without a real
+  rating, and the footer omits an icon it has no address for. The exception is
+  `supabase/seed.sql`, which is invented from top to bottom and only ever runs
+  against a throwaway local database.
 
 ## Context that changes decisions
 
@@ -42,8 +83,11 @@ it, and the checklist for adding to it.
 - **Romanian is the primary language.** English falls back to Romanian when a
   translation is blank.
 - **The instructor runs the site herself.** Anything she might reasonably want
-  to change — copy, photos, FAQs — belongs in the database and the admin panel,
-  not in the source.
+  to change — copy, photos, FAQs, her Instagram and Facebook addresses — belongs
+  in the database and the admin panel, not in the source. Half-wiring it counts
+  as not doing it: the footer's Instagram address had an editable field and a
+  hardcoded `href="#"` behind it, which from her side is a screen that does
+  nothing.
 - This is also a portfolio piece. Comments should explain reasoning, especially
   in SQL and API routes, for a reader who is not a backend specialist.
 
@@ -51,9 +95,12 @@ it, and the checklist for adding to it.
 
 ```bash
 npx supabase start / db reset    # local database (needs Docker Desktop)
-npm run dev
+npx supabase db push             # send new migrations to production
+npm run dev                      # local database — prints which one on startup
+npm run dev:prod                 # the live database; everything you do there is live
+npm run mock:images              # rebuild /public/mock from ./mock-images
 npm run lint && npx tsc --noEmit
-npm run test:e2e                 # production build; PW_DEV=1 for the fast loop
+npm run test:e2e                 # production build, one worker; PW_DEV=1 for the fast loop
 ```
 
 ## Gotchas that have cost time
@@ -97,6 +144,17 @@ npm run test:e2e                 # production build; PW_DEV=1 for the fast loop
   healthy, so the only people who could see it were the two with admin accounts.
   Use `createPublicClient()` from `lib/supabase/public.ts` — RLS still applies.
   `tests/stale-session.spec.ts` guards the behaviour and the import rule.
+- **Nothing on this site is statically rendered, and `revalidate` does not
+  change that.** `next build` marks every route `ƒ (Dynamic) server-rendered on
+  demand` — the proxy runs on every request and next-intl resolves the locale
+  from headers, so the whole tree opts out. The `export const revalidate = 300`
+  on the home and about pages is therefore inert: her edits appear on the next
+  request, not five minutes later. The lines stay as a ceiling in case a route
+  ever becomes static-eligible, because the alternative default is caching until
+  the next deployment. Do not reason about staleness from their presence — three
+  comments and one test did, describing a cache this site has never had. Check
+  the route table in `next build` output before believing any claim about
+  caching here.
 - **A stale `.next` makes the build lie.** `npm run build` reported `Failed to
   type check` with parse errors inside the `validator.ts` that Next generates —
   a file overwritten without being truncated, so it resumed mid-token from a
@@ -123,7 +181,76 @@ npm run test:e2e                 # production build; PW_DEV=1 for the fast loop
   than the app being wrong. `npx supabase stop && npx supabase start` also
   clears the `container is not ready: unhealthy` failure that storage and studio
   hit periodically.
+
+  A nastier variant: `db reset` failing with
+  `LegacyDbSetupError: error running container` leaves the database **half
+  built**, and every test then fails with `Database error querying schema` —
+  which reads like the migration you just wrote destroyed the schema. It did
+  not. Stop and start the stack, run `db reset` again, and it applies cleanly.
+- **The suite runs on one worker, and that is deliberate.** Two engines against
+  a production build with Postgres in Docker beside them was enough to get
+  WebKit killed mid-test, scattering one to three failures across unrelated
+  specs on every run. Measured: 1-3 failures at two workers, 0 at one. Before
+  believing a WebKit failure, re-run that spec alone — and do not raise
+  `workers` to buy back the ninety seconds. See `playwright.config.ts`.
 - **Pin `next` exactly and keep `@next/swc-*` in step with it.** Vercel runs
   `npm install`, not `npm ci`, so a floating range can resolve there to a version
   CI never saw. A caret on `next` beside literal `optionalDependencies` pins
   installed two different versions of the same native binary at once.
+- **`npm run dev` reads the *local* database; `npm run dev:prod` reads
+  production.** `.env` holds the production values and `.env.local` overrides the
+  three Supabase ones with the Docker stack, which Next resolves in that order.
+  Both commands print which one they picked on startup — read that line before
+  concluding a change "did nothing", because an empty local database and a
+  broken query look identical. `npm run dev:prod` re-asserts `.env` on top and
+  is the only way to reach live data; everything you do there is live.
+  The test suite is separate again: `playwright.config.ts` loads `.env.test`
+  first and `tests/helpers.ts` hard-crashes on a non-local URL.
+- **Local content comes from `supabase/seed.sql`,** which `npx supabase db reset`
+  replays: five events, five posts, five testimonials, five FAQs and her copy,
+  all invented. The soonest event is deliberately full so the home page's
+  ordering rule has something to do, and the lead event deliberately has no
+  photograph. Pictures live in `/public/mock`, built from the gitignored
+  `mock-images/` by `npm run mock:images`.
+- **Tailwind v4 compiles `scale-*` to the individual `scale` property**, which
+  does **not** override `transform` — the browser applies translate, rotate,
+  scale and *then* transform, so the two multiply. `hover:scale-[1.02]` on an
+  element Motion is already scaling by 1.02 gives 1.0404. Anything that gets a
+  transform on hover also wants an identity (`scale-100`) at rest, or it creates
+  its stacking context only while hovered.
+- **Scaling a container scales the text in it**, so every line grows and its
+  ends move: an event card's 300px description grows 6.6px, an admin tile's 77px
+  label 1.7px. That is accepted on `GlassCard` and is not a bug — what is not
+  accepted is the text stretching *past* its final width and springing back,
+  which is what a spring with a low damping ratio does and what got reported
+  from the live site as text "bouncing in place". Keep the overshoot near zero
+  and growth reads as growth.
+- **One hover for every card, and it lives in `GlassCard`.** `scale: 1.02` on a
+  spring of `stiffness 300, damping 30, mass 1` — a damping ratio of 0.87,
+  measured at 0.000% overshoot and 0.000px of springback. Do not retune it per
+  page. A card animates if and only if the whole card is a link; everything else
+  passes `hover={false}`, including the contact form and both sets of
+  testimonial quotes, because an effect that does not lead anywhere stops the
+  effect meaning anything.
+- **Overshoot is a percentage of the travel, not of the final value.** A 10.8%
+  overshoot on a scale from 1.00 to 1.02 peaks at 1.0222, not 1.13 — so a bound
+  written against the absolute number catches nothing. The guard in
+  `tests/ui-consistency.spec.ts` was wrong for exactly this reason on the first
+  attempt and passed against a deliberately bouncy spring.
+- **`cn` is plain `clsx` — there is no tailwind-merge.** Conflicting utilities do
+  not resolve; both land in the class list and the cascade picks one, which is
+  how `transition-transform` passed to `<GlassCard>` silently displaced
+  `box-shadow` from `transition-property` and stopped the shadow easing. Never
+  pass a component a utility it already sets.
+- **`backdrop-filter` over a flat colour does nothing except change the text.**
+  Blurring a solid background returns the same solid background — but it promotes
+  the element to its own compositing layer, and Chrome then drops subpixel
+  antialiasing. Measured on the home page: background pixels moved ≤11/255, text
+  pixels up to 82/255. Use it only where content actually passes behind something
+  (the fixed header, the mobile menu, the admin sidebar).
+- **WebKit's Tab key does not walk links**, so a keyboard-navigation test passes
+  vacuously on the `mobile` project. Safari ships "press Tab to highlight each
+  item" off, and an iPhone has no Tab key at all; eight presses on /ro/blog
+  produced only `BUTTON` and `BODY`, never an `<a>`. Move focus with `.focus()`
+  and assert `el.matches(":focus-visible")` before reading the style — both
+  engines honour that.

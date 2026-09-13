@@ -48,7 +48,7 @@ export function LanguageSwitcher() {
       disabled={isPending}
       aria-label={action}
       title={action}
-      className="flex items-center gap-1.5 rounded-full bg-white/40 px-3 py-1.5 text-sm text-charcoal-light backdrop-blur-sm transition-colors hover:bg-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose/50"
+      className="flex items-center gap-1.5 rounded-full bg-white/40 px-3 py-1.5 text-sm text-charcoal-light backdrop-blur-sm transition-colors hover:bg-white/60"
     >
       <Flag code={FLAG[locale] ?? "RO"} />
       <span aria-hidden="true">{locale.toUpperCase()}</span>

@@ -177,7 +177,21 @@ test.describe("events", () => {
       await page.goto(`/ro/events/${event.slug}`);
 
       await expect(page.getByText("1/1 locuri ocupate")).toBeVisible();
-      await expect(page.getByText("Locuri epuizate")).toBeVisible();
+      // "Complet" is the site's one word for this state — the same one the card
+      // on /ro/events uses. See components/events/seat-count.tsx.
+      //
+      // Two matches is the assertion, not an accident of the locator. This page
+      // marks the state twice, in two places that are far apart on screen: the
+      // badge in the meta line beside the date, and the line under the capacity
+      // bar in the registration panel. They used to disagree — "Complet" in the
+      // badge, "Locuri epuizate" in the panel — so counting them is what catches
+      // either one drifting back to a vocabulary of its own.
+      //
+      // `exact` because getByText substring-matches, and a full event also
+      // reveals "Completează datele și te anunțăm…" on the waiting-list form.
+      const soldOut = page.getByText("Complet", { exact: true });
+      await expect(soldOut).toHaveCount(2);
+      await expect(soldOut.first()).toBeVisible();
 
       // The registration form must be gone and the waiting list offered.
       await expect(page.getByRole("button", { name: "Înscrie-te gratuit" })).toBeHidden();

@@ -24,6 +24,9 @@ import { absoluteUrl, SITE_NAME, INSTRUCTOR_NAME } from "@/lib/site-config";
  * herself — see supabase/migrations/20260808000001_site_content.sql.
  */
 
+// Inert today — every route in this app is server-rendered on demand — and kept
+// as a ceiling in case that changes. The reasoning is on the same line in
+// app/[locale]/page.tsx.
 export const revalidate = 300;
 
 export async function generateMetadata({

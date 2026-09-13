@@ -945,6 +945,224 @@ makes an exact pin the only thing that guarantees the two agree.
 
 ---
 
+## Part 10 — Nine ways to draw the same ring
+
+Reported as a look-and-feel complaint: *"when focusing on some UI elements there
+are some which have a black border whereas the others have the pink one."*
+
+It turned out to be four separate things, and only one of them was a style at
+all.
+
+### The black ring was the absence of a style
+
+Tabbing through every public page and recording the computed outline at each
+stop found the same value over and over: `1px auto rgb(16, 16, 16)`. That is
+Chrome's own focus ring. Every header navigation link, the wordmark, every blog
+and event card, both footer icons and the entire admin sidebar had no focus
+style whatsoever and fell through to it.
+
+On a card it looked worse than merely default. The outline is drawn on the
+focused element — the `<a>` — and follows *its* border radius, not the radius of
+the card inside it. The `<a>` had none, so a soft rounded card got a hard black
+rectangle around it.
+
+Behind that, nine different treatments had accumulated on the controls that
+*were* styled: `ring-rose-deep` with a cream offset on buttons, an inset variant
+on the FAQ rows, `rose/40` on the dashboard tiles, `rose/50` on the header and
+language switcher, `rose/20` on form fields, `rose-deep/20` on the admin content
+fields, two checkboxes that set a ring colour with no ring width so nothing was
+drawn, and two fields that removed the browser outline and put nothing back —
+leaving focus genuinely invisible.
+
+The argument against the weakest of those was already written in the codebase.
+`lib/button-styles.ts` said a 50%-opacity pastel ring "was nearly invisible
+against cream, which defeats the purpose for keyboard users". That reasoning had
+been applied to the buttons and never carried across to the inputs, which were
+using the same pastel at 20%.
+
+All nine are now one rule:
+
+```css
+:where(a:any-link, button, summary, input, textarea, select):focus-visible {
+  outline: 2px solid var(--color-rose-deep);
+  outline-offset: 2px;
+}
+```
+
+`:where()` has zero specificity, so adding it could not disturb anything that
+already worked, and every control added from here is correct without anybody
+remembering. `outline` rather than a box-shadow ring because it follows the
+element's own radius, cannot be clipped by an `overflow: hidden` ancestor, and
+its offset shows the page through the gap — which is what `ring-offset-cream`
+was faking by naming the background colour at each call site. Two places want
+the offset inset instead, both flush inside a clipping box: the FAQ rows and the
+country-search field in the phone input.
+
+### The cards were being animated twice
+
+The same complaint included wanting the public cards to feel like the admin
+dashboard tiles. They already used the same component; five public call sites
+also passed `transition-transform hover:scale-[1.02]` through `className`.
+
+Sampled every 100ms after hover, against a dashboard tile:
+
+| | as shipped | the tile |
+|---|---|---|
+| settles after | ~1000ms | ~250ms |
+| final scale | 1.0404 | 1.0200 |
+| spring overshoot | flattened away | visible at 200ms |
+| `transition-property` | `transform, translate, scale, rotate` | `box-shadow` |
+
+Three failures stacked:
+
+1. **The scale doubled.** Tailwind v4 compiles `scale-*` to the individual
+   `scale` property, which does not replace `transform` — the two multiply.
+   `1.02 × 1.02 = 1.0404`. The `modern-web-guidance` note on individual
+   transform properties says this outright: "`scale: 2; transform: scale(3)`
+   will first scale by 2x, then again by 3x, for a total of 6x."
+2. **It ran four times too slow.** `transition-transform` put a 300ms CSS ease on
+   the property Motion's spring was already animating frame by frame, so the
+   spring became a moving target chased through a lag filter.
+3. **The shadow stopped easing.** `cn` is plain `clsx` with no tailwind-merge, so
+   `transition-shadow` and `transition-transform` both survived into the class
+   list and the cascade picked one. `box-shadow` fell out of the transition and
+   `hover:shadow-xl` snapped instantly.
+
+The fix was deletion. Two things were added rather than removed: `GlassCard` now
+respects `useReducedMotion()` — `whileHover` is JavaScript and, unlike the
+`motion-safe:` variants on the buttons, does not honour the OS setting on its own
+— and it declares an identity `scale: 1` at rest, so the card is not creating its
+stacking context only while hovered.
+
+### …and then the cards stopped scaling entirely
+
+That fixed the doubling, and left the real problem visible underneath it. The
+next report was that text and icons on the event and blog cards jittered and
+bounced in place until the hover finished, while the dashboard tiles stayed
+still — and that the tiles were the wanted behaviour.
+
+The tiles were not doing anything different. Scaling a card scales its text, so
+every line grows and both of its ends move; the spring overshoots to 1.0221
+before settling at 1.02, so each line stretched past its final width and sprang
+back. Measuring the inked width of each line with a Range, at the peak:
+
+| line | at rest | at the peak | stretch |
+|---|---|---|---|
+| event card description | 303.9px | 310.6px | +6.7 |
+| event card title | 210.3px | 215.0px | +4.7 |
+| blog card date | 128.4px | 131.2px | +2.8 |
+| admin tile label | 77.1px | 78.9px | +1.7 |
+| admin tile number | 15.0px | 15.3px | +0.3 |
+
+The size of the effect follows the length of the line and its distance from the
+card's centre — obvious on a 400px event card carrying a 300px description, mild
+on a blog date, and invisible on a 215px tile whose longest label is 77px. Four
+to twenty times smaller, not absent.
+
+Worth recording as a method note: the first three instruments all said the two
+were identical. Sampling positions every animation frame gave the same travel and
+the same number of direction changes for both. A CDP screencast diffing
+consecutive frames put the *admin* tile's peak pixel churn higher than the blog
+card's. Only screenshotting the text at four fixed points along the spring and
+enlarging it four times made the mechanism visible — the line was getting longer.
+The measurement that finally worked was the one that measured the thing being
+complained about, rather than a proxy for it.
+
+The first answer was to make the card lift and not scale: the whole card moves as
+one piece, so glyphs keep their positions relative to each other, and a zoom sits
+on the one child that should zoom — the icon on a dashboard tile, the photograph
+on an event card.
+
+That is not where it ended up. Asked to see it, the lift read as underpowered —
+a card that rises without growing barely registers as responding at all — so the
+scale came back, and the wobble had to be solved on its own terms rather than by
+removing the thing that caused it. The fix is the damping ratio: at ζ = 0.87 the
+spring approaches 1.02 and stops there, measured at 0.000% overshoot. The text
+still grows, because scaling a box scales what is inside it and there is no way
+around that short of splitting the card into two layers. Growth was never the
+complaint. Stretching past the final width and springing back was, and that is
+gone.
+
+So the shipped behaviour is: **the card scales, on a spring damped almost to
+critical.** `components/ui/glass-card.tsx` is the single definition and its
+header carries the measurements.
+
+### A section in the admin panel that genuinely did nothing
+
+She had a group of fields headed "General" holding an Instagram address and a
+public email. Neither appeared anywhere on the site: the footer hardcoded
+`href="#"` on both its icons, and nothing in the codebase read either key. The
+storage and the editing screen had been built and the consuming half never was.
+
+The heading existed only because the rows said so — the screen renders
+`select distinct section` and looks the name up in a table of labels. It is now
+"Footer", the email field is gone (contact runs through the rate-limited,
+CAPTCHA-protected form; a second plain-text address in the footer is the one an
+address harvester can read), and Facebook has a field at last, having had an icon
+since the beginning.
+
+The wiring needed `lib/social.ts` more than it needed the markup. The realistic
+inputs are `@nume`, `nume`, `instagram.com/nume` and a pasted full address, and
+the middle two are the dangerous ones: `href="instagram.com/nume"` is a *relative*
+path, so the browser resolves it against this site and the link 404s on our own
+domain while looking perfectly well typed. Only `http(s)` is passed through
+untouched; everything else is either given a scheme or treated as a handle, which
+also means a `javascript:` string pasted into the field can never reach an href.
+
+An icon with no address behind it is not rendered at all. A social button that
+looks live and goes nowhere tells a visitor something untrue about the business,
+which is the same failure as an invented statistic.
+
+### The background bands were costing more than they showed
+
+The home page alternated cream with a `bg-white/50 backdrop-blur-sm` band.
+Measured off the rendered page:
+
+| | contrast |
+|---|---|
+| band vs cream | 1.030:1 |
+| card on the band | 1.022:1 |
+| the same card on plain cream | 1.053:1 |
+
+So the bands were invisible, and worse than invisible — a near-white card on a
+near-white band had less than half the separation it has on cream. The
+alternation was also decided per section in the markup while three of those
+sections only render when she has filled the content in, so the live page read
+cream, band, cream, cream, band.
+
+The blur was doing nothing at all: there is only a flat body colour behind a
+section. Diffing the page with and without every `backdrop-filter` moved
+background pixels by at most 11/255, but *text* pixels by up to 82/255 — because
+a backdrop-filter promotes the element to its own compositing layer and Chrome
+then drops subpixel antialiasing. Its only visible effect was that text on two
+bands was rendered differently from text everywhere else. It stays on the fixed
+header, the mobile menu and the admin sidebar, which are the only places content
+actually passes behind something.
+
+What replaced it is one continuous cream ground and a single soft light in the
+top-left, where the photograph and the headline are. It fades to transparent
+rather than to another colour, so there is no seam and no band to keep in step
+with the content, and its centre is offset by an absolute `-4rem` rather than a
+percentage — a percentage resolves against the whole document height, so the
+light would drift further off the top of a long blog post than of a short page.
+
+### What the tests hold
+
+`tests/ui-consistency.spec.ts`. The focus guard is the one worth describing: it
+does not press Tab, because Tab does not walk links in WebKit. Safari ships
+"press Tab to highlight each item" switched off and an iPhone has no Tab key at
+all — measured on the mobile project, eight presses produced only `BUTTON` and
+`BODY` and never a single `<a>`. A tab-walk would have passed while testing
+almost nothing on the engine most of this audience uses. Moving focus in script
+works on both engines and both then report `:focus-visible` as matching, so the
+test asserts that match before reading the outline: a control the browser will
+not treat as keyboard-focused is skipped rather than passed.
+
+Verified by removing only the rule: ten focus tests fail across both engines,
+each reporting `1px auto rgb(16, 16, 16)`.
+
+---
+
 ## Decisions worth defending
 
 **Keeping the tech stack.** Next.js + Supabase + Stripe was the right call and

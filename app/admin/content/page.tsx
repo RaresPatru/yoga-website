@@ -42,10 +42,20 @@ interface FaqRow {
   published: boolean;
 }
 
+/**
+ * The heading above each group of fields.
+ *
+ * The groups themselves come from the `section` column, not from this list —
+ * the screen renders `select distinct section` and looks the name up here,
+ * falling back to the raw value. So a section only exists because rows say it
+ * does, which is why there used to be one called "General" holding two fields
+ * that appeared nowhere on the site. It is now "Footer", named after the place
+ * its values actually come out.
+ */
 const SECTION_LABELS: Record<string, { ro: string; en: string }> = {
   home: { ro: "Pagina de start", en: "Home page" },
   about: { ro: "Despre mine", en: "About me" },
-  general: { ro: "General", en: "General" },
+  footer: { ro: "Footer (linkuri sociale)", en: "Footer (social links)" },
 };
 
 export default function AdminContentPage() {
@@ -230,7 +240,7 @@ export default function AdminContentPage() {
                         rows={5}
                         lang="ro-RO"
                         spellCheck
-                        className="mt-3 w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal focus:border-rose-deep/50 focus:outline-none focus:ring-2 focus:ring-rose-deep/20"
+                        className="mt-3 w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal"
                         placeholder={ro ? "Scrie în română..." : "Write in Romanian..."}
                       />
                       <textarea
@@ -239,7 +249,7 @@ export default function AdminContentPage() {
                         rows={4}
                         lang="en"
                         spellCheck
-                        className="mt-2 w-full rounded-xl border border-sage/20 bg-white/40 px-4 py-3 text-charcoal-light focus:border-rose-deep/50 focus:outline-none focus:ring-2 focus:ring-rose-deep/20"
+                        className="mt-2 w-full rounded-xl border border-sage/20 bg-white/40 px-4 py-3 text-charcoal-light"
                         placeholder={
                           ro
                             ? "Engleză (opțional — dacă e gol, se afișează româna)"
@@ -329,7 +339,7 @@ export default function AdminContentPage() {
                 rows={3}
                 lang="ro-RO"
                 spellCheck
-                className="mt-2 w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal focus:border-rose-deep/50 focus:outline-none focus:ring-2 focus:ring-rose-deep/20"
+                className="mt-2 w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal"
                 placeholder={ro ? "Răspuns" : "Answer"}
               />
               <div className="mt-3 flex flex-wrap items-center gap-3">

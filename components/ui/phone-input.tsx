@@ -246,7 +246,6 @@ export function PhoneInput({
           className={cn(
             "flex w-[6.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-sage/30",
             "bg-white/60 px-3 py-3 text-sm text-charcoal backdrop-blur-sm",
-            "focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20",
             hasError && "border-error"
           )}
         >
@@ -272,9 +271,8 @@ export function PhoneInput({
             // instead of overflowing its own box.
             "min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal",
             "placeholder:text-charcoal-light/50 backdrop-blur-sm",
-            "focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20",
-            "transition-all duration-200",
-            hasError && "border-error focus:border-error focus:ring-error/20"
+            "transition-colors duration-200",
+            hasError && "border-error"
           )}
         />
 
@@ -300,7 +298,13 @@ export function PhoneInput({
                 }}
                 onKeyDown={onSearchKeyDown}
                 placeholder={t("Țară sau prefix", "Country or code")}
-                className="min-w-0 flex-1 bg-transparent text-sm text-charcoal placeholder:text-charcoal-light/60 focus:outline-none"
+                // This one field insets its outline. It sits flush inside the
+                // dropdown's `overflow-hidden` box, so an outline drawn 2px
+                // outside it would be clipped on both edges — the one case on
+                // the site where the global offset is wrong. It used to carry a
+                // bare `focus:outline-none` instead, which left focus here
+                // invisible.
+                className="min-w-0 flex-1 bg-transparent text-sm text-charcoal placeholder:text-charcoal-light/60 focus-visible:-outline-offset-2"
               />
             </div>
 

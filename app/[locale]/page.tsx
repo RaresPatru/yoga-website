@@ -1,9 +1,11 @@
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
-import { ArrowRight, Calendar, Clock, MapPin, Users, Quote } from "lucide-react";
+import { ArrowRight, Calendar, Clock, MapPin, Quote } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { buttonClasses } from "@/lib/button-styles";
 import { GlassCard } from "@/components/ui/glass-card";
+import { Rating } from "@/components/ui/rating";
+import { SeatCount } from "@/components/events/seat-count";
 import { TextPlaceholder, ImagePlaceholder } from "@/components/ui/content-placeholder";
 // Disabled — see the note at <StickyCta /> near the bottom of this file.
 // import { StickyCta } from "@/components/sticky-cta";
@@ -11,7 +13,8 @@ import { FaqList } from "@/components/faq-list";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getSiteContent, getFaqs } from "@/lib/site-content";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { formatDate, formatTime } from "@/lib/utils";
+import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
+import { eventAvailability } from "@/lib/event-availability";
 import { formatPrice } from "@/lib/money";
 
 /**
@@ -39,7 +42,43 @@ import { formatPrice } from "@/lib/money";
  * a specific event.
  */
 
+/**
+ * INERT TODAY, AND KEPT ANYWAY.
+ *
+ * `next build` reports every route in this app as `ƒ (Dynamic) server-rendered
+ * on demand` — there is no `/ro.html` in the build output and nothing but
+ * /robots.txt in the prerender manifest. The proxy runs on every request and
+ * next-intl resolves the locale from headers, so the whole tree opts out of
+ * static rendering and this number currently changes nothing: the page is built
+ * fresh for every visitor and her edits appear at once.
+ *
+ * It stays because the failure mode of deleting it is worse than the failure
+ * mode of keeping it. A route that later becomes static-eligible and has no
+ * `revalidate` is cached until the next deployment, which would freeze her home
+ * page indefinitely; with this line the worst case is five minutes.
+ *
+ * Do not reason about staleness from its presence. Three comments elsewhere
+ * used to, and each described a cache that has never existed on this site.
+ */
 export const revalidate = 300;
+
+/** How many events the page shows: one lead card and two beneath it. */
+const HOME_EVENT_COUNT = 3;
+
+/**
+ * How many upcoming events to consider before picking those three.
+ *
+ * The ordering below depends on how full each event is, and how full an event
+ * is cannot be expressed as a PostgREST `order` — it lives in the
+ * `event_availability` view, one row per event. So the ranking happens here,
+ * over a bounded window rather than the whole table.
+ *
+ * The bound is the one compromise: if the next twenty-four events were somehow
+ * all full, a twenty-fifth with seats left would not be found. That is not a
+ * situation this site can reach, and the alternative is fetching every future
+ * event on every home page render.
+ */
+const EVENT_WINDOW = 24;
 
 interface EventCard {
   id: string;
@@ -63,7 +102,11 @@ export default async function HomePage({
   const { locale } = await params;
   const t = await getTranslations("home");
   const supabase = createPublicClient();
-  const today = new Date().toISOString().split("T")[0];
+  // One reading of the clock, used for both the query's date floor and the
+  // time-of-day cutoff below. Taking it twice would let a render that straddles
+  // midnight filter against two different days.
+  const renderedAt = new Date();
+  const today = renderedAt.toISOString().split("T")[0];
 
   const [content, faqs] = await Promise.all([getSiteContent(locale), getFaqs(locale)]);
 
@@ -74,10 +117,11 @@ export default async function HomePage({
       .eq("published", true)
       .gte("date", today)
       .order("date", { ascending: true })
-      .limit(3),
+      .order("time", { ascending: true })
+      .limit(EVENT_WINDOW),
     supabase
       .from("testimonials")
-      .select("id, content, type, rating")
+      .select("id, content, type, rating, author_name")
       .eq("approved", true)
       .order("created_at", { ascending: false })
       .limit(3),
@@ -90,20 +134,61 @@ export default async function HomePage({
       .limit(3),
   ]);
 
-  const events = (upcoming ?? []) as EventCard[];
+  const candidates = (upcoming ?? []) as EventCard[];
 
-  // Seat counts come from the aggregate view — the registrations table itself
-  // holds personal data and is not readable without being signed in.
-  const availability = new Map<string, { capacity: number | null; taken: number }>();
-  if (events.length) {
-    const { data: rows } = await supabase
-      .from("event_availability")
-      .select("event_id, capacity, taken")
-      .in("event_id", events.map((e) => e.id));
-    for (const row of rows ?? []) {
-      availability.set(row.event_id, { capacity: row.capacity, taken: row.taken });
-    }
-  }
+  // Seat counts, which decide the ordering below as well as what each card
+  // says. Why they come from a view and not from `registrations` is in
+  // lib/event-availability.ts.
+  const availability = await eventAvailability(supabase, candidates.map((e) => e.id));
+
+  /**
+   * An uncapped event always has room. So does one whose seat count could not
+   * be read — showing an event that turns out to be full is a smaller failure
+   * than hiding one that is not.
+   */
+  const hasRoom = (event: EventCard) => {
+    const info = availability.get(event.id);
+    if (!info?.capacity) return true;
+    return info.taken < info.capacity;
+  };
+
+  /**
+   * WHICH THREE EVENTS THE PAGE LEADS WITH
+   *
+   * Soonest first, except that an event with no seats left gives up its place
+   * to a later one somebody can still book. A full event is not hidden — it
+   * drops behind every bookable date and only appears if there is room left on
+   * the page.
+   *
+   * The reasoning is that this block exists to sell a seat. The nearest date is
+   * the most compelling thing to show, right up until the moment it cannot be
+   * bought, at which point it is an advert for disappointment and the next
+   * available date is worth more.
+   *
+   * Nothing needs to happen when a seat frees up: `hasRoom` is computed per
+   * render from live registration counts, so a cancellation restores that event
+   * to its natural place by date on the next render, which is the next request:
+   * this page is server-rendered on demand, not cached. See the note on
+   * `revalidate` above.
+   *
+   * The time-of-day filter is here rather than in the query because the cutoff
+   * is an instant, not a date: `date >= today` still matches this morning's
+   * class at six in the evening. `eventStartInstant` resolves the stored
+   * wall-clock time through Europe/Bucharest, so it stays right across the
+   * daylight-saving switch.
+   */
+  const events = candidates
+    .filter(
+      (event) =>
+        eventStartInstant(event.date, event.time).getTime() >= renderedAt.getTime()
+    )
+    .sort(
+      (a, b) =>
+        Number(hasRoom(b)) - Number(hasRoom(a)) ||
+        a.date.localeCompare(b.date) ||
+        a.time.localeCompare(b.time)
+    )
+    .slice(0, HOME_EVENT_COUNT);
 
   const title = (e: EventCard) =>
     locale === "ro" ? e.title_ro : e.title_en || e.title_ro;
@@ -179,7 +264,7 @@ export default async function HomePage({
       {/* 2. The next event, as high up the page as it can go              */}
       {/* ---------------------------------------------------------------- */}
       {nextEvent ? (
-        <section id="events" className="bg-white/50 py-16 backdrop-blur-sm">
+        <section id="events" className="py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
               {locale === "ro" ? "Următorul eveniment" : "Next event"}
@@ -187,9 +272,14 @@ export default async function HomePage({
 
             <Link
               href={`/events/${nextEvent.slug}`}
-              className="mt-6 block rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-deep focus-visible:ring-offset-2"
+              // `rounded-2xl` to match the GlassCard inside it: the focus
+              // outline follows the focused element's own radius, so a 24px
+              // link around a 16px card draws corners that miss the card.
+              className="group mt-6 block rounded-2xl"
             >
-              <GlassCard className="overflow-hidden transition-transform hover:scale-[1.01]">
+              <GlassCard
+                className="overflow-hidden"
+              >
                 <div className="grid gap-6 md:grid-cols-5">
                   {nextEvent.image_url && (
                     <div className="relative aspect-video overflow-hidden rounded-2xl md:col-span-2 md:aspect-square">
@@ -198,7 +288,7 @@ export default async function HomePage({
                         alt={title(nextEvent)}
                         fill
                         sizes="(max-width: 768px) 90vw, 40vw"
-                        className="object-cover"
+                        className="object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
                       />
                     </div>
                   )}
@@ -229,7 +319,6 @@ export default async function HomePage({
                       <SeatCount
                         locale={locale}
                         info={availability.get(nextEvent.id)}
-                        fullLabel={t("full")}
                       />
                     </div>
                     <p className="mt-6 inline-flex items-center gap-2 font-medium text-rose-deep">
@@ -244,8 +333,25 @@ export default async function HomePage({
             {laterEvents.length > 0 && (
               <div className="mt-8 grid gap-5 sm:grid-cols-2">
                 {laterEvents.map((event) => (
-                  <Link key={event.id} href={`/events/${event.slug}`}>
-                    <GlassCard className="h-full transition-transform hover:scale-[1.02]">
+                  <Link key={event.id} href={`/events/${event.slug}`} className="group block rounded-2xl">
+                    <GlassCard
+                      className="h-full"
+                    >
+                      {/* These two cards used to drop the photograph entirely,
+                          so an event with one looked different depending on
+                          which page you met it on. The lead card above and the
+                          events index both show it; so do these now. */}
+                      {event.image_url && (
+                        <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl bg-sage/10">
+                          <Image
+                            src={event.image_url}
+                            alt={title(event)}
+                            fill
+                            sizes="(max-width: 640px) 90vw, 45vw"
+                            className="object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
+                          />
+                        </div>
+                      )}
                       <h3 className="font-serif text-lg text-charcoal">{title(event)}</h3>
                       <div className="mt-3 flex flex-wrap gap-3 text-sm text-charcoal-light">
                         <span className="flex items-center gap-1.5">
@@ -264,7 +370,6 @@ export default async function HomePage({
                         <SeatCount
                           locale={locale}
                           info={availability.get(event.id)}
-                          fullLabel={t("full")}
                           compact
                         />
                       </div>
@@ -282,7 +387,7 @@ export default async function HomePage({
           </div>
         </section>
       ) : (
-        <section id="events" className="bg-white/50 py-16 backdrop-blur-sm">
+        <section id="events" className="py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="font-serif text-3xl text-charcoal">{t("events_title")}</h2>
             <p className="mt-3 text-charcoal-light">
@@ -326,16 +431,29 @@ export default async function HomePage({
       {/* 4. Testimonials                                                   */}
       {/* ---------------------------------------------------------------- */}
       {testimonials && testimonials.length > 0 && (
-        <section className="bg-white/50 py-16 backdrop-blur-sm">
+        <section className="py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
               {t("testimonials_title")}
             </h2>
             <div className="mt-8 grid gap-5 md:grid-cols-3">
+              {/* Not a link, so it does not lift — see the note on the same
+                  card in app/[locale]/testimonials/page.tsx. */}
               {testimonials.map((item) => (
-                <GlassCard key={item.id} className="h-full">
+                <GlassCard key={item.id} hover={false} className="flex h-full flex-col">
                   <Quote className="h-6 w-6 text-rose-deep/40" aria-hidden="true" />
-                  <p className="mt-3 text-charcoal">{item.content}</p>
+                  {/* Nothing is drawn when the rating is null — see the note in
+                      components/ui/rating.tsx. A quote with no stars beside it
+                      is honest; five default stars are not. */}
+                  <Rating value={item.rating} locale={locale} className="mt-3" />
+                  {/* `flex-1` pushes the attribution to the bottom, so the rule
+                      above it lines up across a row of cards whose quotes are
+                      different lengths. */}
+                  <p className="mt-3 flex-1 text-charcoal">{item.content}</p>
+                  <p className="mt-4 border-t border-sage/20 pt-3 text-sm font-medium text-charcoal">
+                    {item.author_name ||
+                      (locale === "ro" ? "Participantă" : "Participant")}
+                  </p>
                 </GlassCard>
               ))}
             </div>
@@ -369,15 +487,17 @@ export default async function HomePage({
       {/* 6. Recent writing                                                 */}
       {/* ---------------------------------------------------------------- */}
       {posts && posts.length > 0 && (
-        <section className="bg-white/50 py-16 backdrop-blur-sm">
+        <section className="py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
               {t("blog_title")}
             </h2>
             <div className="mt-8 grid gap-5 sm:grid-cols-3">
               {posts.map((post) => (
-                <Link key={post.id} href={`/blog/${post.slug}`}>
-                  <GlassCard className="h-full transition-transform hover:scale-[1.02]">
+                <Link key={post.id} href={`/blog/${post.slug}`} className="block rounded-2xl">
+                  <GlassCard
+                    className="h-full"
+                  >
                     <h3 className="font-serif text-lg text-charcoal">
                       {locale === "ro" ? post.title_ro : post.title_en || post.title_ro}
                     </h3>
@@ -414,33 +534,3 @@ export default async function HomePage({
   );
 }
 
-/** Seats remaining, or a "full" marker. Hidden entirely for uncapped events. */
-function SeatCount({
-  info,
-  locale,
-  fullLabel,
-  compact = false,
-}: {
-  info?: { capacity: number | null; taken: number };
-  locale: string;
-  fullLabel: string;
-  compact?: boolean;
-}) {
-  if (!info?.capacity) return null;
-
-  const isFull = info.taken >= info.capacity;
-  const left = Math.max(info.capacity - info.taken, 0);
-
-  return (
-    <span
-      className={`flex items-center gap-1.5 text-sm ${isFull ? "text-error" : "text-charcoal-light"}`}
-    >
-      <Users className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} aria-hidden="true" />
-      {isFull
-        ? fullLabel
-        : locale === "ro"
-          ? `${left} locuri libere`
-          : `${left} spots left`}
-    </span>
-  );
-}

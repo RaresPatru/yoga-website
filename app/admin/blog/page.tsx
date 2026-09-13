@@ -60,7 +60,7 @@ function ToolbarButton({
       title={title}
       className={`flex items-center justify-center rounded-lg p-2 text-sm transition-all duration-150 ${
         active
-          ? "bg-rose/15 text-rose shadow-sm"
+          ? "bg-rose/15 text-rose-deep shadow-sm"
           : "text-charcoal-light hover:scale-105 hover:bg-rose/5 hover:text-charcoal active:scale-95"
       }`}
     >
@@ -85,7 +85,7 @@ function DropdownItem({
       onClick={onClick}
       className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
         active
-          ? "bg-rose/10 text-rose"
+          ? "bg-rose/10 text-rose-deep"
           : "text-charcoal-light hover:bg-rose/5 hover:text-charcoal"
       }`}
     >
@@ -308,7 +308,7 @@ function BlogEditor({
             onClick={handleTranslateTitle}
             disabled={translatingTitle || !titleRo.trim()}
             title={t("admin.translate_to_en")}
-            className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+            className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
             {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {translatingTitle ? t("admin.translating") : "→ EN"}
@@ -326,13 +326,21 @@ function BlogEditor({
             onClick={handleTranslateContent}
             disabled={translatingContent || !editor || !editor.getText().trim()}
             title={t("admin.translate_to_en")}
-            className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
             {translatingContent ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
             {translatingContent ? t("admin.translating") : "→ EN"}
           </button>
         </div>
-        <div className="rounded-xl border border-sage/30 bg-white/60 backdrop-blur-sm overflow-hidden">
+        {/*
+          The focus outline goes on this box rather than on the editable area
+          inside it. The global rule in globals.css only covers links, buttons
+          and form controls, and TipTap's editing surface is a contenteditable
+          <div> — so without this the only sign the editor had focus was the
+          caret. `focus-within` lights the whole editor, toolbar included, which
+          is what a text field would do.
+        */}
+        <div className="rounded-xl border border-sage/30 bg-white/60 backdrop-blur-sm overflow-hidden focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-rose-deep">
           {editor && (
             <div className="flex flex-wrap items-center gap-0.5 border-b border-sage/20 p-1.5">
               <div className="relative" ref={headingRef}>
@@ -505,7 +513,7 @@ function BlogEditor({
           rows={6}
           spellCheck={spell !== "off"}
           lang={spell === "ro" ? "ro-RO" : "en"}
-          className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm focus:border-rose/50 focus:outline-none focus:ring-2 focus:ring-rose/20"
+          className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm"
         />
       </div>
 
@@ -515,7 +523,7 @@ function BlogEditor({
             type="checkbox"
             checked={published}
             onChange={(e) => setPublished(e.target.checked)}
-            className="h-4 w-4 rounded border-sage/30 text-rose focus:ring-rose/20"
+            className="h-4 w-4 rounded border-sage/30 accent-rose-deep"
           />
           <span className="text-sm text-charcoal-light">{t("admin.published")}</span>
         </label>
@@ -526,7 +534,7 @@ function BlogEditor({
               type="checkbox"
               checked={hidden}
               onChange={(e) => setHidden(e.target.checked)}
-              className="h-4 w-4 rounded border-sage/30 text-rose focus:ring-rose/20"
+              className="h-4 w-4 rounded border-sage/30 accent-rose-deep"
             />
             <span className="flex items-center gap-1.5 text-sm text-charcoal-light">
               <EyeOff className="h-3.5 w-3.5" /> {t("admin.hidden_from_users")}
