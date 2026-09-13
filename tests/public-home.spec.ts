@@ -334,22 +334,166 @@ test.describe.skip("home page sticky call to action", () => {
   });
 });
 
-test.describe("home page mobile menu", () => {
+/**
+ * The navigation drawer behind the hamburger.
+ *
+ * It is a scroll container rather than an animated panel — see the long comment
+ * above `.nav-drawer` in app/globals.css — so these reach for the scroller and
+ * the panel by class name. That coupling is the point: the swipe *is* the
+ * scroll, and a test that only pressed buttons would not notice if the snap
+ * stops stopped working.
+ */
+test.describe("home page navigation drawer", () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
-  test("mobile menu opens, navigates and closes with correct aria state", async ({ page }) => {
+  const drawer = (page: import("@playwright/test").Page) => page.locator("#mobile-menu");
+  const trigger = (page: import("@playwright/test").Page) =>
+    page.locator('button[aria-controls="mobile-menu"]');
+
+  /** How far the panel's right edge still is from the right of the screen. */
+  const gapFromEdge = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => {
+      const sheet = document.querySelector(".nav-drawer-sheet");
+      if (!sheet) return -1;
+      return Math.round(window.innerWidth - sheet.getBoundingClientRect().right);
+    });
+
+  // The panel slides, so "visible" arrives well before "arrived". Every test
+  // here waits for it to be flush with the edge before touching anything.
+  const openDrawer = async (page: import("@playwright/test").Page) => {
+    // Proof that the client is running, before anything is pressed.
+    //
+    // WebKit hydrates noticeably later than Chromium, and a click that lands
+    // first is swallowed without a trace: the hamburger is a bare <button> in
+    // no form, so there is no native behaviour to fall back on, and the test
+    // simply sees a menu that never opened. Caught as a one-in-a-run flake on
+    // the mobile project, which is the engine most of this audience uses.
+    //
+    // <next-route-announcer> is what proves it. Next's client runtime appends
+    // it on hydration and it appears nowhere in the server HTML, so it cannot
+    // be there until the JavaScript has run.
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
+    await trigger(page).click();
+    await expect(drawer(page)).toBeVisible();
+    await expect.poll(() => gapFromEdge(page)).toBe(0);
+  };
+
+  test("opens, marks the page you are on, navigates and closes behind you", async ({
+    page,
+  }) => {
     await page.goto("/ro");
 
-    const toggle = page.getByRole("button", { name: "Deschide meniul" });
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator("#mobile-menu")).toBeHidden();
+    await expect(trigger(page)).toHaveAttribute("aria-expanded", "false");
+    await expect(drawer(page)).toBeHidden();
 
-    await toggle.click();
-    await expect(page.getByRole("button", { name: "Închide meniul" })).toBeVisible();
-    await expect(page.locator("#mobile-menu")).toBeVisible();
-    await expect(page.locator("#mobile-menu")).toContainText("Evenimente");
+    await openDrawer(page);
+    await expect(trigger(page)).toHaveAttribute("aria-expanded", "true");
+    // Scoped to the drawer: the hamburger is still a toggle, so while the menu
+    // is open it carries this name too, and an unscoped locator matches both.
+    await expect(drawer(page).getByRole("button", { name: "Închide meniul" })).toBeVisible();
+    await expect(drawer(page)).toContainText("Evenimente");
 
-    await page.locator("#mobile-menu").getByRole("link", { name: "Blog" }).click();
+    // The current page is announced, not merely tinted. This assertion is the
+    // one that would have caught the original bug: the header compared a
+    // pathname that next-intl had already stripped the locale from against one
+    // that still had it, so nothing was ever marked on either language.
+    await expect(drawer(page).locator('a[aria-current="page"]')).toHaveText("Acasă");
+
+    await drawer(page).getByRole("link", { name: "Blog" }).click();
     await expect(page).toHaveURL(/\/ro\/blog/);
+    await expect(drawer(page)).toBeHidden();
+  });
+
+  test("following a link does not drag focus back onto the menu button", async ({
+    page,
+  }) => {
+    await page.goto("/ro");
+    await openDrawer(page);
+
+    await drawer(page).getByRole("link", { name: "Contact" }).click();
+    await expect(page).toHaveURL(/\/ro\/contact/);
+    await expect(drawer(page)).toBeHidden();
+
+    // Closing by any other route hands focus back to the hamburger, which is
+    // right for a menu you dismissed and wrong for one you navigated out of —
+    // it would put a keyboard user on the menu button of the page they have
+    // just left. The same distinction takes `inert` off the page immediately
+    // rather than after the slide-out, because <next-route-announcer> is one
+    // of the body children this marks inert, and an announcement made while
+    // inert is not made.
+    await expect(trigger(page)).not.toBeFocused();
+    const stillInert = await page.evaluate(() =>
+      [...document.body.children].filter((el) => el.hasAttribute("inert")).length
+    );
+    expect(stillInert, "the page behind must be live again after a navigation").toBe(0);
+  });
+
+  test("Escape closes it and hands the hamburger its focus back", async ({ page }) => {
+    await page.goto("/ro");
+    await openDrawer(page);
+
+    await page.keyboard.press("Escape");
+    await expect(drawer(page)).toBeHidden();
+    // Without this the next Tab starts from the top of the document, which for
+    // a keyboard user reads as the menu having thrown them out of the page.
+    await expect(trigger(page)).toBeFocused();
+  });
+
+  test("a tap on the dimmed page closes it", async ({ page }) => {
+    await page.goto("/ro");
+    await openDrawer(page);
+
+    // Well inside the strip of page left showing beside the panel. Clicked with
+    // the mouse rather than `touchscreen.tap` so this also runs on the desktop
+    // project, which has no touch.
+    await page.mouse.click(20, 320);
+    await expect(drawer(page)).toBeHidden();
+  });
+
+  test("everything behind it is inert while it is open", async ({ page }) => {
+    await page.goto("/ro");
+
+    const inertSiblings = () =>
+      page.evaluate(() => {
+        const open = document.getElementById("mobile-menu");
+        const others = [...document.body.children].filter((el) => el !== open);
+        return {
+          total: others.length,
+          inert: others.filter((el) => el.hasAttribute("inert")).length,
+        };
+      });
+
+    expect(await inertSiblings()).toMatchObject({ inert: 0 });
+
+    await openDrawer(page);
+    // Not a count: what matters is that nothing was missed. `inert` is what
+    // keeps a keyboard and a screen reader out of the page behind the dim, and
+    // it is also the whole focus trap — there is no key handling to go with it.
+    const open = await inertSiblings();
+    expect(open.total).toBeGreaterThan(0);
+    expect(open.inert).toBe(open.total);
+
+    await page.keyboard.press("Escape");
+    await expect(drawer(page)).toBeHidden();
+    expect(await inertSiblings()).toMatchObject({ inert: 0 });
+  });
+
+  test("a drag that stops part way snaps shut instead of resting there", async ({
+    page,
+  }) => {
+    await page.goto("/ro");
+    await openDrawer(page);
+
+    // Released a third of the way back towards closed. `scroll-snap-type: x
+    // mandatory` is what promises the drawer can never be abandoned half open,
+    // and the IntersectionObserver that watches the panel is what turns landing
+    // on the closed stop into a closed drawer.
+    await page.evaluate(() => {
+      const scroller = document.querySelector(".nav-drawer-scroller")!;
+      const travel = scroller.scrollWidth - scroller.clientWidth;
+      scroller.scrollTo({ left: travel * 0.3, behavior: "instant" });
+    });
+
+    await expect(drawer(page)).toBeHidden();
   });
 });

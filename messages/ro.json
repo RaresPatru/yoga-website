@@ -9,7 +9,8 @@
     "admin": "Admin",
     "menu": {
       "open": "Deschide meniul",
-      "close": "Închide meniul"
+      "close": "Închide meniul",
+      "label": "Meniu"
     }
   },
   "common": {

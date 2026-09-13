@@ -254,3 +254,20 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   produced only `BUTTON` and `BODY`, never an `<a>`. Move focus with `.focus()`
   and assert `el.matches(":focus-visible")` before reading the style — both
   engines honour that.
+- **WebKit says yes to scroll-driven animations and then will not interpolate.**
+  `timeline-scope`, `scroll-timeline`, a named `animation-timeline` and
+  `@property` all report as supported in WebKit 26.6, and a custom property
+  animated on a scroll timeline still moves in one step instead of tracking the
+  scroll. Measured across a drag at 0, 25, 50, 75 and 100%: Chromium returns
+  0, 0.25, 0.5, 0.75, 1 and WebKit returns 0, 1, 1, 1, 1. The recommended
+  fallback does not save you, because `CSS.supports("animation-timeline:
+  scroll()")` is *true* there — nothing detects it. The navigation drawer's dim
+  is therefore driven by one `scroll` listener on every engine
+  (`components/layout/header.tsx`), which is the boring version and the one
+  that works where the visitors are.
+- **Playwright's WebKit is not Safari, and the gap is silent.** Its build does
+  not implement `overscroll-behavior` at all — `CSS.supports` says no and the
+  longhand is missing from computed style — while Safari has shipped it since
+  16. A test that asserts on that property fails against a browser engine that
+  the audience never runs. Check `CSS.supports` in the engine before believing
+  a Playwright-WebKit result about CSS support.

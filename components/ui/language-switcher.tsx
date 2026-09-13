@@ -42,13 +42,28 @@ export function LanguageSwitcher() {
    */
   const action = locale === "ro" ? "Switch to English" : "Treci la română";
 
+  /*
+   * The same sage hover the navigation links use, for the same reason: the old
+   * `bg-white/40` → `bg-white/60` step is a 1.01:1 change against a bar that is
+   * already nearly white, so the control looked inert.
+   *
+   * `backdrop-blur-sm` went with it. The header above already blurs, and
+   * blurring a second time inside it buys nothing except another compositing
+   * layer — which is what costs the text its subpixel antialiasing. Inside the
+   * drawer, where this also renders, it was blurring an opaque panel.
+   *
+   * The border is what makes it look like something you can press. Its fill is
+   * white on a surface that is already almost white, in the bar and in the
+   * drawer both, so without an edge the flag and the two letters simply float
+   * there as text.
+   */
   return (
     <button
       onClick={toggleLocale}
       disabled={isPending}
       aria-label={action}
       title={action}
-      className="flex items-center gap-1.5 rounded-full bg-white/40 px-3 py-1.5 text-sm text-charcoal-light backdrop-blur-sm transition-colors hover:bg-white/60"
+      className="flex items-center gap-1.5 rounded-full border border-sage/30 bg-white/50 px-3 py-1.5 text-sm text-charcoal-light transition-colors hover:bg-sage/35 hover:text-charcoal active:bg-sage/45"
     >
       <Flag code={FLAG[locale] ?? "RO"} />
       <span aria-hidden="true">{locale.toUpperCase()}</span>

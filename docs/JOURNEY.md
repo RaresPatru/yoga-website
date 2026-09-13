@@ -1163,6 +1163,117 @@ each reporting `1px auto rgb(16, 16, 16)`.
 
 ---
 
+## Part 11 — A navigation bar that never answered
+
+The report was that hovering the navigation did not feel like anything. There
+were two causes, and only one of them was a styling problem.
+
+### The hover was a real style and it was invisible
+
+The bar is `bg-white/60` over cream, so it renders at about `#FFFCF9`. The hover
+state was `bg-white/40`, which composites on top of that to `#FFFDFB`:
+
+| | contrast with the bar |
+|---|---|
+| the old `hover:bg-white/40` | 1.01:1 |
+| `hover:bg-sage/35` | 1.31:1 |
+| `bg-rose/35`, the current page | 1.26:1 |
+
+This is the background-bands arithmetic from Part 10 applied to every link in
+the header. Any wash under about 30% opacity on a near-white surface is not a
+subtle effect, it is no effect.
+
+The reason the fix is not simply "make the text change colour too" is that the
+two pull against each other. A wash strong enough to see drags `sage-deep` text
+down to 3.87:1, under the 4.5:1 AA needs. So the wash carries the signal and the
+text goes *darker* rather than greener — `charcoal-light` to `charcoal`, 10.3:1
+on the hover wash. The current page is the one place coloured text survives, and
+only because `rose-deeper` on `rose/35` is 5.67:1 where `rose-deep` would have
+been 4.09:1.
+
+### The current page was never marked, on either language
+
+The header decided what was current like this:
+
+```ts
+pathname.startsWith(`/${locale}${href}`)
+```
+
+`usePathname` here is next-intl's, and it returns the pathname with the locale
+already stripped — `/about`, never `/ro/about`. So the test was whether
+`"/about"` starts with `"/ro/about"`, and the answer was no on every page in
+both languages. The rose pill in the design had never once been drawn.
+
+Two hues now carry two jobs: rose means *you are here*, sage means *you can go
+here*. That is what lets the current page stay marked while you hover something
+else, and it is also why hover is the calmer of the two colours — it is
+transient, and the accent should belong to the thing that persists.
+
+### Swiping a menu open is scrolling it
+
+The old mobile menu was a panel that appeared under the bar. What replaced it is
+a drawer that slides in from the right, and it contains no touch handling at
+all. It is a horizontally scrolling box one viewport plus one panel wide with a
+scroll-snap stop at each end: hard left is closed, hard right is open. Dragging
+it is scrolling, so momentum, rubber-banding and mid-flick reversal come from
+the browser instead of from arithmetic in a `pointermove` listener, and
+`scroll-snap-type: x mandatory` is what promises it can never be abandoned half
+open.
+
+Two decisions inside that are worth stating.
+
+**It opens from the right**, partly because the hamburger is at the right end of
+the bar, but mostly because that makes *closed* the scroll origin. A left-hand
+drawer has open at `scrollLeft: 0`, so it flashes fully open for a frame every
+time it is revealed, and the property that fixes that — `scroll-initial-target`
+— is Chromium-only. A right-hand drawer needs nothing: an element that has just
+stopped being `display: none` sits at scroll position zero, which here means
+shut.
+
+**It is not a `popover`.** The top layer would save managing one z-index and
+nothing else, because a drawer wants `popover="manual"` — which switches off
+light-dismiss, Escape handling and focus management. Against that,
+`showPopover()` throws below Safari 17, and a navigation menu that throws is a
+site with no navigation.
+
+There is no focus trap either, and none is needed: every direct child of
+`<body>` except the drawer gets `inert` while it is open, which removes them
+from the tab order and the accessibility tree together. The drawer is rendered
+as a sibling of `<header>` precisely so that rule has no list of regions to keep
+in step.
+
+### WebKit says yes to scroll-driven animations and then will not interpolate
+
+The dim behind the panel should track the finger, which is four lines of CSS:
+register a custom property, name a `scroll-timeline` on the scroller, point an
+`animation-timeline` at it. It runs off the main thread and it is the pattern
+every current guide recommends.
+
+Measured across a drag, at 0, 25, 50, 75 and 100% open:
+
+| | 0% | 25% | 50% | 75% | 100% |
+|---|---|---|---|---|---|
+| Chromium 153 | 0 | 0.25 | 0.5 | 0.75 | 1 |
+| WebKit 26.6 | 0 | 1 | 1 | 1 | 1 |
+
+WebKit reports `timeline-scope`, `scroll-timeline`, named `animation-timeline`
+and `@property` as all supported, and then moves the value in one step. The dim
+was a light switch on the engine most of this site is read in.
+
+The recommended fallback does not help, because the thing you are told to
+feature-detect — `CSS.supports("animation-timeline: scroll()")` — is `true`
+there. Nothing catches it. So the dim is driven by a single `scroll` listener on
+every engine: the boring version, and the one that works where the visitors are.
+
+Verified after the change on both engines, 50 assertions each: the panel rests
+flush to the edge with 75px of page still showing, the dim reads 0.225 at half
+open and 0.45 at rest, everything outside the drawer is inert while it is open
+and nothing is inert after, focus moves into the panel and returns to the
+hamburger, and a drag released 30% of the way back snaps shut rather than
+staying put.
+
+---
+
 ## Decisions worth defending
 
 **Keeping the tech stack.** Next.js + Supabase + Stripe was the right call and
