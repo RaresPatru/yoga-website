@@ -30,6 +30,19 @@ be submitted. Without it every booking stops at the CAPTCHA.
   A failed `supabase_studio` health check is harmless; studio is only the web UI.
 - **Docker clock drift after the host sleeps** produces
   `JWT issued at future` on every authenticated call. Restart the containers.
+- **Never navigate with `waitUntil: "networkidle"`.** Turnstile holds a `blob:`
+  request to `challenges.cloudflare.com` open indefinitely, so on any page
+  carrying the widget network idle never arrives and `page.goto` times out —
+  which reads exactly like a hung page. Measured on `/ro/contact` in Chromium:
+  `load` fires at 406ms and the client has hydrated 33ms later, while the blob
+  request was still open after six seconds. Navigate with the default and then
+  wait for proof the client is running.
+- **Wait for `next-route-announcer` before clicking anything.** Next appends it
+  from the client runtime and it is absent from the server HTML, so it is a
+  genuine "hydration finished" signal. Without it, a click on a control whose
+  only behaviour is a React handler — the header's hamburger, say — is
+  swallowed with no trace, and the drawer simply never opens. WebKit hydrates
+  later than Chromium, so this shows up there first.
 - **The verified Turnstile widget is deliberately hidden** (`h-0 opacity-0
   inert`). Wait for it with `state: "attached"`, not the default `"visible"`.
 - **Kill stray node processes before rebuilding** — port 3100 is often still

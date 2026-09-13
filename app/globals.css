@@ -182,6 +182,171 @@ body {
   }
 }
 
+/*
+ * THE MOBILE NAVIGATION DRAWER
+ *
+ * The panel behind the hamburger. It slides in from the right, tracks your
+ * finger if you drag it, and closes by swiping it back off the edge, tapping
+ * the dimmed page beside it, pressing Escape, or using the button in its
+ * corner. components/layout/header.tsx holds the script that goes with it.
+ *
+ * WHY THE SWIPE IS A SCROLL
+ *
+ * There is no touch handler anywhere in this component. The drawer is a
+ * horizontally scrolling box one viewport plus one panel wide, with a scroll
+ * snap stop at each end: scrolled hard left the panel sits off-screen, scrolled
+ * hard right it sits on-screen. Dragging the drawer is therefore only
+ * scrolling, which means momentum, rubber-banding, mid-flick reversal and the
+ * exact feel of the platform all come from the browser instead of from
+ * arithmetic in a pointermove listener. `scroll-snap-type: x mandatory` is what
+ * guarantees it can never be abandoned half-open.
+ *
+ * WHY IT OPENS FROM THE RIGHT
+ *
+ * Partly because the hamburger is at the right end of the bar, and a panel
+ * should arrive from wherever you pressed. Mostly because it puts "closed" at
+ * the scroll origin. A left-hand drawer has *open* at scrollLeft 0, so it would
+ * appear fully open for a frame every time it is revealed, and the CSS property
+ * that fixes that — `scroll-initial-target` — is Chromium-only, which is
+ * exactly the wrong way round for an audience arriving from Instagram on an
+ * iPhone. A right-hand drawer needs nothing: an element that has just stopped
+ * being `display: none` has a scroll position of zero, which here means shut.
+ *
+ * WHY NOT `popover`
+ *
+ * The top layer would save managing one z-index and nothing else. A drawer
+ * wants `popover="manual"`, which switches off light-dismiss, Escape handling
+ * and focus management, so there is little left to inherit — and against that,
+ * `showPopover()` throws below Safari 17. A navigation menu that throws is a
+ * site with no navigation. One z-index is the cheaper problem.
+ */
+@layer components {
+  .nav-drawer {
+    /*
+     * Wide enough to read, narrow enough to leave a strip of the page showing.
+     * That strip is the affordance: it is what says the drawer is sitting on
+     * top of something you can tap to get back to.
+     */
+    --nav-drawer-width: min(20rem, 80dvw);
+
+    /*
+     * How far open the drawer is, 0 to 1. Drives the dim below and is written
+     * by a scroll listener in the header component, once per frame of the
+     * swipe.
+     *
+     * THIS SHOULD HAVE BEEN A SCROLL-DRIVEN ANIMATION, AND CANNOT BE
+     *
+     * The tidy version of this is four lines of CSS — register the property,
+     * name a `scroll-timeline` on the scroller, point an `animation-timeline`
+     * at it — and it runs off the main thread. It also produces the wrong
+     * answer in WebKit 26.6, which reports every part of that chain as
+     * supported (`timeline-scope`, `scroll-timeline`, named
+     * `animation-timeline`, `@property`) and then refuses to interpolate:
+     * measured at 0%, 25%, 50%, 75% and 100% of the drag, Chromium returns
+     * 0, 0.25, 0.5, 0.75, 1 and WebKit returns 0, 1, 1, 1, 1. The dim was a
+     * light switch on the one engine this site is mostly read in.
+     *
+     * There is no `@supports` test that catches it, because
+     * `CSS.supports("animation-timeline: scroll()")` is true there — so the
+     * feature-detected fallback everyone recommends never fires. One listener
+     * that runs everywhere beats a fast path that is silently wrong on the
+     * majority browser.
+     */
+    --nav-drawer-open: 0;
+
+    position: fixed;
+    inset: 0;
+    /* Above the header and the sticky booking bar, which are both z-50. */
+    z-index: 60;
+  }
+
+  /* Author rule rather than relying on the browser's own `[hidden]`, which any
+     author `display` declaration would silently outrank. */
+  .nav-drawer[hidden] {
+    display: none;
+  }
+
+  /*
+   * The dim over the page.
+   *
+   * A real element rather than `::backdrop`, because `::backdrop` only began
+   * inheriting custom properties from the element it belongs to in Safari 17.4
+   * — before that it inherited from the root and would read
+   * `--nav-drawer-open` as 0 forever, leaving the page undimmed and "tap
+   * outside to close" looking like dead space. An ordinary child inherits by
+   * the ordinary rules everywhere.
+   *
+   * Charcoal, not black: the palette has no pure black in it and a warm dim
+   * sits better over cream.
+   */
+  .nav-drawer-dim {
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-charcoal);
+    opacity: calc(var(--nav-drawer-open) * 0.45);
+  }
+
+  /*
+   * The swipe surface: two grid columns, one empty and one viewport wide, the
+   * other holding the panel. Positioned so it paints over the dim and takes the
+   * taps meant for it.
+   */
+  .nav-drawer-scroller {
+    position: relative;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 100% var(--nav-drawer-width);
+    overflow-x: scroll;
+    overflow-y: hidden;
+    /* Stops a swipe that reaches either end from turning into a scroll of the
+       page behind, and on iOS stops the whole document rubber-banding. */
+    overscroll-behavior: none;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  /* `scrollbar-width` is only Safari 18.2 and later, and this is the browser
+     that matters most here. */
+  .nav-drawer-scroller::-webkit-scrollbar,
+  .nav-drawer-sheet::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* The empty first column — the closed snap stop. */
+  .nav-drawer-scroller::before {
+    content: "";
+    scroll-snap-align: start;
+  }
+
+  .nav-drawer-sheet {
+    scroll-snap-align: end;
+    /*
+     * 100% of the fixed, inset-0 drawer rather than `100svh`. They are the same
+     * number almost always, but tying the panel to its own container means it
+     * cannot leave a gap along the bottom on whichever viewport iOS decides a
+     * fixed element gets while its toolbar is collapsing.
+     */
+    height: 100%;
+    overflow-y: auto;
+    /* A long menu that reaches its end must not start scrolling the page. */
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding: 1.25rem;
+    /* Clear of the home indicator on a notched phone. */
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Smooth travel when the drawer is opened or closed by a tap; a swipe is
+     driven by the finger either way. Off for anyone who asked for less motion,
+     which leaves the drawer appearing and disappearing instantly. */
+  @media (prefers-reduced-motion: no-preference) {
+    .nav-drawer-scroller {
+      scroll-behavior: smooth;
+    }
+  }
+
+}
+
 @layer utilities {
   /*
    * Fallback for older posts only.
