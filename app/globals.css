@@ -328,8 +328,25 @@ body {
      */
     height: 100%;
     overflow-y: auto;
-    /* A long menu that reaches its end must not start scrolling the page. */
-    overscroll-behavior: contain;
+    /*
+     * NO `overscroll-behavior` HERE. IT LOOKS LIKE AN OMISSION AND IS NOT.
+     *
+     * `overflow-y: auto` quietly makes this a scroll container on *both* axes —
+     * when one axis is auto and the other is `visible`, the visible one is
+     * forced to auto — and its horizontal scroll range is zero. So a sideways
+     * drag that starts on the panel is captured here, goes nowhere, and only
+     * reaches the scroller that would have moved by chaining out of this
+     * element. `overscroll-behavior: contain` forbids exactly that, which
+     * silently removed swipe-to-close from the whole surface of the panel:
+     * the drawer could only be swiped by the strip of dimmed page beside it.
+     *
+     * The vertical protection it was added for is already handled one level
+     * up, by `overscroll-behavior: none` on the scroller. Measured with the
+     * panel deliberately made tall and scrolled to its end: the page behind
+     * stays at scrollY 0 with or without a rule here, while a swipe on the
+     * panel moves the drawer 312px -> 90px without one and 312px -> 312px
+     * with one.
+     */
     scrollbar-width: none;
     padding: 1.25rem;
     /* Clear of the home indicator on a notched phone. */

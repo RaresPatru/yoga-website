@@ -496,4 +496,80 @@ test.describe("home page navigation drawer", () => {
 
     await expect(drawer(page)).toBeHidden();
   });
+
+  /**
+   * An actual finger on the actual panel.
+   *
+   * Every other test in this file moves the drawer with `scrollTo`, which
+   * exercises the snap stops and the observer and steps straight over the two
+   * things that decide whether a swipe is even received: which element the
+   * touch lands on, and whether that element lets the gesture chain outwards.
+   * Both were wrong — `overscroll-behavior: contain` on the panel meant a drag
+   * starting anywhere on the menu itself did nothing at all, so the drawer
+   * could only be swiped shut by the narrow strip of dimmed page beside it —
+   * and the entire suite stayed green throughout.
+   *
+   * Chromium-only, because a synthetic drag needs CDP and Playwright's WebKit
+   * can tap but not drag. That is the wrong engine for this audience and it is
+   * still worth having: the bug was in a CSS rule, not in engine behaviour, and
+   * this is the only test that would have caught it.
+   */
+  // `hasTouch` is scoped to this one test rather than the whole block on
+  // purpose: Tailwind v4 compiles `hover:` inside `@media (hover: hover)`, so
+  // turning touch on for a context switches every hover style in it off.
+  test.describe(() => {
+    test.use({ hasTouch: true });
+
+    test("a swipe that starts on the panel drags the drawer with it", async ({
+      page,
+      browserName,
+    }) => {
+      test.skip(browserName !== "chromium", "a synthetic touch drag needs CDP");
+
+      await page.goto("/ro");
+      await openDrawer(page);
+
+      const cdp = await page.context().newCDPSession(page);
+      const swipeRight = async (fromX: number, y: number, distance: number) => {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchStart",
+          touchPoints: [{ x: fromX, y }],
+        });
+        for (let i = 1; i <= 14; i++) {
+          await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: fromX + (distance * i) / 14, y }],
+          });
+          await page.waitForTimeout(16);
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForTimeout(400);
+      };
+
+      const scrollLeft = () =>
+        page.evaluate(() =>
+          Math.round(document.querySelector(".nav-drawer-scroller")!.scrollLeft)
+        );
+
+      // Open means scrolled to the far end; the swipe drags it back to zero.
+      const opened = await scrollLeft();
+      expect(
+        opened,
+        "the drawer should be at its open stop before the swipe"
+      ).toBeGreaterThan(100);
+
+      // Starting well inside the panel, not on the dimmed strip beside it.
+      await swipeRight(250, 400, 220);
+
+      // That the panel followed the finger, not that it finished closing. A
+      // synthetic drag does not reliably produce the release velocity a snap
+      // needs, and snapping is covered by the test above; what is asserted
+      // here is the part that was broken — whether the gesture reaches the
+      // scroller at all. Unfixed this reads 312 -> 312.
+      expect(
+        await scrollLeft(),
+        "the panel must move with a swipe that starts on the panel"
+      ).toBeLessThan(opened - 100);
+    });
+  });
 });
