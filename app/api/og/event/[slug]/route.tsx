@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { createPublicClient } from "@/lib/supabase/public";
 import { LandscapeCard, OG_SIZE } from "@/lib/og-card";
-import { SITE_NAME } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import { formatDate } from "@/lib/utils";
 import { formatPrice } from "@/lib/money";
 
@@ -22,6 +22,9 @@ export async function GET(
 ) {
   const { slug } = await params;
   const locale = new URL(req.url).searchParams.get("locale") === "en" ? "en" : "ro";
+  /* The share card carries her business name, so it has to read the name she
+     set rather than the placeholder that used to be compiled in. */
+  const siteName = await getSiteName(locale);
 
   // No session: Row Level Security still applies, so an unpublished event
   // cannot be previewed by guessing its slug.
@@ -37,7 +40,7 @@ export async function GET(
     // Still return an image rather than a 404: a broken image in a share card
     // looks worse than a plain branded one.
     return new ImageResponse(
-      <LandscapeCard title={SITE_NAME} siteName={SITE_NAME} />,
+      <LandscapeCard title={siteName} siteName={siteName} />,
       OG_SIZE
     );
   }
@@ -52,7 +55,7 @@ export async function GET(
         title={title}
         subtitle={event.location ?? undefined}
         badge={event.price === 0 ? free : formatPrice(event.price, event.currency, locale)}
-        siteName={SITE_NAME}
+        siteName={siteName}
       />
     ),
     {

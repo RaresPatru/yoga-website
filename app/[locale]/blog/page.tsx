@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { formatDate } from "@/lib/utils";
 import { getLocale, getTranslations } from "next-intl/server";
 import { buildPageMetadata } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
+import { absoluteUrl } from "@/lib/site-config";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -14,7 +14,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   return buildPageMetadata({
-    title: `Blog · ${SITE_NAME}`,
+    title: "Blog",
     description:
       locale === "ro"
         ? "Gânduri despre practică, respirație și echilibru — scrise între ateliere."

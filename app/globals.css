@@ -362,6 +362,66 @@ body {
     }
   }
 
+  /*
+   * THE BAR GETS OUT OF THE WAY WHILE YOU ARE READING
+   *
+   * `translate`, NOT `transform`. Tailwind v4 compiles its transform utilities
+   * to the individual `translate` / `scale` / `rotate` properties, and the
+   * browser applies those *before* `transform`, so an element carrying both
+   * gets the product of the two rather than the one written last. Nothing on
+   * the header sets `translate`, and keeping this rule out of the utility
+   * classes is what keeps that true.
+   *
+   * The extra 2rem past -100% is the shadow. In its compact state the bar has
+   * none, but the hide can also begin while the card treatment is still
+   * transitioning out, and `shadow-lg` reaches about 22px below the box —
+   * travelling exactly one box height would park a soft grey smear along the
+   * top edge of the screen for the length of the transition.
+   */
+  .nav-bar[data-hidden] {
+    translate: 0 calc(-100% - 2rem);
+  }
+
+  /*
+   * A BAR THE KEYBOARD IS USING MUST NOT LEAVE — AND ONLY THE KEYBOARD'S
+   *
+   * Someone who tabs into the wordmark or a link while the bar is parked
+   * off-screen would otherwise be focused on something they cannot see.
+   *
+   * This was `:not(:focus-within)` on the rule above, and it was wrong in a way
+   * that took a bug report to see. Closing the drawer hands focus back to the
+   * hamburger, the hamburger lives inside this element, and nothing about
+   * scrolling blurs a button — so after opening and closing the menu once, the
+   * veto held and the bar simply stopped hiding. The giveaway was that widening
+   * the window past `md` fixed it: that makes the hamburger `display: none`,
+   * which blurs it, which released the veto.
+   *
+   * `:focus-visible` is the distinction that was missing. A button focused
+   * programmatically after a tap or a click does not match it; the same button
+   * focused after Escape, by someone driving with a keyboard, does. So the
+   * veto now applies to exactly the visitor it was written for and to nobody
+   * else.
+   *
+   * IT IS TWO RULES ON PURPOSE. `:has()` is the newest thing in this file, and
+   * written as `:not(:has(...))` on the hide rule an engine without `:has()`
+   * would drop the whole declaration and the bar would never hide at all.
+   * Split like this, the worst an old engine does is lose the veto — the bar
+   * still hides, which is the behaviour almost everyone is here for.
+   */
+  .nav-bar[data-hidden]:has(:focus-visible) {
+    translate: 0 0;
+  }
+
+  /*
+   * Reduced motion keeps the behaviour and drops the slide: the bar still
+   * leaves and returns, between one frame and the next.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    .nav-bar {
+      transition: translate 260ms ease;
+    }
+  }
+
 }
 
 @layer utilities {

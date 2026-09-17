@@ -6,7 +6,8 @@ import { sanitizeHtml } from "@/lib/sanitize";
 import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
 import { toCurrency } from "@/lib/money";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
+import { absoluteUrl, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import { ShareButton } from "@/components/ui/share-button";
 import { AddCalendar } from "@/components/ui/add-calendar";
 import { StoryImageButton } from "@/components/ui/story-image-button";
@@ -80,7 +81,7 @@ export async function generateMetadata({
   const { title, description } = localised(event, locale);
 
   return buildPageMetadata({
-    title: `${title} · ${SITE_NAME}`,
+    title,
     description: toDescription(
       description,
       locale === "ro"
@@ -148,7 +149,7 @@ export default async function EventDetailPage({
         addressCountry: SITE_COUNTRY,
       },
     },
-    organizer: { "@type": "Organization", name: SITE_NAME, url: absoluteUrl("/") },
+    organizer: { "@type": "Organization", name: await getSiteName(locale), url: absoluteUrl("/") },
     offers: {
       "@type": "Offer",
       price: event.price,

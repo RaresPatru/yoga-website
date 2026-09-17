@@ -6,7 +6,8 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LocaleLang } from "@/components/locale-lang";
 import { buildPageMetadata } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
+import { absoluteUrl, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import type { Metadata } from "next";
 
 /**
@@ -28,10 +29,15 @@ export async function generateMetadata({
   const { locale } = await params;
 
   return buildPageMetadata({
+    /* The tagline alone. `buildPageMetadata` appends the business name now, so
+       this reads "Yoga pentru corp, minte și suflet · Yoga Flow" rather than
+       leading with the name as it used to. Every other page is already ordered
+       that way, and the distinctive words are the ones worth having before a
+       search result gets truncated. */
     title:
       locale === "ro"
-        ? `${SITE_NAME} · Yoga pentru corp, minte și suflet`
-        : `${SITE_NAME} · Yoga for body, mind and soul`,
+        ? "Yoga pentru corp, minte și suflet"
+        : "Yoga for body, mind and soul",
     description:
       locale === "ro"
         ? "Ateliere și retreaturi de yoga în grupuri mici, ghidate cu atenție și blândețe."
@@ -55,6 +61,10 @@ export default async function LocaleLayout({
 
   const messages = await getMessages();
   const t = await getTranslations("common");
+  /* One read, shared by the structured data below and by the header. The header
+     is a client component and cannot reach the database itself, so the name has
+     to arrive as a prop from here. */
+  const siteName = await getSiteName(locale);
 
   /**
    * schema.org LocalBusiness, on every page.
@@ -67,7 +77,7 @@ export default async function LocaleLayout({
   const businessSchema = {
     "@context": "https://schema.org",
     "@type": "HealthAndBeautyBusiness",
-    name: SITE_NAME,
+    name: siteName,
     url: absoluteUrl(`/${locale}`),
     address: {
       "@type": "PostalAddress",
@@ -90,7 +100,7 @@ export default async function LocaleLayout({
       >
         {t("skip_to_content")}
       </a>
-      <Header />
+      <Header siteName={siteName} />
       <main id="main-content" tabIndex={-1} className="flex-1 pt-20">{children}</main>
       <Footer locale={locale} />
     </NextIntlClientProvider>

@@ -480,7 +480,20 @@ test.describe("the footer opens her actual accounts", () => {
    */
   async function footerLinks(page: Page): Promise<string[]> {
     await page.goto("/ro/testimonials");
-    return page.locator("footer a").evaluateAll((links) =>
+    /*
+     * `a[rel~="me"]`, not `footer a`.
+     *
+     * This read every anchor in the footer, which was the same thing while the
+     * footer held nothing but the two social icons. It stopped being the same
+     * thing when the footer grew an index of the site's sections, and the test
+     * then reported six navigation links where it expected two accounts.
+     *
+     * `rel="me"` is the right discriminator rather than a lucky one: it is the
+     * microformat for "this link points at a profile belonging to the same
+     * person", it is already on these two anchors for that reason, and no
+     * navigation link will ever carry it.
+     */
+    return page.locator('footer a[rel~="me"]').evaluateAll((links) =>
       links.map((a) => `${a.getAttribute("aria-label")} ${a.getAttribute("href")}`)
     );
   }

@@ -108,10 +108,12 @@ test.describe("home page (RO)", () => {
     await expect(page).toHaveURL(/\/ro\/events/);
   });
 
-  // The horizontal nav is `hidden md:flex`; below that breakpoint these links
-  // live behind the hamburger, which the mobile menu test covers instead.
+  // The horizontal nav is `hidden lg:flex`; below that breakpoint these links
+  // live behind the hamburger, which the drawer tests cover instead. It was
+  // `md` until the Romanian labels were measured at 840px and found not to fit
+  // in 768.
   test("desktop nav links navigate to every section", async ({ page, viewport }) => {
-    test.skip((viewport?.width ?? 0) < 768, "desktop-only layout");
+    test.skip((viewport?.width ?? 0) < 1024, "desktop-only layout");
     const links: Array<[string, RegExp]> = [
       ["Acasă", /\/ro$/],
       ["Blog", /\/ro\/blog/],
@@ -146,7 +148,7 @@ test.describe("home page (RO)", () => {
 });
 
 test.describe("home page language switching", () => {
-  // Below `md` the switcher sits inside the mobile menu, so it has to be opened
+  // Below `lg` the switcher sits inside the drawer, so it has to be opened
   // first. Running this on both viewports is worth the extra few lines: an
   // Instagram-driven audience means the phone path is the one that matters, and
   // it was previously untested.
@@ -160,7 +162,11 @@ test.describe("home page language switching", () => {
     // is `md:hidden`. Width is deterministic and is what the CSS keys off.
     const width = page.viewportSize()?.width ?? 1280;
 
-    if (width >= 768) {
+    /* 1024, matching `lg`. This read 768 and only kept working by luck — both
+       test projects sit clear of the gap, at 1280 and 390 — but anything run
+       between 768 and 1024 would have taken the desktop path and hunted for a
+       switcher that is inside the drawer at that width. */
+    if (width >= 1024) {
       await page.getByRole("banner").getByRole("button", { name: label }).click();
       return;
     }
@@ -183,17 +189,29 @@ test.describe("home page language switching", () => {
   // a single-language toggle are plausible to a visitor, so the visible text is
   // the current language and the accessible name is the action — which is also
   // what a screen reader announces.
-  test("shows the current language and its flag", async ({ page, viewport }) => {
-    test.skip((viewport?.width ?? 0) < 768, "the switcher is inside the mobile menu below md");
+  test("shows both languages, current one first, with its flag", async ({
+    page,
+    viewport,
+  }) => {
+    /* 1024, not 768. The switcher moved into the drawer at `lg` when the link
+       row did — the Romanian labels need 840px to sit on one line and `md` was
+       below that, so between 768 and 840 the bar grew a second row. */
+    test.skip((viewport?.width ?? 0) < 1024, "the switcher is inside the drawer below lg");
 
     await page.goto("/ro");
     const ro = page.getByRole("banner").getByRole("button", { name: "Switch to English" });
-    await expect(ro).toHaveText("RO");
+    /* Both codes, the one you are reading first and beside the flag. Showing
+       only the current language was unambiguous but said nothing about the
+       alternative existing — a visitor who does not read Romanian had to hover
+       for a tooltip to find out there was an English version. */
+    await expect(ro).toHaveText("RO|EN");
     await expect(ro.locator("img")).toHaveAttribute("src", "/flags/RO.svg");
 
     await page.goto("/en");
     const en = page.getByRole("banner").getByRole("button", { name: "Treci la română" });
-    await expect(en).toHaveText("EN");
+    /* The pair swaps rather than holding position, so "flag plus the code next
+       to it" always names the page you are on. */
+    await expect(en).toHaveText("EN|RO");
     await expect(en.locator("img")).toHaveAttribute("src", "/flags/GB.svg");
   });
 
@@ -571,5 +589,534 @@ test.describe("home page navigation drawer", () => {
         "the panel must move with a swipe that starts on the panel"
       ).toBeLessThan(opened - 100);
     });
+  });
+});
+
+/**
+ * The navigation bar's two behaviours.
+ *
+ * COMPACTING closes the 12px gap that used to sit above the bar, which is what
+ * severed the top of a heading scrolling past it. AUTO-HIDING takes the bar off
+ * the screen entirely once the visitor is reading, and brings it back when they
+ * scroll up to look for something.
+ *
+ * The two have separate thresholds on purpose and the tests below hold them
+ * apart: 8px to compact, 80px before anything is allowed to leave.
+ */
+test.describe("home page navigation bar", () => {
+  type Page = import("@playwright/test").Page;
+
+  /** Client is running. See the note in the drawer block above. */
+  const hydrated = (page: Page) =>
+    page.locator("next-route-announcer").waitFor({ state: "attached" });
+
+  const flags = (page: Page) =>
+    page.evaluate(() => {
+      const header = document.querySelector("header");
+      return {
+        compact: header?.hasAttribute("data-compact") ?? false,
+        hidden: header?.hasAttribute("data-hidden") ?? false,
+      };
+    });
+
+  const barBox = (page: Page) =>
+    page.evaluate(() => {
+      const bar = document.querySelector("header nav");
+      if (!bar) return null;
+      const rect = bar.getBoundingClientRect();
+      return {
+        top: Math.round(rect.top),
+        height: Math.round(rect.height),
+        width: Math.round(rect.width),
+        radius: getComputedStyle(bar).borderTopLeftRadius,
+      };
+    });
+
+  const scrollTo = (page: Page, y: number) =>
+    page.evaluate((to) => window.scrollTo(0, to), y);
+
+  /* The bar holds itself on screen for 1.6s the first time the page goes past
+     the header. Tests that are about the ordinary hide have to get past that
+     first, or they are testing the announcement instead. */
+  const pastTheAnnouncement = async (page: Page) => {
+    await scrollTo(page, 400);
+    await expect.poll(async () => (await flags(page)).hidden).toBe(false);
+    await page.waitForTimeout(1800);
+  };
+
+  test("is a floating card while the page is at rest", async ({ page }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+
+    expect(await flags(page)).toEqual({ compact: false, hidden: false });
+    const box = await barBox(page);
+    expect(box?.top, "sits below the top edge rather than against it").toBe(12);
+    expect(box?.radius, "keeps its rounded corners").not.toBe("0px");
+  });
+
+  test("compacts against the top edge as soon as the page moves", async ({
+    page,
+    viewport,
+  }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+    const resting = await barBox(page);
+
+    /* 40px: past the 8px that compacts and well short of the 80px that would
+       let it leave. This is the window that used to show a severed heading —
+       content already sliding under the bar while the bar was still a floating
+       card with 12px of raw page above it. */
+    await scrollTo(page, 40);
+    await expect.poll(async () => (await flags(page)).compact).toBe(true);
+
+    /*
+     * POLL EVERY PROPERTY BEING ASSERTED, NOT ONE OF THEM AND THEN THE REST.
+     *
+     * `data-compact` lands in one frame; the geometry it drives is a 200ms
+     * transition behind it, so polling the flag and reading the box catches the
+     * bar mid-flight — that read 1px instead of 0 the first time, which looks
+     * exactly like an off-by-one and is not one.
+     *
+     * Polling one measurement and then reading the others is the subtler version
+     * of the same mistake, and it produced a genuinely flaky test: `top` comes
+     * from a `padding` transition on the shell while `border-radius` comes from
+     * a separate transition on the surface *inside* it. They are the same
+     * duration but they do not start on the same frame, so `top` reaching 0
+     * proves nothing about the corner — which was still at 0.086377px on the run
+     * that failed. Each assertion waits for its own property.
+     */
+    await expect
+      .poll(async () => (await barBox(page))?.top, {
+        message: "flush with the viewport, so there is no gap to slice through",
+      })
+      .toBe(0);
+    await expect
+      .poll(async () => (await barBox(page))?.radius, { message: "sheds the rounding" })
+      .toBe("0px");
+    await expect
+      .poll(async () => (await barBox(page))?.width, {
+        message: "spans the whole viewport",
+      })
+      .toBe(viewport?.width);
+
+    const box = await barBox(page);
+    expect(box?.height, "is shorter than at rest").toBeLessThan(resting!.height);
+    expect((await flags(page)).hidden, "but has not left").toBe(false);
+  });
+
+  test("does not leave while the page is still near the top", async ({ page }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+
+    await scrollTo(page, 60);
+    await expect.poll(async () => (await flags(page)).compact).toBe(true);
+    await expect.poll(async () => (await barBox(page))?.top).toBe(0);
+    expect((await flags(page)).hidden).toBe(false);
+  });
+
+  test("introduces itself the first time the page goes past the header", async ({
+    page,
+  }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+
+    /* One long scroll down and nothing else — the arrival of someone who
+       followed an Instagram link and reads straight down. Plain auto-hide would
+       take the bar away here and they would never learn it exists. */
+    await scrollTo(page, 1200);
+    await expect.poll(async () => (await flags(page)).hidden).toBe(false);
+    await expect
+      .poll(async () => (await barBox(page))?.top, { message: "on screen, not parked" })
+      .toBe(0);
+
+    // And then it does get out of the way, once it has been seen.
+    await page.waitForTimeout(1800);
+    await scrollTo(page, 2000);
+    await expect.poll(async () => (await flags(page)).hidden).toBe(true);
+  });
+
+  test("gets out of the way on the way down and comes back on the way up", async ({
+    page,
+  }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+    await pastTheAnnouncement(page);
+
+    await scrollTo(page, 1200);
+    await expect.poll(async () => (await flags(page)).hidden).toBe(true);
+    await expect.poll(async () => (await barBox(page))?.top).toBeLessThan(-40);
+
+    await scrollTo(page, 1000);
+    await expect.poll(async () => (await flags(page)).hidden).toBe(false);
+    await expect.poll(async () => (await barBox(page))?.top).toBe(0);
+  });
+
+  test("a bar the keyboard is using does not leave", async ({ page }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+    await pastTheAnnouncement(page);
+
+    await scrollTo(page, 1200);
+    await expect.poll(async () => (await flags(page)).hidden).toBe(true);
+
+    /*
+     * Focus moved with .focus() and checked with :focus-visible rather than
+     * pressed for with Tab — WebKit's Tab key does not walk links, so a tab loop
+     * passes vacuously on the mobile project.
+     *
+     * The target is the wordmark BUTTON, deliberately not `header a`. This read
+     * `header a` until the wordmark stopped being a link, at which point the
+     * first anchor in the header became "Acasă" — which is `display: none` below
+     * `lg`, so the focus silently did nothing and the check failed on the phone
+     * project only. Verified in both engines: a button focused this way does
+     * match :focus-visible, so the veto is real and it was the selector that was
+     * wrong.
+     */
+    const focusVisible = await page.evaluate(() => {
+      const wordmark = document.querySelector("header button") as HTMLElement | null;
+      wordmark?.focus();
+      return wordmark?.matches(":focus-visible") ?? false;
+    });
+    expect(focusVisible, "the wordmark should read as keyboard-focused").toBe(true);
+
+    expect(
+      (await flags(page)).hidden,
+      "still flagged hidden — the veto is presentational"
+    ).toBe(true);
+    await expect
+      .poll(async () => (await barBox(page))?.top, {
+        message: "but it must be on screen, not focused off the top edge",
+      })
+      .toBe(0);
+  });
+
+  test("the compacted glass keeps enough body to read nav text over a photograph", async ({
+    page,
+  }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+    await scrollTo(page, 400);
+    await expect.poll(async () => (await flags(page)).compact).toBe(true);
+
+    const surfaceAlpha = () =>
+      page.evaluate(() => {
+        const bar = document.querySelector("header nav");
+        if (!bar) return null;
+        const colour = getComputedStyle(bar).backgroundColor;
+        const alpha =
+          colour.match(/\/\s*([\d.]+)\s*\)/) ??
+          colour.match(/rgba\([^)]*,\s*([\d.]+)\s*\)/);
+        return alpha ? Number(alpha[1]) : 1;
+      });
+
+    /*
+     * Measured, not guessed. The bar crosses the event card photographs on the
+     * home page, and the darkest backdrop any of them puts behind it leaves the
+     * surface at #CCCCCC. Against that, charcoal-light nav links read 5.52:1
+     * and the rose current-page pill 4.55:1 — both over AA's 4.5:1. At 0.7
+     * those were 4.19:1 and 3.46:1, which is why this floor exists.
+     */
+    /* Polled, because the fill is a 200ms transition away from its resting 0.6
+       and a straight read catches it partway. */
+    await expect
+      .poll(surfaceAlpha, {
+        message: "thinner glass than this drops nav links below AA over a dark photo",
+      })
+      .toBeGreaterThanOrEqual(0.8);
+
+    const backdrop = await page.evaluate(
+      () => getComputedStyle(document.querySelector("header nav")!).backdropFilter || "none"
+    );
+    expect(backdrop, "and it is still glass").toContain("blur");
+  });
+
+  /* The hamburger only exists below `md`, and the bug this covers needs it. */
+  test.describe(() => {
+    test.use({ viewport: { width: 375, height: 667 } });
+
+    test("still gets out of the way after the menu has been opened and closed", async ({
+      page,
+    }) => {
+      await page.goto("/ro");
+      await hydrated(page);
+      await pastTheAnnouncement(page);
+
+      const drawer = page.locator("#mobile-menu");
+      await page.locator('button[aria-controls="mobile-menu"]').click();
+      await expect(drawer).toBeVisible();
+      await drawer.getByRole("button", { name: "Închide meniul" }).click();
+      await expect(drawer).toBeHidden();
+
+      /*
+       * THE BUG THIS EXISTS FOR
+       *
+       * Closing the drawer hands focus back to the hamburger, and the hamburger
+       * lives inside <header>. The hide was vetoed by `:not(:focus-within)`, so
+       * from that moment the bar simply stopped hiding — nothing about scrolling
+       * blurs a button. It was reported as "the menu button stays visible", and
+       * the tell was that widening the window past `md` fixed it: that makes the
+       * hamburger `display: none`, which blurs it and released the veto.
+       *
+       * The veto is `:focus-visible` now, which a button focused after a tap
+       * does not match.
+       */
+      await scrollTo(page, 1200);
+      await expect
+        .poll(async () => (await flags(page)).hidden, {
+          message: "the bar must still hide once the menu has been used",
+        })
+        .toBe(true);
+      await expect.poll(async () => (await barBox(page))?.top).toBeLessThan(-40);
+    });
+  });
+});
+
+test.describe("home page navigation bar identity and fit", () => {
+  type Page = import("@playwright/test").Page;
+
+  const hydrated = (page: Page) =>
+    page.locator("next-route-announcer").waitFor({ state: "attached" });
+
+  /**
+   * The bar must never grow a second row.
+   *
+   * Reported from a desktop window being dragged narrower: somewhere above the
+   * hamburger's breakpoint the Romanian labels ran out of room and wrapped, so
+   * "Despre mine" and the wordmark each broke over two lines and the bar grew
+   * to roughly double height instead of handing over to the menu.
+   *
+   * The cause was a breakpoint chosen without measuring. The link row needs
+   * 840px in Romanian — walked down in 10px steps to find it — and it was set to
+   * hand over at `md`, 768px. English fits in 770px, so the primary language was
+   * the only one that ever showed it.
+   */
+  test("never grows a second row at any width", async ({ page, isMobile }) => {
+    test.skip(!!isMobile, "a device viewport cannot be resized through the breakpoint");
+
+    await page.goto("/ro");
+    await hydrated(page);
+    const resting = await page.evaluate(() =>
+      Math.round(document.querySelector("header nav")!.getBoundingClientRect().height)
+    );
+
+    for (let width = 1200; width >= 360; width -= 20) {
+      await page.setViewportSize({ width, height: 800 });
+      const state = await page.evaluate(() => {
+        const bar = document.querySelector("header nav")!;
+        const burger = document.querySelector('header button[aria-controls="mobile-menu"]');
+        const firstLink = bar.querySelector("a[href]");
+        return {
+          height: Math.round(bar.getBoundingClientRect().height),
+          burgerShown: !!burger && burger.getBoundingClientRect().width > 0,
+          linksShown: !!firstLink && firstLink.getBoundingClientRect().width > 0,
+        };
+      });
+
+      expect(
+        state.height,
+        `the bar wrapped to ${state.height}px at ${width}px wide`
+      ).toBeLessThanOrEqual(resting);
+
+      /* Exactly one of the two navigations is offered at any width. Both would
+         be clutter; neither would be a site you cannot move around. */
+      expect(
+        state.burgerShown !== state.linksShown,
+        `at ${width}px: hamburger ${state.burgerShown}, links ${state.linksShown}`
+      ).toBe(true);
+    }
+  });
+
+  /**
+   * The wordmark takes you to the top of the page you are on.
+   *
+   * It linked to "/" until now, which is the usual convention and was also
+   * redundant here — "Acasă" sits beside it and does that. Scrolling the current
+   * page back to its own top is the job nothing else in the bar does, and it is
+   * worth more now that the bar spends most of its time off-screen.
+   */
+  test("the wordmark returns the page to its top without leaving it", async ({ page }) => {
+    await page.goto("/ro");
+    await hydrated(page);
+
+    await page.evaluate(() => window.scrollTo(0, 1200));
+    await page.waitForTimeout(500);
+    /* Up a little first, so the bar is on screen to be pressed. */
+    await page.evaluate(() => window.scrollTo(0, 1140));
+    await expect.poll(async () => page.evaluate(() => Math.round(window.scrollY))).toBe(1140);
+
+    const before = page.url();
+    const wordmark = page.getByRole("banner").getByRole("button", { name: /Înapoi sus/ });
+    await wordmark.click();
+
+    await expect.poll(async () => page.evaluate(() => Math.round(window.scrollY))).toBe(0);
+    expect(page.url(), "it must not navigate anywhere").toBe(before);
+  });
+
+  /**
+   * The business name is hers, and it has to reach every surface that shows it.
+   *
+   * "Yoga Flow" was a placeholder compiled into the source, which meant renaming
+   * the business was a developer's job. It is a row in `site_content` now,
+   * edited from "Conținut site" beside her Instagram address.
+   *
+   * This test exists because the failure mode for this kind of change is
+   * partial: a field that updates the header and leaves the browser tab, the
+   * share card and the structured data still saying the old name is worse than
+   * no field at all — it looks like it worked. So the assertions here span the
+   * header, the page title and the schema.org block deliberately.
+   */
+  test("the business name comes from the admin panel, everywhere it appears", async ({
+    page,
+  }) => {
+    const previous = await siteContentValue("general.site_name");
+    const chosen = "Respiră Yoga";
+
+    try {
+      await setSiteContent("general.site_name", chosen);
+      await page.goto("/ro");
+      await hydrated(page);
+
+      await expect(
+        page.getByRole("banner").getByRole("button", { name: new RegExp(chosen) })
+      ).toContainText(chosen);
+      await expect(page).toHaveTitle(new RegExp(chosen));
+
+      const schema = await page.evaluate(
+        () =>
+          document.querySelector('script[type="application/ld+json"]')?.textContent ?? ""
+      );
+      expect(JSON.parse(schema).name, "structured data carries it too").toBe(chosen);
+
+      /* And the footer, which is the other place a visitor reads it. */
+      await expect(page.locator("footer")).toContainText(chosen);
+    } finally {
+      await setSiteContent("general.site_name", previous);
+    }
+  });
+
+  /**
+   * Empty means "she has not chosen yet", not empty.
+   *
+   * Every other key in this table treats a blank value that way and the public
+   * pages render a placeholder rather than a gap. A site with no name in the
+   * browser tab would be the one case where that convention produced something
+   * broken instead of something unfinished.
+   */
+  test("falls back to the placeholder while the field is still blank", async ({ page }) => {
+    const previous = await siteContentValue("general.site_name");
+
+    try {
+      await setSiteContent("general.site_name", "");
+      await page.goto("/ro");
+      await hydrated(page);
+
+      await expect(page.getByRole("banner").getByRole("button").first()).toContainText(
+        "Yoga Flow"
+      );
+      await expect(page).toHaveTitle(/Yoga Flow/);
+    } finally {
+      await setSiteContent("general.site_name", previous);
+    }
+  });
+});
+
+/**
+ * The footer index, and the regression it exists for.
+ *
+ * On a phone the top bar renders none of the site's sections: the link row is
+ * `hidden lg:flex` and the drawer is `display: none` until it is opened. An
+ * audit of a rendered phone page found twenty anchors, of which eight had a box,
+ * and all eight were blog posts — twelve links to the site's own sections were
+ * in the markup and none of them was drawn. Once the wordmark stopped being a
+ * link there was no rendered route to the home page at all.
+ *
+ * That is ordinary for a hamburger menu and mostly fine for people. It is less
+ * fine for a search engine that indexes the rendered mobile page. These run at
+ * each project's own viewport deliberately, so the phone project is the one
+ * asserting the phone case.
+ */
+test.describe("footer navigation", () => {
+  const SECTIONS = [
+    "/ro",
+    "/ro/about",
+    "/ro/blog",
+    "/ro/events",
+    "/ro/testimonials",
+    "/ro/contact",
+  ];
+
+  test("renders every section as a real link, at any viewport", async ({ page }) => {
+    await page.goto("/ro/blog");
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
+
+    const drawn = await page.evaluate(() =>
+      [...document.querySelectorAll("footer a[href]")]
+        .filter((a) => {
+          const box = a.getBoundingClientRect();
+          return box.width > 0 && box.height > 0;
+        })
+        .map((a) => a.getAttribute("href"))
+    );
+
+    for (const href of SECTIONS) {
+      expect(drawn, `the footer must render a link to ${href}`).toContain(href);
+    }
+  });
+
+  test("is a list, so it can be counted and skipped", async ({ page }) => {
+    await page.goto("/ro");
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
+
+    /* A real <ul> hands assistive technology the number of items before the
+       first one and one gesture to skip the group; a run of loose anchors does
+       neither. Safari drops list semantics from a flex list with no markers, but
+       only outside a <nav> — this is inside one, which is why no `role="list"`
+       patch is needed here. */
+    const shape = await page.evaluate(() => {
+      const list = document.querySelector("footer nav ul");
+      return {
+        isList: list?.tagName ?? null,
+        items: list ? list.querySelectorAll(":scope > li").length : 0,
+      };
+    });
+    expect(shape.isList).toBe("UL");
+    expect(shape.items).toBe(6);
+  });
+
+  test("the two navigation landmarks are told apart", async ({ page }) => {
+    await page.goto("/ro");
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
+
+    const exposed = await page.evaluate(() =>
+      [...document.querySelectorAll("nav")]
+        .filter((n) => n.getBoundingClientRect().width > 0)
+        .map((n) => n.getAttribute("aria-label"))
+    );
+
+    expect(exposed.length, "the bar and the footer").toBeGreaterThanOrEqual(2);
+    expect(exposed.every(Boolean), `every visible nav needs a name: ${JSON.stringify(exposed)}`).toBe(true);
+    expect(new Set(exposed).size, "and the names must differ").toBe(exposed.length);
+    /* A <nav> is announced as a navigation already; naming it one reads back as
+       "navigation navigation". */
+    for (const name of exposed) {
+      expect(name).not.toMatch(/naviga/i);
+    }
+  });
+
+  test("a footer link actually navigates", async ({ page }) => {
+    await page.goto("/ro/blog");
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
+    await page.locator("footer nav a").filter({ hasText: "Evenimente" }).first().click();
+    await expect(page).toHaveURL(/\/ro\/events/);
+  });
+
+  test("does not push the page sideways", async ({ page }) => {
+    await page.goto("/ro");
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
+    const overflow = await page.evaluate(() => ({
+      doc: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
+    }));
+    expect(overflow.doc, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport);
   });
 });

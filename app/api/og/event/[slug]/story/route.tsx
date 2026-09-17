@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { createPublicClient } from "@/lib/supabase/public";
 import { StoryCard, STORY_SIZE } from "@/lib/og-card";
-import { SITE_NAME } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import { formatDate } from "@/lib/utils";
 import { formatPrice } from "@/lib/money";
 
@@ -24,6 +24,9 @@ export async function GET(
 ) {
   const { slug } = await params;
   const locale = new URL(req.url).searchParams.get("locale") === "en" ? "en" : "ro";
+  /* The share card carries her business name, so it has to read the name she
+     set rather than the placeholder that used to be compiled in. */
+  const siteName = await getSiteName(locale);
 
   const supabase = createPublicClient();
   const { data: event } = await supabase
@@ -34,7 +37,7 @@ export async function GET(
     .maybeSingle();
 
   if (!event) {
-    return new ImageResponse(<StoryCard title={SITE_NAME} siteName={SITE_NAME} />, STORY_SIZE);
+    return new ImageResponse(<StoryCard title={siteName} siteName={siteName} />, STORY_SIZE);
   }
 
   const title = locale === "ro" ? event.title_ro : event.title_en || event.title_ro;
@@ -47,7 +50,7 @@ export async function GET(
         title={title}
         subtitle={event.location ?? undefined}
         badge={event.price === 0 ? free : formatPrice(event.price, event.currency, locale)}
-        siteName={SITE_NAME}
+        siteName={siteName}
       />
     ),
     {

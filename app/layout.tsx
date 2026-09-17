@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import { PostHogProvider } from "@/components/providers/posthog-provider";
 import { getLocale } from "next-intl/server";
-import { SITE_NAME, siteUrl } from "@/lib/site-config";
+import { siteUrl } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import "./globals.css";
 
 /**
@@ -42,12 +43,17 @@ const inter = Inter({
  * description and share image via generateMetadata — see lib/metadata.ts.
  * `metadataBase` is what lets those pages give relative image paths and still
  * emit the absolute URLs that crawlers require.
+ *
+ * A function rather than a constant, because the title is hers to change now and
+ * a `const` cannot await a database read.
  */
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl()),
-  title: SITE_NAME,
-  description: "Yoga pentru corp, minte și suflet",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    metadataBase: new URL(siteUrl()),
+    title: await getSiteName(),
+    description: "Yoga pentru corp, minte și suflet",
+  };
+}
 
 export default async function RootLayout({
   children,

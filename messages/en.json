@@ -11,6 +11,11 @@
       "open": "Open menu",
       "close": "Close menu",
       "label": "Menu"
+    },
+    "back_to_top": "Back to top",
+    "landmark": {
+      "primary": "Primary",
+      "sections": "Site sections"
     }
   },
   "common": {

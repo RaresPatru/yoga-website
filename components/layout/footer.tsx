@@ -1,10 +1,30 @@
 import { getTranslations } from "next-intl/server";
-import { SITE_NAME } from "@/lib/site-config";
-import { getSiteContent } from "@/lib/site-content";
+import { Link } from "@/i18n/navigation";
+import { getSiteContent, getSiteName } from "@/lib/site-content";
+import { NAV_LINKS } from "@/lib/nav-links";
 import { socialUrl, type SocialNetwork } from "@/lib/social";
 
 /**
- * The site footer, and the only place the social links come out.
+ * The site footer: the sections index, the social links, and the copyright.
+ *
+ * WHY THE SECTIONS ARE DOWN HERE AS WELL AS UP THERE
+ *
+ * Not for symmetry. On a phone the top bar renders none of them: the link row
+ * is `hidden lg:flex` and the drawer is `display: none` until it is opened, so
+ * an audit of a rendered phone page found twenty anchors of which eight had a
+ * box, and every single one of the eight was a blog post. Twelve links to the
+ * site's own sections existed in the markup and none of them was drawn.
+ *
+ * That is normal for a hamburger menu and mostly fine for people, who know what
+ * the three lines mean. It is less fine for Google, which indexes the rendered
+ * mobile page — so the version being evaluated had no internal navigation at
+ * all, and no route at all to the home page once the wordmark stopped being a
+ * link. Discovery was never at risk (the sitemap lists every page); the weight
+ * the site passes to its own sections was.
+ *
+ * So the footer carries them, at every width, in real markup. It is also the
+ * honest answer for a visitor at the bottom of a long article who wants to go
+ * somewhere else and would otherwise have to scroll all the way back up.
  *
  * Both icons used to be `href="#"` — hardcoded, going nowhere, on every page.
  * The admin panel has had a field for the Instagram address since the beginning
@@ -34,7 +54,10 @@ const ICONS: Record<SocialNetwork, { label: string; path: string }> = {
 
 export async function Footer({ locale }: { locale: string }) {
   const t = await getTranslations("footer");
+  const nav = await getTranslations("nav");
   const content = await getSiteContent(locale);
+  /* Same request-cached table the line above just read. */
+  const siteName = await getSiteName(locale);
 
   const links = (
     [
@@ -49,9 +72,64 @@ export async function Footer({ locale }: { locale: string }) {
 
   return (
     <footer className="mt-auto border-t border-sage/20 bg-white/40">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 py-8 md:flex-row">
+      {/*
+        SIX LINKS ARE A LINE, NOT A DIRECTORY
+
+        The reflex for "put the navigation in the footer" is the four-column
+        sitemap with a tracked-out heading over each column. That shape exists to
+        impose order on forty links across four unrelated groups. This site has
+        six, all of one kind, and columns would invent a hierarchy that is not
+        there — plus three headings naming categories that do not exist.
+
+        So it is one row that wraps, reading as a sentence of places to go.
+
+        A real <ul>: it hands assistive technology a count before the first item
+        and a single gesture to skip the whole group, which a run of loose <a>
+        elements does not. Safari drops list semantics from a `display: flex`
+        list with no markers — but only OUTSIDE a <nav>, and this is inside one,
+        so no `role="list"` patch is needed. That exemption is worth knowing
+        rather than guessing at, on the browser most of this audience uses.
+
+        The label is "Secțiunile site-ului", not "Navigare secțiuni": a <nav> is
+        already announced as a navigation, so naming it one reads back as
+        "navigation navigation".
+      */}
+      <nav
+        aria-label={nav("landmark.sections")}
+        className="mx-auto max-w-7xl px-6 pt-8"
+      >
+        <ul className="flex flex-wrap justify-center gap-x-6 gap-y-2 md:justify-start">
+          {NAV_LINKS.map(({ href, key }) => (
+            <li key={key}>
+              {/*
+                The underline that gains a colour, borrowed from the wordmark
+                rather than the bar's pill.
+
+                Six filled pills in a row would make the quietest part of the
+                page the busiest. An underline is what a footer link has looked
+                like since before any of this, and because the rule is already
+                there and only transparent, nothing moves when it arrives — the
+                same reason the wordmark uses it.
+
+                Darkening the text as well is the second cue. It is the pattern
+                the bar uses (wash plus darker text) with the wash swapped for
+                something appropriate to the density down here, and it means the
+                hover does not depend on colour alone.
+              */}
+              <Link
+                href={href}
+                className="rounded-sm text-sm text-charcoal-light underline decoration-transparent decoration-1 underline-offset-4 transition-colors hover:text-charcoal hover:decoration-sage-deep"
+              >
+                {nav(key)}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 border-t border-sage/15 px-6 py-6 mt-8 md:flex-row">
         <p className="text-sm text-charcoal-light">
-          &copy; {new Date().getFullYear()} {SITE_NAME}. {t("rights")}
+          &copy; {new Date().getFullYear()} {siteName}. {t("rights")}
         </p>
         {links.length > 0 && (
           <div className="flex items-center gap-4">

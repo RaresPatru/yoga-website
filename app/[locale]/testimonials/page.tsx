@@ -3,7 +3,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { getLocale, getTranslations } from "next-intl/server";
 import { formatDate } from "@/lib/utils";
 import { buildPageMetadata } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
+import { absoluteUrl } from "@/lib/site-config";
 import { Quote } from "lucide-react";
 import { Rating } from "@/components/ui/rating";
 import type { Metadata } from "next";
@@ -15,7 +15,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   return buildPageMetadata({
-    title: locale === "ro" ? `Testimoniale · ${SITE_NAME}` : `Testimonials · ${SITE_NAME}`,
+    title: locale === "ro" ? "Testimoniale" : "Testimonials",
     description:
       locale === "ro"
         ? "Ce spun participantele despre ateliere și retreaturi."

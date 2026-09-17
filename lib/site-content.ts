@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { createPublicClient } from "@/lib/supabase/public";
+import { SITE_NAME } from "@/lib/site-config";
 
 /**
  * Reads the editable page copy the instructor manages from the admin panel.
@@ -11,6 +12,7 @@ import { createPublicClient } from "@/lib/supabase/public";
  * naming them in one place is what buys most of it back.
  */
 export type SiteContentKey =
+  | "general.site_name"
   | "home.hero_title"
   | "home.hero_subtitle"
   | "home.hero_image"
@@ -66,6 +68,33 @@ export const getSiteContent = cache(async function getSiteContent(
   }
 
   return content;
+});
+
+/**
+ * The name of the business, as she has set it — or the placeholder if she has
+ * not yet.
+ *
+ * This is separated from the other keys because of where it is used. Hero copy
+ * is read by one page; the name is read by the header, the footer, every page
+ * title, the Open Graph card behind every shared link and the structured data a
+ * search engine files the business under. Giving it a named accessor means none
+ * of those has to know it lives in a key/value table, and means the fallback is
+ * decided once rather than at fifteen call sites.
+ *
+ * `locale` is taken but barely matters: the migration leaves `value_en` null, so
+ * English falls through to the Romanian value and one name serves both. It is a
+ * parameter anyway so that callers which already hold a locale reuse the request
+ * cache that `getSiteContent` keeps, instead of provoking a second fetch of the
+ * same table for the other language.
+ *
+ * Never throws and never returns empty. A page that cannot reach the database
+ * should still be called something.
+ */
+export const getSiteName = cache(async function getSiteName(
+  locale: string = "ro"
+): Promise<string> {
+  const content = await getSiteContent(locale);
+  return content["general.site_name"] ?? SITE_NAME;
 });
 
 export interface Faq {

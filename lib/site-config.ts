@@ -9,10 +9,17 @@
  */
 
 /**
- * PLACEHOLDER — the instructor has not chosen a business name yet.
+ * THE FALLBACK NAME, NOT THE NAME.
  *
- * Changing this one value renames the site everywhere: header, footer, page
- * titles, social share cards and structured data. See docs/CONTENT-NEEDED.md.
+ * The business name is hers to set, from "Conținut site" in the admin panel —
+ * it lives in `site_content` under `general.site_name` and is read through
+ * `getSiteName()` in lib/site-content.ts, which is what the header, the footer,
+ * every page title, every share card and the structured data all use.
+ *
+ * This constant is what those fall back to while the field is still empty, and
+ * if the database is ever unreachable. Do not import it to display the name:
+ * doing so would show "Yoga Flow" on a site she has already renamed, which is
+ * the exact half-wired failure the footer's Instagram link once had.
  */
 export const SITE_NAME = "Yoga Flow";
 

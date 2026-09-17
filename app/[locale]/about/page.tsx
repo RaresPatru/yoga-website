@@ -8,7 +8,7 @@ import { TextPlaceholder, ImagePlaceholder } from "@/components/ui/content-place
 import { getSiteContent } from "@/lib/site-content";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME, INSTRUCTOR_NAME } from "@/lib/site-config";
+import { absoluteUrl, INSTRUCTOR_NAME } from "@/lib/site-config";
 
 /**
  * About page.
@@ -40,7 +40,7 @@ export async function generateMetadata({
   const title = content["about.title"] ?? (locale === "ro" ? "Despre mine" : "About me");
 
   return buildPageMetadata({
-    title: `${title} · ${SITE_NAME}`,
+    title,
     description: toDescription(
       content["about.body"],
       locale === "ro"

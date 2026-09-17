@@ -11,6 +11,11 @@
       "open": "Deschide meniul",
       "close": "Închide meniul",
       "label": "Meniu"
+    },
+    "back_to_top": "Înapoi sus",
+    "landmark": {
+      "primary": "Principal",
+      "sections": "Secțiunile site-ului"
     }
   },
   "common": {

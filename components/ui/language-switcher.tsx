@@ -30,15 +30,30 @@ export function LanguageSwitcher() {
   };
 
   /*
-   * The button shows the language you are reading, not the one you would switch
-   * to.
+   * The button shows BOTH languages, with the one you are reading first.
    *
-   * It used to show the opposite — "EN" while the page was in Romanian — which
-   * is a genuine coin-flip for the reader: both readings are plausible and the
-   * only way to find out was to press it. Showing current state and describing
-   * the action in the accessible name splits those two jobs properly, which is
-   * also what makes the control readable to a screen reader: it announces
-   * "Switch to English", not the bare letters.
+   * It has been through three shapes. It showed the language you would switch
+   * *to* ("EN" while reading Romanian), which is a coin-flip for the reader:
+   * both readings are plausible and the only way to find out was to press it.
+   * Then it showed the language you were reading ("RO" while reading Romanian),
+   * which is unambiguous but silent about the alternative — a visitor who does
+   * not read Romanian had no way to know English existed without hovering for a
+   * tooltip, and hovering to discover something is not a thing most people do.
+   *
+   * "RO|EN" says both facts at once: which one you are in, and that there is
+   * another. The flag and the leading code always agree and always describe the
+   * page you are on; the trailing code is the offer.
+   *
+   * The pair swaps on toggle rather than holding position, so "flag plus the
+   * code beside it" is a single unit that always means *current*. The trade is
+   * that the alternative moves from one side to the other — acceptable with two
+   * languages, and the reason this is not built as a segmented control, where
+   * segments must hold still and each is separately clickable.
+   *
+   * One consequence worth knowing: this is a toggle, so pressing the code you
+   * are already in also switches. The active code is weighted to read as
+   * already-selected rather than as an option, which is what keeps that from
+   * being an invitation.
    */
   const action = locale === "ro" ? "Switch to English" : "Treci la română";
 
@@ -66,7 +81,22 @@ export function LanguageSwitcher() {
       className="flex items-center gap-1.5 rounded-full border border-sage/30 bg-white/50 px-3 py-1.5 text-sm text-charcoal-light transition-colors hover:bg-sage/35 hover:text-charcoal active:bg-sage/45"
     >
       <Flag code={FLAG[locale] ?? "RO"} />
-      <span aria-hidden="true">{locale.toUpperCase()}</span>
+      {/*
+        Hidden from assistive technology, all of it. The accessible name is the
+        `aria-label` above — "Switch to English" — which says what pressing this
+        does; "RO|EN" read aloud says nothing useful and would compete with it.
+
+        Both codes are full-strength colours rather than one being faded: on the
+        compacted bar this sits over photographs, where charcoal-light already
+        measures 5.52:1 against the worst backdrop on the site and anything
+        lighter drops under AA. The weight carries the distinction instead,
+        which costs no contrast at all.
+      */}
+      <span aria-hidden="true" className="flex items-center gap-1">
+        <span className="font-medium text-charcoal">{locale.toUpperCase()}</span>
+        <span className="text-charcoal-light">|</span>
+        <span className="text-charcoal-light">{next.toUpperCase()}</span>
+      </span>
     </button>
   );
 }

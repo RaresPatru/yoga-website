@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { LandscapeCard, OG_SIZE } from "@/lib/og-card";
-import { SITE_NAME } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 
 /**
  * The fallback share card, used by any page without an image of its own —
@@ -9,8 +9,11 @@ import { SITE_NAME } from "@/lib/site-config";
  * Having a default matters: a page with no og:image at all gets whatever the
  * platform decides to scrape, which is usually nothing.
  */
-export function GET(req: Request) {
+export async function GET(req: Request) {
   const locale = new URL(req.url).searchParams.get("locale") === "en" ? "en" : "ro";
+  /* The share card carries her business name, so it has to read the name she
+     set rather than the placeholder that used to be compiled in. */
+  const siteName = await getSiteName(locale);
 
   return new ImageResponse(
     (
@@ -25,7 +28,7 @@ export function GET(req: Request) {
             ? "Ateliere și retreaturi în grupuri mici"
             : "Workshops and retreats in small groups"
         }
-        siteName={SITE_NAME}
+        siteName={siteName}
       />
     ),
     {

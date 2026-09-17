@@ -169,6 +169,20 @@ grant select, insert, delete on table public.admins to service_role;
 
 update public.site_content set value_ro = v.ro, value_en = v.en
 from (values
+  -- The business name.
+  --
+  -- It is the one row here that is not invented: it is what she has actually
+  -- called the business, and it is here so that `db reset` stops wiping it. The
+  -- 20260915000000 migration creates this key empty — correctly, because an
+  -- empty value means "she has not chosen yet" and nobody should ship a name on
+  -- her behalf — and a reset therefore left the local site reading "Yoga Flow",
+  -- the placeholder, every single time.
+  --
+  -- THIS DOES NOT SET THE NAME ON THE LIVE SITE. seed.sql runs against the
+  -- local Docker database and nowhere else. Production takes it from the admin
+  -- panel, under "Conținut site", and the migration deliberately left it blank
+  -- there. `null` for English because a business name is not translated.
+  ('general.site_name', 'flow4ward', null),
   ('home.hero_title',
    'Îți ghidez călătoria către echilibru',
    'Guiding your journey towards balance'),

@@ -7,7 +7,8 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { ShareButton } from "@/components/ui/share-button";
 import { StoryImageButton } from "@/components/ui/story-image-button";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME, INSTRUCTOR_NAME } from "@/lib/site-config";
+import { absoluteUrl, INSTRUCTOR_NAME } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import { Link } from "@/i18n/navigation";
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
@@ -51,7 +52,7 @@ export async function generateMetadata({
   const content = locale === "ro" ? post.content_ro : post.content_en || post.content_ro;
 
   return buildPageMetadata({
-    title: `${title} · ${SITE_NAME}`,
+    title,
     // The excerpt is derived from the post body with the HTML stripped —
     // TipTap stores markup, and raw tags in a meta description look broken in
     // search results.
@@ -88,7 +89,7 @@ export default async function BlogPostPage({
     datePublished: post.created_at,
     description: toDescription(content, title),
     author: { "@type": "Person", name: INSTRUCTOR_NAME },
-    publisher: { "@type": "Organization", name: SITE_NAME },
+    publisher: { "@type": "Organization", name: await getSiteName(locale) },
     mainEntityOfPage: absoluteUrl(`/${locale}/blog/${post.slug}`),
   };
 

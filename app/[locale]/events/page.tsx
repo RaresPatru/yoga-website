@@ -7,7 +7,7 @@ import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
 import { formatPrice } from "@/lib/money";
 import { getLocale, getTranslations } from "next-intl/server";
 import { buildPageMetadata } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
+import { absoluteUrl } from "@/lib/site-config";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import Image from "next/image";
 import type { Metadata } from "next";
@@ -19,7 +19,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   return buildPageMetadata({
-    title: locale === "ro" ? `Evenimente · ${SITE_NAME}` : `Events · ${SITE_NAME}`,
+    title: locale === "ro" ? "Evenimente" : "Events",
     description:
       locale === "ro"
         ? "Ateliere, retreaturi și sesiuni de yoga în grupuri mici. Vezi datele următoare și rezervă-ți locul."
