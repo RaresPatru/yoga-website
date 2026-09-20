@@ -77,7 +77,7 @@ export function LanguageSwitcher() {
       onClick={toggleLocale}
       disabled={isPending}
       aria-label={action}
-      title={action}
+      data-tooltip={action}
       className="flex items-center gap-1.5 rounded-full border border-sage/30 bg-white/50 px-3 py-1.5 text-sm text-charcoal-light transition-colors hover:bg-sage/35 hover:text-charcoal active:bg-sage/45"
     >
       <Flag code={FLAG[locale] ?? "RO"} />

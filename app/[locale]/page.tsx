@@ -1,21 +1,22 @@
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
-import { ArrowRight, Calendar, Clock, MapPin, Quote } from "lucide-react";
+import { ArrowRight, Quote } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { buttonClasses } from "@/lib/button-styles";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Rating } from "@/components/ui/rating";
-import { SeatCount } from "@/components/events/seat-count";
+import { EventCarousel } from "@/components/events/event-carousel";
+import {
+  EventFeatureCard,
+  type FeaturedEvent,
+} from "@/components/events/event-feature-card";
 import { TextPlaceholder, ImagePlaceholder } from "@/components/ui/content-placeholder";
-// Disabled — see the note at <StickyCta /> near the bottom of this file.
-// import { StickyCta } from "@/components/sticky-cta";
 import { FaqList } from "@/components/faq-list";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getSiteContent, getFaqs } from "@/lib/site-content";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
+import { formatDate, eventStartInstant } from "@/lib/utils";
 import { eventAvailability } from "@/lib/event-availability";
-import { formatPrice } from "@/lib/money";
 
 /**
  * Home page — a server component.
@@ -62,11 +63,19 @@ import { formatPrice } from "@/lib/money";
  */
 export const revalidate = 300;
 
-/** How many events the page shows: one lead card and two beneath it. */
-const HOME_EVENT_COUNT = 3;
+/**
+ * How many events the carousel holds.
+ *
+ * One card is on screen at a time, so this is how far someone can swipe before
+ * they run out — not how much the page shows at once. Six is a judgement: enough
+ * that the section feels like there is a programme behind it, few enough that
+ * "see all events" still has a job, and short enough that nobody swipes into
+ * next spring by accident.
+ */
+const HOME_EVENT_COUNT = 6;
 
 /**
- * How many upcoming events to consider before picking those three.
+ * How many upcoming events to read before ranking them for the carousel.
  *
  * The ordering below depends on how full each event is, and how full an event
  * is cannot be expressed as a PostgREST `order` — it lives in the
@@ -79,20 +88,6 @@ const HOME_EVENT_COUNT = 3;
  * event on every home page render.
  */
 const EVENT_WINDOW = 24;
-
-interface EventCard {
-  id: string;
-  slug: string;
-  title_ro: string;
-  title_en: string | null;
-  date: string;
-  time: string;
-  location: string | null;
-  price: number;
-  currency: string | null;
-  max_participants: number | null;
-  image_url: string | null;
-}
 
 export default async function HomePage({
   params,
@@ -113,7 +108,9 @@ export default async function HomePage({
   const [{ data: upcoming }, { data: testimonials }, { data: posts }] = await Promise.all([
     supabase
       .from("events")
-      .select("id, slug, title_ro, title_en, date, time, location, price, currency, max_participants, image_url")
+      // One literal, never concatenated — see the note in CLAUDE.md about what
+      // that does to Supabase's type inference.
+      .select("id, slug, title_ro, title_en, description_ro, description_en, date, time, end_date, end_time, location, price, currency, image_url")
       .eq("published", true)
       .gte("date", today)
       .order("date", { ascending: true })
@@ -134,7 +131,7 @@ export default async function HomePage({
       .limit(3),
   ]);
 
-  const candidates = (upcoming ?? []) as EventCard[];
+  const candidates = (upcoming ?? []) as FeaturedEvent[];
 
   // Seat counts, which decide the ordering below as well as what each card
   // says. Why they come from a view and not from `registrations` is in
@@ -142,23 +139,37 @@ export default async function HomePage({
   const availability = await eventAvailability(supabase, candidates.map((e) => e.id));
 
   /**
-   * An uncapped event always has room. So does one whose seat count could not
-   * be read — showing an event that turns out to be full is a smaller failure
-   * than hiding one that is not.
+   * Whether this event can still be booked, which decides where it sorts.
+   *
+   * A capacity of NULL or 0 is sold out rather than uncapped — the reasoning is
+   * in components/events/seat-count.tsx and the rule is enforced in
+   * supabase/migrations/20260918000000_capacity_is_required.sql.
+   *
+   * An event with no availability row at all is a different thing: the count
+   * could not be read, so nothing is known. It keeps its place by date, because
+   * this only decides the order and showing an event that turns out to be full
+   * is a smaller failure than burying one that is not.
    */
-  const hasRoom = (event: EventCard) => {
+  const hasRoom = (event: FeaturedEvent) => {
     const info = availability.get(event.id);
-    if (!info?.capacity) return true;
+    if (!info) return true;
+    if (!info.capacity) return false;
     return info.taken < info.capacity;
   };
 
   /**
-   * WHICH THREE EVENTS THE PAGE LEADS WITH
+   * THE ORDER THE CAROUSEL CYCLES IN
    *
    * Soonest first, except that an event with no seats left gives up its place
    * to a later one somebody can still book. A full event is not hidden — it
    * drops behind every bookable date and only appears if there is room left on
    * the page.
+   *
+   * So the sequence, from the card that shows first, is: the nearest date with
+   * a seat free, then every other bookable date in the order they happen, then
+   * the full ones in the order they happen. Two sorted runs, one after the
+   * other, which is what the three comparisons below do in one pass — the first
+   * splits bookable from full, and the other two order within each run.
    *
    * The reasoning is that this block exists to sell a seat. The nearest date is
    * the most compelling thing to show, right up until the moment it cannot be
@@ -186,13 +197,34 @@ export default async function HomePage({
       (a, b) =>
         Number(hasRoom(b)) - Number(hasRoom(a)) ||
         a.date.localeCompare(b.date) ||
-        a.time.localeCompare(b.time)
+        // An event with no announced hour sorts to the top of its own day.
+        // `time` became nullable so she can publish a date before she knows the
+        // hour, and "" sorts before any real "HH:MM".
+        (a.time ?? "").localeCompare(b.time ?? "")
     )
     .slice(0, HOME_EVENT_COUNT);
 
-  const title = (e: EventCard) =>
-    locale === "ro" ? e.title_ro : e.title_en || e.title_ro;
-  const [nextEvent, ...laterEvents] = events;
+  /**
+   * The events section's own strings.
+   *
+   * Inline rather than in `messages/`, matching the other section headings on
+   * this page ("Cine sunt", "Vezi detalii și rezervă"). The carousel is a client
+   * component, so its labels have to be handed to it as plain props anyway —
+   * a `t` function cannot cross that boundary.
+   */
+  const ro = locale === "ro";
+  const eventStrings = {
+    // Singular while there is one event, because "upcoming events" over a lone
+    // card reads as a section that failed to load. Plural the moment the
+    // carousel can actually move.
+    heading: events.length > 1
+      ? ro ? "Evenimente viitoare" : "Upcoming events"
+      : ro ? "Următorul eveniment" : "Next event",
+    list: ro ? "Evenimente viitoare" : "Upcoming events",
+    previous: ro ? "Evenimentul anterior" : "Previous event",
+    next: ro ? "Evenimentul următor" : "Next event",
+    position: ro ? "Evenimentul {n} din {total}" : "Event {n} of {total}",
+  };
 
   return (
     <div className="flex flex-col">
@@ -246,16 +278,6 @@ export default async function HomePage({
               <Link href="/events" className={buttonClasses({ size: "lg" })}>{t("cta")}</Link>
               <Link href="/about" className={buttonClasses({ variant: "secondary", size: "lg" })}>{locale === "ro" ? "Despre mine" : "About me"}</Link>
             </div>
-            {/*
-              A zero-height marker directly below the hero buttons.
-              <StickyCta> watches it to decide when the floating "book now" bar
-              is worth showing: while this is still on screen the real call to
-              action is too, and a second copy of it floating over the page is
-              just clutter. Marking the end of the hero rather than measuring a
-              scroll distance means it stays correct when the headline wraps to
-              a different number of lines.
-            */}
-            <div id="hero-cta-end" aria-hidden="true" className="h-px w-full" />
           </div>
         </div>
       </section>
@@ -263,133 +285,62 @@ export default async function HomePage({
       {/* ---------------------------------------------------------------- */}
       {/* 2. The next event, as high up the page as it can go              */}
       {/* ---------------------------------------------------------------- */}
-      {nextEvent ? (
+      {events.length > 0 ? (
         <section id="events" className="py-16">
           <div className="mx-auto max-w-6xl px-4">
-            <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
-              {locale === "ro" ? "Următorul eveniment" : "Next event"}
+            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+              {eventStrings.heading}
             </h2>
 
-            <Link
-              href={`/events/${nextEvent.slug}`}
-              // `rounded-2xl` to match the GlassCard inside it: the focus
-              // outline follows the focused element's own radius, so a 24px
-              // link around a 16px card draws corners that miss the card.
-              className="group mt-6 block rounded-2xl"
+            {/*
+              One card at a time, the rest a swipe away.
+
+              This section used to show three events at once: a large card and
+              two small ones beneath it. The two that mattered least took two
+              thirds of the section, and the card that earns the booking had to
+              share the fold with them. Every event now gets the same full-width
+              card, and the order above decides which one is standing there when
+              the page opens.
+
+              The cards are rendered here, on the server, and handed to the
+              carousel as children — so all of them are in the HTML with their
+              photographs, prices and links whether or not the JavaScript
+              arrives, and whether or not the visitor is a crawler.
+            */}
+            <EventCarousel
+              count={events.length}
+              listLabel={eventStrings.list}
+              previousLabel={eventStrings.previous}
+              nextLabel={eventStrings.next}
+              positionLabel={eventStrings.position}
             >
-              <GlassCard
-                className="overflow-hidden"
-              >
-                <div className="grid gap-6 md:grid-cols-5">
-                  {nextEvent.image_url && (
-                    <div className="relative aspect-video overflow-hidden rounded-2xl md:col-span-2 md:aspect-square">
-                      <Image
-                        src={nextEvent.image_url}
-                        alt={title(nextEvent)}
-                        fill
-                        sizes="(max-width: 768px) 90vw, 40vw"
-                        className="object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
-                      />
-                    </div>
-                  )}
-                  <div className={nextEvent.image_url ? "md:col-span-3" : "md:col-span-5"}>
-                    <h3 className="font-serif text-2xl text-charcoal md:text-3xl">
-                      {title(nextEvent)}
-                    </h3>
-                    <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-charcoal-light">
-                      <span className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" aria-hidden="true" />
-                        {formatDate(nextEvent.date, locale)}
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" aria-hidden="true" />
-                        {formatTime(nextEvent.time)}
-                      </span>
-                      {nextEvent.location && (
-                        <span className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" aria-hidden="true" />
-                          {nextEvent.location}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-5 flex flex-wrap items-center gap-3">
-                      <span className="rounded-full bg-rose/15 px-4 py-1.5 font-medium text-rose-deep">
-                        {nextEvent.price === 0 ? t("free") : formatPrice(nextEvent.price, nextEvent.currency, locale)}
-                      </span>
-                      <SeatCount
-                        locale={locale}
-                        info={availability.get(nextEvent.id)}
-                      />
-                    </div>
-                    <p className="mt-6 inline-flex items-center gap-2 font-medium text-rose-deep">
-                      {locale === "ro" ? "Vezi detalii și rezervă" : "See details and book"}
-                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                    </p>
-                  </div>
-                </div>
-              </GlassCard>
-            </Link>
+              {events.map((event) => (
+                // Deliberately no classes on the <li>: its width and its snap
+                // position come from `.event-carousel-track > li`, beside the
+                // container that measures them. See app/globals.css.
+                <li key={event.id}>
+                  <EventFeatureCard
+                    event={event}
+                    locale={locale}
+                    availability={availability.get(event.id)}
+                  />
+                </li>
+              ))}
+            </EventCarousel>
 
-            {laterEvents.length > 0 && (
-              <div className="mt-8 grid gap-5 sm:grid-cols-2">
-                {laterEvents.map((event) => (
-                  <Link key={event.id} href={`/events/${event.slug}`} className="group block rounded-2xl">
-                    <GlassCard
-                      className="h-full"
-                    >
-                      {/* These two cards used to drop the photograph entirely,
-                          so an event with one looked different depending on
-                          which page you met it on. The lead card above and the
-                          events index both show it; so do these now. */}
-                      {event.image_url && (
-                        <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl bg-sage/10">
-                          <Image
-                            src={event.image_url}
-                            alt={title(event)}
-                            fill
-                            sizes="(max-width: 640px) 90vw, 45vw"
-                            className="object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
-                          />
-                        </div>
-                      )}
-                      <h3 className="font-serif text-lg text-charcoal">{title(event)}</h3>
-                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-charcoal-light">
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                          {formatDate(event.date, locale)}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                          {formatTime(event.time)}
-                        </span>
-                      </div>
-                      <div className="mt-4 flex items-center gap-3">
-                        <span className="rounded-full bg-rose/15 px-3 py-1 text-sm font-medium text-rose-deep">
-                          {event.price === 0 ? t("free") : formatPrice(event.price, event.currency, locale)}
-                        </span>
-                        <SeatCount
-                          locale={locale}
-                          info={availability.get(event.id)}
-                          compact
-                        />
-                      </div>
-                    </GlassCard>
-                  </Link>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-8">
+            <div className="mt-8 text-center">
               <Link href="/events" className={buttonClasses({ variant: "secondary" })}>
-                  {t("view_all_events")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-                </Link>
+                {t("view_all_events")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Link>
             </div>
           </div>
         </section>
       ) : (
         <section id="events" className="py-16">
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="font-serif text-3xl text-charcoal">{t("events_title")}</h2>
+          <div className="mx-auto max-w-6xl px-4 text-center">
+            <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
+              {t("events_title")}
+            </h2>
             <p className="mt-3 text-charcoal-light">
               {locale === "ro"
                 ? "Momentan nu sunt evenimente programate. Revino curând."
@@ -517,19 +468,6 @@ export default async function HomePage({
         </section>
       )}
 
-      {/*
-        The floating "book now" bar is switched off for now, at the owner's
-        request. Left commented rather than deleted because the component and
-        its tests are intact and this is the only line that turns it back on:
-
-            <StickyCta />
-
-        To re-enable: uncomment the line above, restore the import at the top of
-        this file, and change `test.describe.skip` back to `test.describe` in
-        tests/public-home.spec.ts. The `#hero-cta-end` marker below the hero
-        buttons is what the bar watches to decide when to appear; it costs
-        nothing and stays put.
-      */}
     </div>
   );
 }

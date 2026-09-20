@@ -5,7 +5,6 @@ import { formatDate } from "@/lib/utils";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ShareButton } from "@/components/ui/share-button";
-import { StoryImageButton } from "@/components/ui/story-image-button";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
 import { absoluteUrl, INSTRUCTOR_NAME } from "@/lib/site-config";
 import { getSiteName } from "@/lib/site-content";
@@ -123,13 +122,6 @@ export default async function BlogPostPage({
           />
         )}
 
-        <div className="mt-10 border-t border-sage/20 pt-6">
-          <StoryImageButton
-            href={`/api/og/post/${post.slug}/story?locale=${locale}`}
-            fileName={`${post.slug}-story.png`}
-            locale={locale}
-          />
-        </div>
       </GlassCard>
     </div>
   );

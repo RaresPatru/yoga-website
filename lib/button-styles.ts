@@ -57,7 +57,28 @@ export function buttonClasses({
         variant === "primary",
       "border border-sage/40 bg-white/70 text-charcoal hover:bg-white hover:border-sage-deep/40 backdrop-blur-sm":
         variant === "secondary",
-      "text-charcoal-light hover:text-charcoal hover:bg-white/40": variant === "ghost",
+      /*
+       * THE HOVER USED TO BE `bg-white/40`, WHICH IS NOT A COLOUR ON THIS SITE.
+       *
+       * White at 40% over the cream page (#FFF8F0) resolves to (255, 251, 246)
+       * against a resting (255, 248, 240): three points of green, six of blue,
+       * none of red. That is below what an eye picks up, so the button declared
+       * a hover state and produced no visible change — and inside a GlassCard,
+       * which is already white at 60%, it was fainter still. A hover that does
+       * nothing is a bug rather than a restrained choice.
+       *
+       * Sage at 10% lands on (245, 241, 230): ten points of red and blue, seven
+       * of green. Still the quietest button on the site, and now actually there.
+       * It is also the tint the carousel arrows and the calendar menu already
+       * use, so "faint sage wash" means one thing everywhere.
+       *
+       * `active:` as well as `hover:`, because Tailwind wraps `hover:` in
+       * `@media (hover: hover)` — on the phone this audience arrives with, the
+       * hover rule does not exist at all and a tap produced no feedback of any
+       * kind. `active:` is not gated that way.
+       */
+      "text-charcoal-light hover:text-charcoal hover:bg-sage/10 active:bg-sage/15":
+        variant === "ghost",
     },
     {
       // Minimum 44px tall from `md` up: the tap-target size assistive guidance

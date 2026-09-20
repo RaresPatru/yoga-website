@@ -352,24 +352,46 @@ test.describe("seats and ratings say the same thing wherever they appear", () =>
    * extracting it.
    */
 
-  test("a full event says so, and an uncapped one says nothing", async ({ page }) => {
-    const full = await seedEvent({ max_participants: 1 });
-    const uncapped = await seedEvent({ max_participants: null });
+  /**
+   * THIS TEST USED TO ASSERT THE OPPOSITE, AND THAT IS THE POINT OF IT.
+   *
+   * It read "a full event says so, and an uncapped one says nothing", because
+   * a NULL capacity meant unlimited and a card with no limit had nothing useful
+   * to print. That was the bug: an event saved without a number looked exactly
+   * like one with seats left, and took bookings from an unbounded number of
+   * people. NULL and 0 now both mean sold out —
+   * supabase/migrations/20260918000000_capacity_is_required.sql — so all three
+   * ways of being full have to read identically on a card.
+   */
+  test("every way of being full reads the same on a card", async ({ page }) => {
+    const filledUp = await seedEvent({ max_participants: 1 });
+    const blank = await seedEvent({ max_participants: null });
+    const zero = await seedEvent({ max_participants: 0 });
+    const open = await seedEvent({ max_participants: 5 });
     try {
-      await seedRegistrationFor(full.id);
+      await seedRegistrationFor(filledUp.id);
       await page.goto("/ro/events");
 
-      const fullCard = page.locator(`a[href$="/events/${full.slug}"]`);
-      await expect(fullCard).toContainText("Complet");
+      for (const [event, why] of [
+        [filledUp, "filled up through the site"],
+        [blank, "no capacity ever set"],
+        [zero, "deliberately marked full"],
+      ] as const) {
+        await expect(
+          page.locator(`a[href$="/events/${event.slug}"]`),
+          why
+        ).toContainText("Locuri epuizate");
+      }
 
-      // Not "unlimited seats left", which is not information — it is noise on
-      // every card that has no limit.
-      const uncappedCard = page.locator(`a[href$="/events/${uncapped.slug}"]`);
-      await expect(uncappedCard).toBeVisible();
-      await expect(uncappedCard).not.toContainText(/locuri|Complet/);
+      // And one that is not full, so this cannot pass by marking everything
+      // sold out — which is precisely how it would fail unnoticed.
+      const openCard = page.locator(`a[href$="/events/${open.slug}"]`);
+      await expect(openCard).toContainText("5 locuri libere");
+      await expect(openCard).not.toContainText("epuizate");
     } finally {
-      await deleteEventBySlug(full.slug);
-      await deleteEventBySlug(uncapped.slug);
+      for (const event of [filledUp, blank, zero, open]) {
+        await deleteEventBySlug(event.slug);
+      }
     }
   });
 
@@ -385,6 +407,71 @@ test.describe("seats and ratings say the same thing wherever they appear", () =>
       await page.goto("/ro/events");
       await expect(page.locator(`a[href$="/events/${event.slug}"]`)).toContainText(
         "4 locuri libere"
+      );
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  /**
+   * ROMANIAN DOES NOT PLURALISE THE WAY ENGLISH DOES
+   *
+   * English splits at one and stops. Romanian splits twice — the noun takes
+   * `de` once the last two digits leave the 1..19 window — so a component that
+   * interpolates a number into a Romanian sentence has three cases to get
+   * right, and the count on these cards used to have one: "1 locuri libere",
+   * "20 locuri libere".
+   *
+   * The boundaries are what is worth pinning: 1, the last short form (19), and
+   * the first long one (20). Capacity is hers to set from the admin panel, so
+   * twenty is an ordinary number here, not an edge case.
+   */
+  test("the seat count is grammatical in Romanian at every boundary", async ({ page }) => {
+    const cases = [
+      { capacity: 1, says: "1 loc liber" },
+      { capacity: 19, says: "19 locuri libere" },
+      { capacity: 20, says: "20 de locuri libere" },
+    ];
+    const events = await Promise.all(
+      cases.map((c) => seedEvent({ max_participants: c.capacity }))
+    );
+    try {
+      await page.goto("/ro/events");
+      for (const [i, expected] of cases.entries()) {
+        const card = page.locator(`a[href$="/events/${events[i].slug}"]`);
+        await expect(card, `capacity ${expected.capacity}`).toContainText(expected.says);
+      }
+
+      // And the same three in English, which only has the one split.
+      await page.goto("/en/events");
+      for (const [i, expected] of cases.entries()) {
+        const card = page.locator(`a[href$="/events/${events[i].slug}"]`);
+        await expect(card).toContainText(
+          expected.capacity === 1 ? "1 spot left" : `${expected.capacity} spots left`
+        );
+      }
+    } finally {
+      await Promise.all(events.map((e) => deleteEventBySlug(e.slug)));
+    }
+  });
+
+  /**
+   * The last seat is the one worth getting right, because it is the one that
+   * used to read "1 locuri libere" — and it is exactly when someone is deciding
+   * whether to book now or later.
+   */
+  test("one seat left reads as one seat, on the card and on the event page", async ({
+    page,
+  }) => {
+    const event = await seedEvent({ max_participants: 2 });
+    try {
+      await seedRegistrationFor(event.id);
+      await page.goto("/ro/events");
+      await expect(page.locator(`a[href$="/events/${event.slug}"]`)).toContainText(
+        "1 loc liber"
+      );
+      await expect(page.locator(`a[href$="/events/${event.slug}"]`)).not.toContainText(
+        "1 locuri"
       );
     } finally {
       await deleteEventBySlug(event.slug);

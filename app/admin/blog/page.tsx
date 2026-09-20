@@ -57,7 +57,8 @@ function ToolbarButton({
   return (
     <button
       onClick={onClick}
-      title={title}
+      aria-label={title}
+      data-tooltip={title}
       className={`flex items-center justify-center rounded-lg p-2 text-sm transition-all duration-150 ${
         active
           ? "bg-rose/15 text-rose-deep shadow-sm"
@@ -307,7 +308,7 @@ function BlogEditor({
           <button
             onClick={handleTranslateTitle}
             disabled={translatingTitle || !titleRo.trim()}
-            title={t("admin.translate_to_en")}
+            data-tooltip={t("admin.translate_to_en")}
             className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
             {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -325,7 +326,7 @@ function BlogEditor({
           <button
             onClick={handleTranslateContent}
             disabled={translatingContent || !editor || !editor.getText().trim()}
-            title={t("admin.translate_to_en")}
+            data-tooltip={t("admin.translate_to_en")}
             className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
           >
             {translatingContent ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
@@ -489,9 +490,10 @@ function BlogEditor({
                           </p>
                           <button
                             onClick={() => setShowSpellTooltip(false)}
+                            aria-label={t("admin.close")}
                             className="shrink-0 rounded-full p-0.5 hover:bg-sage/10"
                           >
-                            <X className="h-3 w-3 text-charcoal-light" />
+                            <X className="h-3 w-3 text-charcoal-light" aria-hidden="true" />
                           </button>
                         </div>
                       </div>
@@ -660,12 +662,24 @@ export default function AdminBlogPage() {
                   {new Date(post.created_at).toLocaleDateString("ro-RO")}
                 </p>
               </div>
+              {/* Named for the post they act on — icon-only buttons repeated
+                  down a list are otherwise announced as "Edit, Edit, Edit". */}
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setEditing(post)}>
-                  <Edit2 className="h-4 w-4" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${t("admin.edit_post")}: ${post.title_ro}`}
+                  onClick={() => setEditing(post)}
+                >
+                  <Edit2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleDelete(post.id)}>
-                  <Trash2 className="h-4 w-4 text-error" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${t("admin.delete")}: ${post.title_ro}`}
+                  onClick={() => handleDelete(post.id)}
+                >
+                  <Trash2 className="h-4 w-4 text-error" aria-hidden="true" />
                 </Button>
               </div>
             </GlassCard>

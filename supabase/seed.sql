@@ -223,16 +223,30 @@ update public.site_content set value_ro = 'facebook.com/yoga.cu.maria'
 --   +12d  atelier-yoga-si-jurnal    4 of 12           <- becomes the lead card
 --   +19d  yoga-in-parc              6 of 20
 --   +38d  retreat-de-weekend        2 of 8
---   +54d  seara-de-yin-si-sunet     uncapped
+--   +54d  seara-de-yin-si-sunet     FULL (capacity 0)
 --
--- so the three on the home page start at +12d and the soonest event is visibly
--- absent — which is the rule working. Cancel a registration on the +5d event
--- (delete one row from public.registrations) and it should reappear at the top.
+-- so the carousel opens on +12d and the soonest event is not the one standing
+-- there — which is the rule working. Cancel a registration on the +5d event
+-- (delete one row from public.registrations) and it should come back to the
+-- front.
 --
--- `atelier-yoga-si-jurnal` deliberately has NO image. It is the lead card, which
--- is the only place on the home page that renders an event photograph, so this
--- is what shows how that card copes without one. Give it '/mock/event-1.webp'
--- to see the other way round.
+-- The two sold-out events are sold out for different reasons, and both are
+-- worth having here. `respiratie-de-dimineata` filled up through the site: ten
+-- registrations against ten seats. `seara-de-yin-si-sunet` has a capacity of
+-- **0**, which is her closing bookings outright — the date stays on the site
+-- collecting a waiting list, and raising the number later releases that queue
+-- in order. It used to be NULL, meaning unlimited, and was the one card that
+-- quietly took bookings forever; see
+-- supabase/migrations/20260918000000_capacity_is_required.sql.
+--
+-- Put somebody on `seara-de-yin-si-sunet`'s waiting list, then edit it in the
+-- admin panel and set a capacity, to watch that release happen.
+--
+-- `atelier-yoga-si-jurnal` deliberately has NO image. Every carousel slide on
+-- the home page renders a photograph when there is one, so this is the slide
+-- that shows what the layout does when there is not — the text column spans the
+-- full card instead of three fifths of it. Give it '/mock/event-1.webp' to see
+-- the other way round.
 
 insert into public.events (slug, title_ro, title_en, description_ro, description_en, date, time, location, price, currency, max_participants, image_url, published)
 values
@@ -274,9 +288,81 @@ values
     'An evening of yin and sound',
     'Poziții ținute lung, pături, și boluri tibetane în ultima jumătate de oră. Se pleacă foarte încet.',
     'Long-held poses, blankets, and singing bowls for the last half hour. People leave very slowly.',
-    current_date + 54, '19:00', 'Cluj-Napoca', 60, 'RON', null, '/mock/event-4.webp', true
+    current_date + 54, '19:00', 'Cluj-Napoca', 60, 'RON', 0, '/mock/event-4.webp', true
+  ),
+  (
+    -- The date is known and the hour is not, which is the state `time` was made
+    -- nullable for: she has the venue for that weekend and has not decided when
+    -- Friday starts. NULL rather than a placeholder midnight, so the page can
+    -- tell the difference and say nothing instead of inventing an hour.
+    'retreat-de-primavara',
+    'Retreat de primăvară',
+    'Spring retreat',
+    'Trei zile la marginea pădurii, cu practică dimineața și seara. Orele se anunță în curând.',
+    'Three days at the edge of the forest, with morning and evening practice. Times to be announced.',
+    current_date + 180, null, 'Valea Drăganului', 480, 'RON', 12, '/mock/spare.webp', true
   )
 on conflict (slug) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Pins, for two of the five
+-- ---------------------------------------------------------------------------
+-- `map_link` takes either of the two shapes lib/map-link.ts understands, and
+-- one of each is here so both paths are visible locally rather than only in a
+-- test:
+--
+--   yoga-in-parc        coordinates, for a place with no address to search —
+--                       a spot on the grass in a park is exactly the case the
+--                       field was added for
+--   retreat-de-weekend  a pasted Google Maps URL, which is what she will
+--                       actually produce nine times out of ten
+--
+-- The other three have none, which is the ordinary case: the address renders
+-- as plain text and nothing links anywhere. Set one to something unparseable
+-- ('not a link') to watch it be ignored rather than rendered.
+--
+-- Written as an update rather than as two more columns in the insert above, so
+-- this stays legible as "some events have a pin" instead of a column of NULLs.
+update public.events
+   set map_link = '46.7712, 23.5949'
+ where slug = 'yoga-in-parc';
+
+update public.events
+   set map_link = 'https://www.google.com/maps/search/?api=1&query=Bra%C8%99ov'
+ where slug = 'retreat-de-weekend';
+
+-- ---------------------------------------------------------------------------
+-- When each one ends
+-- ---------------------------------------------------------------------------
+-- Every shape the date-and-time line can take, one per event, because each is
+-- rendered by a different branch and the only way to see a branch is to have a
+-- row that reaches it.
+--
+--   respiratie-de-dimineata   one day, both times   "07:30 - 08:10"
+--   yoga-in-parc              one day, both times   "18:30 - 19:45"
+--   seara-de-yin-si-sunet     one day, both times   "19:00 - 20:30"
+--   atelier-yoga-si-jurnal    one day, no end       "10:00" alone
+--   retreat-de-weekend        two days, both hours  the range, plus "09:00 - 16:00"
+--   retreat-de-primavara      several days, no hour the range, and no clock
+--
+-- The last two are the ones worth opening. `retreat-de-weekend` shows both
+-- halves at once: which days it occupies, and the hours kept on each of them.
+-- They are separate facts and neither hides the other.
+--
+-- `retreat-de-primavara` has no start time at all -- she has booked the venue
+-- and not yet decided when Friday begins -- so the page shows a date range with
+-- no clock beside it rather than inventing an hour, and the calendar entry is
+-- an all-day one. Fill its time in from the admin panel and the clock appears.
+update public.events set end_time = '08:10' where slug = 'respiratie-de-dimineata';
+update public.events set end_time = '19:45' where slug = 'yoga-in-parc';
+update public.events set end_time = '20:30' where slug = 'seara-de-yin-si-sunet';
+update public.events set end_date = current_date + 39, end_time = '16:00'
+  where slug = 'retreat-de-weekend';
+-- Three days, and no hour on any of them: end_date without end_time, on the one
+-- row whose `time` is NULL. This is the combination that renders a date range
+-- with no clock at all.
+update public.events set end_date = current_date + 182
+  where slug = 'retreat-de-primavara';
 
 -- Fill the soonest event to capacity so the ordering rule has something to do.
 --
@@ -312,6 +398,36 @@ cross join lateral generate_series(1, case e.slug
          else 0 end) as n
 where e.slug in ('atelier-yoga-si-jurnal', 'yoga-in-parc', 'retreat-de-weekend')
   and not exists (select 1 from public.registrations r where r.event_id = e.id);
+
+
+-- ---------------------------------------------------------------------------
+-- A waiting list, on the event that is closed
+-- ---------------------------------------------------------------------------
+-- `seara-de-yin-si-sunet` has a capacity of 0, which is her closing bookings:
+-- the date stays up, nobody can book, and the page offers the waiting list
+-- instead. Three people have taken it up.
+--
+-- Two things need this to exist. In the admin panel the event card grows a
+-- third button — the waiting-list one, which only appears when somebody is on
+-- it — so this is the row that shows that layout, and the row that shows the
+-- buttons are told apart by name rather than by position.
+--
+-- And it is the starting state for the release: open the event, put a number in
+-- **Participanți maxim**, save, and that many people are emailed a claim link
+-- in the order they joined. Set 2 and two of these three are written to; the
+-- third keeps its place. See lib/notify-waiting-list.ts.
+insert into public.waiting_list (event_id, full_name, email, phone, created_at)
+select e.id, v.name, v.email, v.phone, now() - v.joined
+from public.events e
+cross join (values
+  ('Ioana Marinescu', 'ioana.marinescu@example.test', '+40721334455', interval '6 days'),
+  ('Andrei Pop',      'andrei.pop@example.test',      '+40722445566', interval '4 days'),
+  ('Elena Dobre',     'elena.dobre@example.test',     '+40723556677', interval '2 days')
+) as v(name, email, phone, joined)
+where e.slug = 'seara-de-yin-si-sunet'
+  -- Same guard as the registrations above: this file is runnable by hand and
+  -- a waiting-list entry has no natural unique key to conflict on.
+  and not exists (select 1 from public.waiting_list w where w.event_id = e.id);
 
 
 -- ---------------------------------------------------------------------------

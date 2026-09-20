@@ -317,7 +317,7 @@ export async function tryInsertEvent(
 export async function eventsBySlug(slug: string) {
   const { data } = await (await adminScoped())
     .from("events")
-    .select("id, slug, price, currency, max_participants")
+    .select("id, slug, price, currency, max_participants, time, end_date, end_time")
     .eq("slug", slug);
   return data ?? [];
 }
@@ -330,6 +330,21 @@ export async function deleteWhatsappLink(label: string) {
 export async function deleteEventBySlug(slug: string) {
   const { error } = await (await adminScoped()).from("events").delete().eq("slug", slug);
   if (error) throw new Error(`deleteEventBySlug failed: ${error.message}`);
+}
+
+/**
+ * Change an event's capacity, the way she would in the admin panel.
+ *
+ * Capacity is the one field whose value decides whether anybody may book at
+ * all — NULL and 0 mean sold out — so moving it is how a test gets an event
+ * from closed to open without driving the form.
+ */
+export async function updateEventCapacity(eventId: string, capacity: number | null) {
+  const { error } = await (await adminScoped())
+    .from("events")
+    .update({ max_participants: capacity })
+    .eq("id", eventId);
+  if (error) throw new Error(`updateEventCapacity failed: ${error.message}`);
 }
 
 export interface SeededPost {

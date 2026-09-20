@@ -1,7 +1,42 @@
 import type { NextConfig } from "next";
+import { networkInterfaces } from "node:os";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin();
+
+/**
+ * Whether this process is `next dev`.
+ *
+ * CLAUDE.md warns against gating behaviour on NODE_ENV, because it reads
+ * `production` in a production *build* even when that build points at the local
+ * database — so it answers "is this a production build", not "is this the live
+ * site". That warning does not bite here: both things below are read only by
+ * the dev server, which always sets NODE_ENV to `development`. The question
+ * being asked really is "is this a build or the dev server".
+ */
+const isDev = process.env.NODE_ENV !== "production";
+
+/**
+ * Every address this machine can be reached on, for `allowedDevOrigins` below.
+ *
+ * Computed rather than written down because it changes: the router hands out a
+ * different one whenever the lease expires or the laptop joins another network,
+ * and a hardcoded `192.168.1.138` would work until the day it silently did not.
+ *
+ * Only ever called in development — see the note on `allowedDevOrigins`.
+ */
+function localAddresses(): string[] {
+  const external = Object.values(networkInterfaces())
+    .flat()
+    .filter((net) => net && net.family === "IPv4" && !net.internal)
+    .map((net) => net!.address);
+
+  // The loopback is filtered out as `internal` and has to be put back by hand.
+  // `127.0.0.1` is the same machine by a different name, so trusting it is
+  // exactly as safe as trusting `localhost`, which Next already does — and it
+  // is what half the tooling here types.
+  return ["127.0.0.1", ...external];
+}
 
 /**
  * Content Security Policy.
@@ -31,7 +66,6 @@ const withNextIntl = createNextIntlPlugin();
  * another domain, which is what clickjacking relies on.
  */
 function contentSecurityPolicy(): string {
-  const isDev = process.env.NODE_ENV !== "production";
 
   // The browser talks to Supabase directly (public pages read events, the admin
   // panel signs in), so its origin has to be on the allowlist.
@@ -58,7 +92,21 @@ function contentSecurityPolicy(): string {
   const supabase = [supabaseOrigin, supabaseSocket].filter(Boolean).join(" ");
 
   // Next.js's dev server uses a websocket for hot reload.
-  const devSocket = isDev ? " ws://localhost:* http://localhost:*" : "";
+  //
+  // Every address this machine answers on, not just `localhost`, for the same
+  // reason `allowedDevOrigins` lists them: a phone on the Wi-Fi reaches the dev
+  // server as `192.168.x.x`, and a CSP that only names `localhost` would block
+  // the socket a second time after Next had been persuaded to accept it.
+  // `'self'` arguably covers the same-origin case already; naming them costs
+  // nothing and does not depend on how each browser reads that.
+  const devSocket = isDev
+    ? [
+        "",
+        ...localAddresses().flatMap((address) => [`ws://${address}:*`, `http://${address}:*`]),
+        "ws://localhost:*",
+        "http://localhost:*",
+      ].join(" ")
+    : "";
 
   return [
     "default-src 'self'",
@@ -68,6 +116,14 @@ function contentSecurityPolicy(): string {
     `media-src 'self' blob: ${supabaseOrigin}`,
     "font-src 'self' data:",
     `connect-src 'self' ${supabase} https://*.posthog.com https://challenges.cloudflare.com${devSocket}`,
+    // Google is deliberately absent. An embedded map was tried here and taken
+    // out again: it cost 1.23MB across 39 requests from Google on a page that
+    // otherwise contacts them not at all, handed over every visitor's IP address
+    // before anyone asked to see a map, and leaned on an undocumented
+    // `output=embed` endpoint outside the terms of the Maps Embed API. The
+    // address on the event page is a plain link to a map instead, which sends
+    // nothing until somebody presses it. Do not re-add this without re-reading
+    // that list.
     "frame-src https://challenges.cloudflare.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.instagram.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
@@ -95,6 +151,46 @@ function contentSecurityPolicy(): string {
 }
 
 const nextConfig: NextConfig = {
+  /**
+   * WHO MAY TALK TO THE DEV SERVER.
+   *
+   * Development only — Next ignores this in a production build, and none of it
+   * reaches a deployed site.
+   *
+   * THE BUG THIS FIXES, WHICH DOES NOT LOOK LIKE A NETWORK PROBLEM AT ALL
+   *
+   * `next dev` trusts exactly one origin out of the box: `localhost`. Open the
+   * same dev server by any other name — the phone on the Wi-Fi reaching
+   * `http://192.168.1.138:3000`, or even `http://127.0.0.1:3000` on the machine
+   * itself — and Next refuses the hot-reload websocket because the `Origin`
+   * header does not match. Measured, by replaying the handshake by hand:
+   *
+   *   Origin: http://localhost:3000     -> 101 Switching Protocols
+   *   Origin: http://127.0.0.1:3000     -> connection closed, no response
+   *   Origin: http://192.168.1.138:3000 -> connection closed, no response
+   *
+   * That is a guard against a hostile page on another origin driving your dev
+   * server, and it is right to have. What makes it expensive is the symptom:
+   * the dev client never finishes bootstrapping without that socket, so React
+   * never hydrates, so **nothing on the page is interactive**. The HTML arrives
+   * and looks perfect. The menu does not open, the carousel does not move, no
+   * form submits, and the console says only that a websocket failed — which
+   * reads like a hot-reload nuisance rather than the cause.
+   *
+   * It is worst exactly where it is hardest to see: testing on a real phone,
+   * which can only reach this machine by its LAN address, and which has no
+   * console to look at.
+   *
+   * Listing this machine's own addresses is the supported fix. It widens
+   * nothing in production and nothing beyond the interfaces this computer
+   * already answers on.
+   */
+  // Gated, so the helper's "only ever called in development" is true of the
+  // code and not just of the comment. Next ignores this key in a build, but
+  // calling it there still enumerated the Vercel build container's network
+  // interfaces and baked their addresses into the config object.
+  allowedDevOrigins: isDev ? localAddresses() : [],
+
   images: {
     remotePatterns: [
       {

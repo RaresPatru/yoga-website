@@ -32,9 +32,18 @@ test.describe("blog", () => {
       await expect(page).toHaveURL(/\/ro\/blog$/);
       await page.goto(`/ro/blog/${post.slug}`);
 
-      const share = page.getByRole("button", { name: "Distribuie" });
-      await share.click();
-      await expect(share).toContainText("Link copiat!");
+      /*
+       * Found by what it says after the click, not by what it said before.
+       *
+       * The button used to carry `aria-label="Distribuie"`, which pinned its
+       * accessible name while the visible text changed to "Link copiat!" — so
+       * one locator matched throughout. That was also a WCAG 2.5.3 failure (the
+       * accessible name has to contain the visible label) and it meant a screen
+       * reader never heard the confirmation at all. The label is gone, the name
+       * follows the text, and the confirmation is now its own locator.
+       */
+      await page.getByRole("button", { name: "Distribuie" }).click();
+      await expect(page.getByRole("button", { name: "Link copiat!" })).toBeVisible();
     } finally {
       await deletePostBySlug(post.slug);
     }

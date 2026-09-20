@@ -234,6 +234,12 @@ update public.events set max_participants = null
  where max_participants is not null and max_participants <= 0;
 ```
 
+> The lesson stands; do not copy that statement. `events_capacity_positive` was
+> replaced by `events_capacity_non_negative` in
+> `20260918000000_capacity_is_required.sql`, because zero became a legal
+> capacity meaning "sold out" — so this repair would now erase a deliberate
+> value. A repair has to be written against the rule you are introducing.
+
 ---
 
 ## Working with production

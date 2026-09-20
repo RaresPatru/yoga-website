@@ -1,123 +1,13 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendConfirmationEmail, fillEmailTemplate } from "@/lib/send-confirmation-email";
-import { getResend } from "@/lib/resend";
-import { absoluteUrl } from "@/lib/site-config";
-import { EVENT_TIME_ZONE } from "@/lib/utils";
+import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
+// Was defined in this file, when a refund or an expired checkout was the only
+// way a seat came back. The admin panel can free seats too now, so the rule
+// about when it is safe to email somebody lives with the function rather than
+// in whichever caller remembers it.
+import { notifyWaitingList } from "@/lib/notify-waiting-list";
 import type Stripe from "stripe";
-
-/** How long someone has to use a claim link before it stops working. */
-const CLAIM_WINDOW_HOURS = 24;
-
-/**
- * Offers a freed seat to the people at the front of an event's waiting list.
- *
- * Called when a seat genuinely opens up: a Stripe checkout expired, or a
- * customer was refunded. Notifies as many people as there are seats, oldest
- * entry first, and gives each a link valid for CLAIM_WINDOW_HOURS.
- */
-async function notifyWaitingList(eventId: string, spotsOpened: number = 1) {
-  const supabase = createAdminClient();
-
-  const { data: nextBatch } = await supabase
-    .from("waiting_list")
-    .select("id, full_name, email")
-    .eq("event_id", eventId)
-    .is("claimed_at", null)
-    // Nobody is offered the same seat twice: an entry that already holds a live
-    // claim link is skipped until that link lapses.
-    .or(`claim_expires_at.is.null,claim_expires_at.lt.${new Date().toISOString()}`)
-    .order("created_at", { ascending: true })
-    .limit(spotsOpened);
-
-  if (!nextBatch || nextBatch.length === 0) return;
-
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + CLAIM_WINDOW_HOURS);
-
-  const { data: event } = await supabase
-    .from("events")
-    .select("slug, title_ro")
-    .eq("id", eventId)
-    .single();
-
-  // `.maybeSingle()` rather than `.single()`: the first time an event's waiting
-  // list is notified there is no previous batch, and `.single()` treats "no
-  // rows" as an error rather than as an empty result.
-  const { data: lastNotification } = await supabase
-    .from("waiting_list_notifications")
-    .select("batch_number")
-    .eq("event_id", eventId)
-    .order("batch_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const batchNumber = (lastNotification?.batch_number || 0) + 1;
-
-  await supabase.from("waiting_list_notifications").insert({
-    event_id: eventId,
-    batch_number: batchNumber,
-    expires_at: expiresAt.toISOString(),
-    spots_opened: spotsOpened,
-  });
-
-  // Stamp the window onto the entries themselves. This is what makes the claim
-  // link checkable — without it the route has no way to know whether a token
-  // was ever issued, or when it lapses.
-  await supabase
-    .from("waiting_list")
-    .update({
-      notified_at: new Date().toISOString(),
-      claim_expires_at: expiresAt.toISOString(),
-    })
-    .in("id", nextBatch.map((entry) => entry.id));
-
-  const { data: template } = await supabase
-    .from("email_templates")
-    .select("subject_ro, body_ro")
-    .eq("type", "spot_available")
-    .maybeSingle();
-
-  if (!template) {
-    console.error("No 'spot_available' email template; claim links were not sent.");
-    return;
-  }
-
-  const eventSlug = event?.slug || eventId;
-
-  // Sent in parallel rather than one after another. allSettled means one
-  // bounced address cannot stop the rest of the batch going out.
-  await Promise.allSettled(
-    nextBatch.map((entry) => {
-      const vars: Record<string, string> = {
-        user_name: entry.full_name,
-        event_name: event?.title_ro || "",
-        // absoluteUrl(), not the raw environment variable. NEXT_PUBLIC_SITE_URL
-        // is frequently unset, and reading it directly is what produced claim
-        // links beginning "undefined/ro/events/..."; the helper falls back to
-        // Vercel's own production URL.
-        claim_url: absoluteUrl(`/ro/events/${eventSlug}?claim=${entry.id}`),
-        // Formatted in Romania's timezone, not the server's. Vercel runs in
-        // UTC, so this told people their link expired two or three hours before
-        // the claim route actually stops accepting it — they would give up on a
-        // seat that was still theirs.
-        expires_at: expiresAt.toLocaleString("ro-RO", { timeZone: EVENT_TIME_ZONE }),
-      };
-
-      return getResend()
-        .emails.send({
-          from: process.env.RESEND_FROM_EMAIL!,
-          to: entry.email,
-          subject: fillEmailTemplate(template.subject_ro, vars),
-          html: fillEmailTemplate(template.body_ro, vars),
-        })
-        .catch((error) => {
-          console.error(`Claim link email failed for ${entry.email}:`, error);
-        });
-    })
-  );
-}
 
 export async function POST(req: Request) {
   const stripe = getStripe();

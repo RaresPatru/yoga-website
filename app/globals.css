@@ -422,6 +422,293 @@ body {
     }
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Tooltips                                                            */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * WHY THESE EXIST AT ALL
+   *
+   * Every tooltip on this site used to be the `title` attribute, which draws
+   * the operating system's own: a black box with white text, in the system
+   * font, at whatever size the OS feels like. On a cream and sage page it looks
+   * like something has gone wrong. It cannot be styled — there is no CSS hook
+   * for it in any browser — so matching the site means not using it.
+   *
+   * WHY NOT THE MODERN ONE
+   *
+   * The current recommendation is interest invokers (`interestfor`) with
+   * `popover="hint"` and anchor positioning. Measured support: interest invokers
+   * are Chrome 142+ with nothing in Firefox or Safari, and anchor positioning
+   * has no Safari at all — so on the iPhone this audience arrives with, the
+   * whole mechanism is absent and it takes two polyfills to stand up. That is
+   * the same trade this project already refused for the navigation drawer
+   * (see the note on `popover` above), and refuses again here for a decoration.
+   *
+   * WHAT THIS IS NOT
+   *
+   * It is not the accessible name. Screen readers get that from the element's
+   * own text or its `aria-label`, and generated content is announced too
+   * inconsistently to be relied on. These are a visual aid for somebody with a
+   * pointer, and nothing here is only said by a tooltip.
+   *
+   * The one thing it does worse than a real popover: Escape cannot dismiss it,
+   * which WCAG 1.4.13 asks for. `title` could not either, so nothing regressed
+   * — but it is the reason to revisit this once Safari ships the real thing.
+   *
+   * THE TRAP, WHICH COSTS NOTHING TO AVOID AND IS INVISIBLE WHEN YOU DO NOT
+   *
+   * The tooltip is this element's own `::after`, so an element with hidden
+   * overflow clips it away entirely. `truncate` is the usual culprit, because
+   * it is three declarations wearing one name and `overflow: hidden` is the one
+   * nobody is thinking about. The header wordmark had exactly that: the tooltip
+   * computed as fully opaque, passed every style assertion, and painted
+   * nothing. Put `truncate` on a child, never on the element carrying
+   * `data-tooltip` — `tests/public-events.spec.ts` fails if anything does.
+   */
+  [data-tooltip] {
+    position: relative;
+  }
+
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    /*
+     * Below, not above. Above is the convention and would put the header's
+     * wordmark tooltip off the top of the screen, since that bar is pinned to
+     * the very edge of the viewport. One direction everywhere beats a correct
+     * direction per call site that nobody remembers to set.
+     */
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    translate: -50% 0;
+    z-index: 60;
+    /* `max-content` so the label never wraps mid-phrase, capped so a long one
+       cannot stretch off the side of a phone. */
+    width: max-content;
+    max-width: min(16rem, 70vw);
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.625rem;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 35%, transparent);
+    /*
+     * Opaque, and no backdrop blur. A tooltip lands on top of body copy, and
+     * even at 97% the text underneath ghosted through it. The blur would not
+     * have helped: CLAUDE.md records that blurring a flat backdrop returns the
+     * same backdrop while costing subpixel antialiasing on the text in front.
+     */
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 400;
+    text-align: center;
+    white-space: normal;
+    box-shadow: 0 8px 20px -6px rgb(0 0 0 / 0.18);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Keyboard first, and deliberately outside the pointer query below: someone
+     tabbing on a touchscreen laptop still gets it. */
+  [data-tooltip]:focus-visible::after {
+    opacity: 1;
+  }
+
+  /*
+   * Pointers only. Without this the tooltip appears on the tap that also
+   * follows the link, so it flashes up as the page changes under it — which is
+   * noise, not information.
+   */
+  @media (hover: hover) {
+    [data-tooltip]:hover::after {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-tooltip]::after {
+      transition: opacity 150ms ease;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* The calendar menu on an event's date                                */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * The date carries a tooltip *and* opens a menu, and both of them arrive
+   * below it. Once the menu is open the tooltip is answering a question that
+   * has already been answered, and it lands on top of the first option.
+   */
+  .event-calendar[open] > summary::after {
+    opacity: 0;
+  }
+
+  /*
+   * Motion that shows what changed, which is the only kind worth having here:
+   * the panel rises the two pixels it just appeared from. `<details>` cannot be
+   * transitioned open — `::details-content` is Chromium-only — so this runs as
+   * a one-shot animation when the panel is inserted.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    .event-calendar[open] > .event-calendar-panel {
+      animation: event-calendar-open 140ms ease-out;
+    }
+  }
+
+  @keyframes event-calendar-open {
+    from {
+      opacity: 0;
+      translate: 0 -2px;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* The home page's event carousel                                      */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * ONE SCROLL CONTAINER, NOT A TRANSFORM
+   *
+   * Swiping is what a phone visitor reaches for, and the browser already does
+   * swiping. A scroll-snap container gives momentum, the rubber band at each
+   * end and the platform's own sense of when a half-swipe should settle — all
+   * for free, all correct on the engine that matters here. The arrows in
+   * components/events/event-carousel.tsx just call `scrollTo` on this same
+   * element, so there is one notion of where the carousel is.
+   *
+   * Scroll snap has been Baseline since 2020, so none of this needs a fallback.
+   * The newer conveniences would: `scrollsnapchange` is Chrome-only and so are
+   * container scroll-state queries, and CLAUDE.md already records what happens
+   * when you trust WebKit's answer about scroll features.
+   */
+  .event-carousel-track {
+    display: flex;
+    overflow-x: auto;
+    /*
+     * Explicitly clipped, not left to compute.
+     *
+     * The component sets this element's height to the slide showing, and a
+     * shorter slide leaves the taller ones overflowing it. Unstated, the other
+     * axis follows `overflow-x` to `auto`, which makes that overflow *scroll* —
+     * the track would drag vertically under a finger and land somewhere between
+     * two cards. `hidden` is a legal pairing with `auto` here (only `visible`
+     * gets coerced) and clips at the padding box, so the card's shadow, which
+     * lives inside that padding, is untouched.
+     */
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    /* A swipe that runs past either end stops there instead of turning into a
+       scroll of the page behind it. */
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    /*
+     * BLEED, AND WHY THE CARD IS OTHERWISE CLIPPED
+     *
+     * `overflow-x: auto` clips on both axes — CSS will not let one axis scroll
+     * while the other stays visible — so this padding is the only room the card
+     * has for anything that reaches outside it, and the card grows 2% under a
+     * pointer and carries a shadow.
+     *
+     * The vertical padding is asymmetric because the shadow is. It is thrown
+     * downwards: at rest `shadow-lg` reaches 22px below the card (10px offset,
+     * 15px blur, -3px spread) and on hover `shadow-xl` reaches about 40px,
+     * against the 12px that used to be here. Both were sliced flat, which reads
+     * as a card resting on a hard edge rather than lifting off the page. The
+     * top needs far less, because the offset pushes the shadow away from it —
+     * the only thing to clear there is the 2% growth.
+     *
+     * The inline padding is cancelled by `-mx-4` at the call site, so the card
+     * still lines up with the heading above it. `scroll-padding-inline` has to
+     * match it: that is what keeps every snap position at exactly
+     * `index * slideWidth`, which is the arithmetic the component reads and
+     * writes. The vertical padding is free of that — it moves nothing sideways.
+     */
+    padding: 0.75rem 1rem 2.75rem;
+    scroll-padding-inline: 1rem;
+    /*
+     * AND WHY THE BLEED THEN NEEDS A GAP
+     *
+     * That inline padding is inside the scrollport, so with the slides packed
+     * edge to edge the next card's first 16px sat in it — a hairline of a
+     * second card down the side of the screen, which reads as a rendering fault
+     * rather than as a hint that there is more. A gap at least as wide as the
+     * padding pushes the neighbour past the scrollport edge instead, leaving
+     * the bleed empty and the card alone on screen.
+     *
+     * It costs nothing in layout: the gap only ever exists off-screen, between
+     * two snap stops.
+     */
+    column-gap: 2rem;
+    /*
+     * A narrow card is only as tall as what is in it.
+     *
+     * Flex stretches every item to the tallest by default, and the card inside
+     * takes that height — which is right beside a photograph and wrong without
+     * one. An event with no picture was a short paragraph floating in the
+     * middle of a tall empty card, with nearly two hundred pixels of nothing
+     * above and below it on a phone.
+     *
+     * Letting it end where its content ends puts that space outside the card,
+     * where it reads as layout rather than as a card that failed to fill
+     * itself. The track itself is then sized to whichever slide is showing —
+     * see the `ResizeObserver` in components/events/event-carousel.tsx — so
+     * that space does not sit empty beneath a short card either.
+     *
+     * From `md` the cards are side-on to their photograph and want to match it,
+     * so they go back to stretching.
+     */
+    align-items: flex-start;
+  }
+
+  @media (min-width: 768px) {
+    .event-carousel-track {
+      align-items: stretch;
+    }
+  }
+
+  /* `scrollbar-width` is Safari 18.2 and later, and this is the engine that
+     matters most here. */
+  .event-carousel-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * One slide, exactly as wide as the scrollport's content box — which is the
+   * width the card had when the page showed only one of them.
+   *
+   * Declared here rather than as classes on the `<li>` at the call site because
+   * the component measures the distance between two slides to decide where to
+   * scroll to. The width, the gap and the snapping belong beside the container
+   * that reads them; split up, they drift apart and the arrows start landing
+   * between cards.
+   */
+  .event-carousel-track > li {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+  }
+
+  /* Programmatic scrolls — the arrows and the arrow keys — glide. A swipe is
+     driven by the finger either way, and is unaffected by this. Off for anyone
+     who asked for less motion, which leaves the arrows cutting straight to the
+     next card. */
+  @media (prefers-reduced-motion: no-preference) {
+    .event-carousel-track {
+      scroll-behavior: smooth;
+      /*
+       * The section settles into the new card's height instead of snapping to
+       * it. The component writes that height; this is what makes the change
+       * readable rather than a jolt — slightly slower than the card's own
+       * glide, so the box has stopped moving by the time the eye returns to it.
+       *
+       * Only ever a length-to-length change: the first height is applied
+       * before the first paint, and CSS cannot interpolate from `auto`
+       * regardless, so nothing animates on load.
+       */
+      transition: height 360ms ease;
+    }
+  }
+
 }
 
 @layer utilities {

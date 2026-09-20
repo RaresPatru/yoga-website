@@ -967,6 +967,108 @@ bearing and easy to undo by accident:
   "Complet" and "Locuri epuizate" — so passing the label in meant the same event
   read differently depending on the page. One concept, one vocabulary.
 
+  "Locuri epuizate" is the one that won, in September 2026. "Complet" had been
+  chosen first and had two problems: it is also the word this site uses for a
+  *full name* in every form it has, and on its own it never said what was
+  complete. `docs/ADMIN-GUIDE.md` had been promising her "Locuri epuizate" the
+  whole time, so that page went from wrong to right without being touched.
+- **`SeatCount` counts in Romanian, which has three plural forms, not two.**
+  The noun takes `de` once the last two digits leave the 1..19 window: "1 loc
+  liber", "19 locuri libere", "20 de locuri libere". Capacity is hers to set
+  from the admin panel, so twenty is an ordinary number here — this read "1
+  locuri libere" on the card that matters most, the one with a single seat left.
+
+### The dev server trusts `localhost` and nothing else
+
+`next.config.ts` lists this machine's own IP addresses in `allowedDevOrigins`,
+computed from `os.networkInterfaces()`. It looks like configuration for its own
+sake. It is not.
+
+`next dev` refuses the hot-reload websocket when the `Origin` header is anything
+other than `localhost` — a guard against a hostile page driving your dev server,
+and right to have. Replayed by hand against the running server:
+
+```
+Origin: http://localhost:3000     -> 101 Switching Protocols
+Origin: http://127.0.0.1:3000     -> connection closed, no response
+Origin: http://192.168.1.138:3000 -> connection closed, no response
+```
+
+The symptom is what makes it expensive. Without that socket the dev client never
+finishes bootstrapping, so **React never hydrates and nothing on the page is
+interactive** — the HTML arrives and looks perfect, the menu will not open, the
+carousel will not move, no form submits. The only console output is a failed
+websocket, which reads like a hot-reload nuisance rather than the cause. It is
+worst where it is hardest to see: testing on a real phone, which can only reach
+the machine by its LAN address and has no console to look at.
+
+Verified after the change, on all three addresses: the header compacts on
+scroll, the drawer opens, zero console errors.
+
+The addresses are computed rather than written down because the router hands out
+a different one whenever the lease expires. `127.0.0.1` is added by hand, since
+`networkInterfaces()` reports the loopback as internal and filters it out.
+
+### Tooltips are CSS, not `title`, and not the Popover API
+
+`title` draws the operating system's tooltip: a black box with white text in the
+system font. On a cream and sage page it reads as a fault, and no browser
+exposes a hook to style it — so matching the site means not using it.
+
+The current recommendation is interest invokers (`interestfor`) with
+`popover="hint"` and anchor positioning. Measured support: interest invokers are
+Chrome 142+ with nothing in Firefox or Safari, anchor positioning has no Safari
+at all, and standing it up needs two polyfills. On the iPhone this audience
+arrives with, none of the mechanism exists — the same trade already refused for
+the navigation drawer.
+
+So: a `::after` on `[data-tooltip]`, shown on hover and `:focus-visible`, in
+app/globals.css. It is not the accessible name — every trigger has its own text
+or `aria-label`, and nothing is said only by a tooltip. What it does worse than
+a real popover is dismissal: Escape cannot close it, which WCAG 1.4.13 asks for.
+`title` could not either, so nothing regressed.
+
+**The trap:** the tooltip is the trigger's own `::after`, so a trigger with
+`overflow: hidden` clips it away entirely. `truncate` is the usual way in — it is
+three declarations under one name. The header wordmark had exactly that: the
+tooltip computed as fully opaque, would have passed any assertion on `opacity`
+or `content`, and painted nothing. It was found by looking at a screenshot, and
+`tests/public-events.spec.ts` now fails if any trigger hides its overflow.
+
+### The map is a link, and the calendar is the date
+
+Both were buttons in a row under the description, alongside an Instagram
+download. All three are gone.
+
+An embedded Google map was built and measured before being removed: 1.23MB
+across 39 requests from Google on a page that otherwise contacts them not at
+all, the visitor's IP address handed over on page load before anyone asked to
+see a map, a `frame-src` entry in the CSP, and an undocumented `output=embed`
+endpoint outside the terms of the Maps Embed API. The address links to a map
+instead and sends nothing until it is pressed.
+
+Putting each action on the noun it acts on — the date adds the date, the address
+opens the map — removed the row entirely. The cost is discoverability, and it is
+real: a button announces itself and an underlined date has to be recognised.
+Against it, both are second-visit actions rather than what the page is for, and
+they now sit where somebody looking for the date or the address is already
+looking. lib/meta-link.ts is what makes them read as live on a device with no
+hover, and explains why it takes an icon, an underline *and* a darker ink rather
+than any one of them.
+
+### `ghost` buttons had a hover that did nothing
+
+The variant's hover was `bg-white/40`. Over the cream page that resolves to
+(255, 251, 246) against a resting (255, 248, 240) — three points of green, six
+of blue, none of red, which is below what an eye picks up. Inside a `GlassCard`,
+already white at 60%, it was fainter still. Measured from painted pixels after
+the change: (255, 248, 240) to (245, 240, 229), a delta of about ten on each
+channel.
+
+It is now `sage/10`, the same wash the carousel arrows and the calendar menu
+use, plus an `active:` state — Tailwind wraps `hover:` in `@media (hover: hover)`,
+so on the phone this audience arrives with, a tap produced no feedback at all.
+
 ### `admins` is sealed off from every role the API can reach
 
 The table decides who may enter `/admin`. It has no grants for `anon` or

@@ -141,7 +141,7 @@ export function WhatsappLinkField({
           type="button"
           onClick={() => setOpen(true)}
           aria-label={t("admin.manage_saved_links")}
-          title={t("admin.manage_saved_links")}
+          data-tooltip={t("admin.manage_saved_links")}
           className="shrink-0 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal-light backdrop-blur-sm transition-colors hover:border-rose/30 hover:text-rose-deep"
         >
           <BookmarkPlus className="h-4 w-4" />

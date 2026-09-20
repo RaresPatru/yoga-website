@@ -572,11 +572,20 @@ export function Header({ siteName }: { siteName: string }) {
             <button
               type="button"
               onClick={backToTop}
-              title={t("back_to_top")}
+              data-tooltip={t("back_to_top")}
               aria-label={`${siteName} — ${t("back_to_top")}`}
-              className="min-w-0 truncate rounded-sm font-serif text-xl font-semibold whitespace-nowrap text-sage-dark underline decoration-transparent decoration-2 underline-offset-[6px] transition-[color,text-decoration-color,font-size] duration-200 ease-out hover:decoration-sage group-data-[compact]:text-lg"
+              className="min-w-0 rounded-sm font-serif text-xl font-semibold text-sage-dark underline decoration-transparent decoration-2 underline-offset-[6px] transition-[color,text-decoration-color,font-size] duration-200 ease-out hover:decoration-sage group-data-[compact]:text-lg"
             >
-              {siteName}
+              {/*
+                The truncation is on this span rather than on the button, and
+                that is not cosmetic. `truncate` is `overflow: hidden`, and an
+                element with hidden overflow clips its own `::after` — which is
+                where the tooltip lives. With it on the button the tooltip
+                computed as fully opaque and painted nothing at all, which is a
+                failure no computed-style check catches. The button is still the
+                thing that shrinks (`min-w-0`); this just does the cutting.
+              */}
+              <span className="block truncate">{siteName}</span>
             </button>
 
             {/*

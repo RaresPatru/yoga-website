@@ -1,16 +1,17 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { Calendar, Clock, MapPin, Users } from "lucide-react";
+import { Clock, MapPin, Users } from "lucide-react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
+import { formatDate, formatEventSchedule, eventStartInstant } from "@/lib/utils";
 import { toCurrency } from "@/lib/money";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
 import { absoluteUrl, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
 import { getSiteName } from "@/lib/site-content";
+import { mapTarget } from "@/lib/map-link";
+import { META_LINK } from "@/lib/meta-link";
 import { ShareButton } from "@/components/ui/share-button";
-import { AddCalendar } from "@/components/ui/add-calendar";
-import { StoryImageButton } from "@/components/ui/story-image-button";
+import { EventDateLink } from "@/components/events/event-date-link";
 import { EventRegistration } from "@/components/events/event-registration";
 import type { Metadata } from "next";
 
@@ -35,8 +36,14 @@ interface EventRow {
   description_ro: string | null;
   description_en: string | null;
   date: string;
-  time: string;
+  /** NULL means she has not announced an hour yet. See the migration. */
+  time: string | null;
+  /** NULL means it ends on the day it starts. */
+  end_date: string | null;
+  /** NULL means she has not said when it ends. */
+  end_time: string | null;
   location: string | null;
+  map_link: string | null;
   price: number;
   currency: string | null;
   max_participants: number | null;
@@ -50,7 +57,7 @@ async function getEvent(slug: string): Promise<EventRow | null> {
   const { data } = await supabase
     .from("events")
     .select(
-      "id, slug, title_ro, title_en, description_ro, description_en, date, time, location, price, currency, max_participants, image_url, whatsapp_group_link"
+      "id, slug, title_ro, title_en, description_ro, description_en, date, time, end_date, end_time, location, map_link, price, currency, max_participants, image_url, whatsapp_group_link"
     )
     .eq("slug", slug)
     .eq("published", true)
@@ -117,8 +124,27 @@ export default async function EventDetailPage({
     .maybeSingle();
 
   const taken = availability?.taken ?? 0;
-  const isFull = event.max_participants != null && taken >= event.max_participants;
+  /*
+   * NULL or 0 capacity is sold out, not unlimited — see
+   * components/events/seat-count.tsx for why, and
+   * supabase/migrations/20260918000000_capacity_is_required.sql for where it is
+   * actually enforced. This line only decides what the page says; the booking
+   * itself is refused by register_for_event() whatever happens here.
+   */
+  const isFull = !event.max_participants || taken >= event.max_participants;
   const t = (ro: string, en: string) => (locale === "ro" ? ro : en);
+
+  /*
+   * Null when she has not pinned the place, or when what she typed was neither
+   * a usable URL nor a coordinate pair — lib/map-link.ts decides, and refusing
+   * is the safe answer there because this value becomes an href on a public
+   * page. Everything below that touches the map is guarded on it.
+   */
+  const map = mapTarget(event.map_link);
+
+  // The same formatter the two card surfaces use, so the date a visitor read on
+  // the home page is the date they read here.
+  const schedule = formatEventSchedule(event, locale);
 
   /**
    * schema.org Event data, embedded as JSON-LD.
@@ -136,6 +162,21 @@ export default async function EventDetailPage({
     // summer and UTC+2 in winter, so a hardcoded offset publishes every winter
     // event to Google's event results an hour early.
     startDate: eventStartInstant(event.date, event.time).toISOString(),
+    /*
+     * Google's event results show a duration when one is published, and rank a
+     * listing with `endDate` above one without. Included only when she has
+     * actually said — a guessed end time in structured data is a guess Google
+     * shows to strangers as fact, which is worse than the same guess on the
+     * page.
+     */
+    ...(event.end_date || event.end_time
+      ? {
+          endDate: eventStartInstant(
+            event.end_date || event.date,
+            event.end_time || event.time
+          ).toISOString(),
+        }
+      : {}),
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     eventStatus: "https://schema.org/EventScheduled",
     description: toDescription(description, title),
@@ -214,28 +255,92 @@ export default async function EventDetailPage({
             <ShareButton title={title} />
           </div>
 
+          {/*
+            Two of these four do something and two are facts. The two that do
+            carry an icon, an underline and a darker ink — see lib/meta-link.ts
+            for why it takes all three on a device with no hover.
+          */}
           <div className="mt-6 flex flex-wrap gap-4 text-sm text-charcoal-light">
-            <span className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" aria-hidden="true" /> {formatDate(event.date, locale)}
-            </span>
-            <span className="flex items-center gap-2">
-              <Clock className="h-4 w-4" aria-hidden="true" /> {formatTime(event.time)}
-            </span>
-            {event.location && (
-              <span className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" aria-hidden="true" /> {event.location}
+            <EventDateLink
+              slug={event.slug}
+              locale={locale}
+              dateText={schedule.date}
+              addLabel={t("Adaugă în calendar", "Add to calendar")}
+              // The only one of the three whose name is not a brand everybody
+              // recognises, so it says what the file is as well as what opens it.
+              appleLabel={t("Apple Calendar (.ics)", "Apple Calendar (.ics)")}
+              event={{
+                title,
+                description: description || "",
+                date: event.date,
+                time: event.time,
+                location: event.location || "",
+                endDate: event.end_date,
+                endTime: event.end_time,
+                url: absoluteUrl(`/${locale}/events/${encodeURIComponent(event.slug)}`),
+              }}
+            />
+            {/* `whitespace-nowrap` because the thin spaces around the en dash
+                are breaking spaces, so a narrow enough column would put the end
+                time on its own line and leave a dash hanging. */}
+            {schedule.time && (
+              <span className="flex items-center gap-2 whitespace-nowrap">
+                {/* A range once she has said when it ends, the start alone
+                    until then, and nothing at all until she has announced an
+                    hour — none of the three is ever a guess. */}
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                {schedule.time}
               </span>
             )}
-            {event.max_participants && (
-              <span className={`flex items-center gap-2 ${isFull ? "text-error" : ""}`}>
-                <Users className="h-4 w-4" aria-hidden="true" />
-                {isFull
-                  ? t("Complet", "Full")
-                  : t("{filled}/{total} locuri", "{filled}/{total} spots")
-                      .replace("{filled}", String(taken))
-                      .replace("{total}", String(event.max_participants))}
-              </span>
-            )}
+            {/*
+              The address opens a map when she has supplied one, and is plain
+              text when she has not. Deliberately only here: on the home page
+              and the events index the whole card is already a link, and a link
+              inside a link is invalid HTML that browsers repair by closing the
+              outer one early — which breaks the card, not just the address.
+
+              `rel="noopener noreferrer"` because this leaves the site, and
+              `target="_blank"` so somebody who came to read about the class
+              still has the class open when they come back from the map.
+            */}
+            {event.location &&
+              (map ? (
+                <a
+                  href={map.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-tooltip={t("Vezi pe hartă", "View on the map")}
+                  // The address stays inside the name rather than being replaced
+                  // by it — same reason as the date link: WCAG 2.5.3 wants the
+                  // visible label in the accessible name, and somebody listening
+                  // to the page still needs to hear where the class is.
+                  aria-label={`${event.location} — ${t("vezi pe hartă", "view on the map")}`}
+                  className={META_LINK}
+                >
+                  <MapPin className="h-4 w-4" aria-hidden="true" /> {event.location}
+                </a>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" aria-hidden="true" /> {event.location}
+                </span>
+              ))}
+            {/* No `max_participants &&` guard any more. It used to hide this
+                line entirely for an event with no capacity set, which was the
+                whole bug: the event was bookable by anyone and the page said
+                nothing about seats at all. A capacity of NULL or 0 now reads as
+                sold out, and the fraction below only ever runs when there is a
+                real number to put in it. */}
+            <span className={`flex items-center gap-2 ${isFull ? "text-error" : ""}`}>
+              <Users className="h-4 w-4" aria-hidden="true" />
+              {isFull
+                ? /* One phrase for one state, site-wide — the card that brought
+                     someone here says this too. components/events/seat-count.tsx
+                     is where that vocabulary is decided. */
+                  t("Locuri epuizate", "Sold out")
+                : t("{filled}/{total} locuri", "{filled}/{total} spots")
+                    .replace("{filled}", String(taken))
+                    .replace("{total}", String(event.max_participants))}
+            </span>
           </div>
 
           {description && (
@@ -248,23 +353,6 @@ export default async function EventDetailPage({
             />
           )}
 
-          <div className="mt-8 flex flex-wrap gap-3">
-            <AddCalendar
-              event={{
-                title,
-                description: description || "",
-                date: event.date,
-                time: event.time,
-                location: event.location || "",
-                uid: event.id,
-              }}
-            />
-            <StoryImageButton
-              href={`/api/og/event/${event.slug}/story?locale=${locale}`}
-              fileName={`${event.slug}-story.png`}
-              locale={locale}
-            />
-          </div>
         </div>
 
         <div className="min-w-0 md:col-span-2">

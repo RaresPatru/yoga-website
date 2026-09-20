@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getResend } from "@/lib/resend";
-import { generateICS } from "@/lib/utils";
+import { generateICS } from "@/lib/calendar";
+import { absoluteUrl } from "@/lib/site-config";
 
 /**
  * Escapes text before it is dropped into an HTML email body.
@@ -82,7 +83,7 @@ export async function sendConfirmationEmail({
 
     const { data: event } = await supabase
       .from("events")
-      .select("id, title_ro, description_ro, date, time, location, whatsapp_group_link")
+      .select("id, slug, title_ro, description_ro, date, time, end_date, end_time, location, whatsapp_group_link")
       .eq("id", eventId)
       .single();
 
@@ -100,7 +101,10 @@ export async function sendConfirmationEmail({
       user_name: fullName,
       event_name: event.title_ro,
       event_date: event.date,
-      event_time: event.time.slice(0, 5),
+      // Empty rather than a guess when she has not announced an hour yet —
+      // `time` became nullable with the end-date columns, and this used to be
+      // an unguarded `.slice()` that would throw on exactly those rows.
+      event_time: event.time ? event.time.slice(0, 5) : "",
       event_location: event.location || "",
       whatsapp_link: event.whatsapp_group_link || "",
     };
@@ -115,6 +119,25 @@ export async function sendConfirmationEmail({
       // confirmation updates the entry the registration confirmation created
       // rather than adding a second copy.
       uid: event.id,
+      /*
+       * And that stability is exactly why the next two lines matter. Anything
+       * this entry says that the one from /api/calendar/event/[slug] does not
+       * is a disagreement between two entries claiming to be the same entry,
+       * and nothing here emits SEQUENCE, so which one wins is up to the
+       * calendar app. Whichever arrives second silently rewrites the first.
+       *
+       * The event's length was the first half of that: the emailed entry was
+       * always ninety minutes while the downloaded one was the real length.
+       * `url` was the second — without it, adding the event from the site and
+       * then opening this email left a single entry with no way back to the
+       * page. Anything added to one call belongs in the other.
+       *
+       * Romanian on purpose, matching the template: the confirmation emails
+       * only exist in her language. The route is the bilingual one.
+       */
+      endDate: event.end_date,
+      endTime: event.end_time,
+      url: absoluteUrl(`/ro/events/${encodeURIComponent(event.slug)}`),
     });
 
     // Strip characters that are awkward in a filename across operating systems.

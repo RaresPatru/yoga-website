@@ -116,7 +116,14 @@ export function EventRegistration({
     [locale]
   );
 
-  const isFull = maxParticipants != null && taken >= maxParticipants;
+  /*
+   * NULL or 0 seats is sold out, not unlimited. The reasoning is in
+   * components/events/seat-count.tsx; the enforcement is in
+   * supabase/migrations/20260918000000_capacity_is_required.sql, which is what
+   * matters — this flag decides which form to draw, and a drawn form is not
+   * permission to book. register_for_event() refuses on its own.
+   */
+  const isFull = !maxParticipants || taken >= maxParticipants;
 
   // Arriving from a waiting-list email: ?claim=<waiting list entry id>.
   useEffect(() => {
@@ -357,34 +364,44 @@ export function EventRegistration({
         <p className="text-3xl font-semibold text-rose-deep">
           {price === 0 ? t("Gratuit", "Free") : formatPrice(price, currency, locale)}
         </p>
-        {maxParticipants && (
-          <div className="mt-3">
-            <div className="flex items-center justify-center gap-1 text-sm text-charcoal-light">
-              <Users className="h-3.5 w-3.5" />
-              {t("{filled}/{total} locuri ocupate", "{filled}/{total} spots filled")
-                .replace("{filled}", String(taken))
-                .replace("{total}", String(maxParticipants))}
-            </div>
-            <div className="mx-auto mt-2 h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-sage/20">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${Math.min((taken / maxParticipants) * 100, 100)}%`,
-                  backgroundColor: isFull ? "#E8A0B4" : "#9CAF88",
-                }}
-              />
-            </div>
-            {isFull && (
-              <p className="mt-2 flex items-center justify-center gap-1 text-sm font-medium text-error">
-                <AlertCircle className="h-3.5 w-3.5" />
-                {/* "Complet" everywhere: components/events/seat-count.tsx owns
-                    the site's vocabulary for this state, and a card that says
-                    one word must not open a page that says another. */}
-                {t("Complet", "Full")}
-              </p>
-            )}
-          </div>
-        )}
+        {/*
+          The counter and the bar need a real number to draw; the sold-out line
+          does not, and used to be nested inside them. So an event with no
+          capacity set — the case that started all of this — showed a price, no
+          seats, no explanation, and then a waiting-list button that appeared to
+          come from nowhere. The two are separate now: a bar when there is
+          something to fill, and the state in words whenever it is true.
+        */}
+        <div className="mt-3">
+          {maxParticipants ? (
+            <>
+              <div className="flex items-center justify-center gap-1 text-sm text-charcoal-light">
+                <Users className="h-3.5 w-3.5" />
+                {t("{filled}/{total} locuri ocupate", "{filled}/{total} spots filled")
+                  .replace("{filled}", String(taken))
+                  .replace("{total}", String(maxParticipants))}
+              </div>
+              <div className="mx-auto mt-2 h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-sage/20">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min((taken / maxParticipants) * 100, 100)}%`,
+                    backgroundColor: isFull ? "#E8A0B4" : "#9CAF88",
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
+          {isFull && (
+            <p className="mt-2 flex items-center justify-center gap-1 text-sm font-medium text-error">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {/* "Locuri epuizate" everywhere: components/events/seat-count.tsx
+                  owns the site's vocabulary for this state, and a card that
+                  says one word must not open a page that says another. */}
+              {t("Locuri epuizate", "Sold out")}
+            </p>
+          )}
+        </div>
       </div>
 
       {!isFull && !showWaitlist ? (

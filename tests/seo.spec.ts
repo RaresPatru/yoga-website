@@ -95,11 +95,11 @@ test.describe("SEO and social sharing", () => {
     const event = await seedEvent({ price: 0 });
 
     try {
-      for (const path of [
-        `/api/og/event/${event.slug}`,
-        `/api/og/event/${event.slug}/story`,
-        "/api/og/default",
-      ]) {
+      // The 1080x1920 `/story` variants of these are gone. They existed only to
+      // feed a "download for Instagram" button on the event and blog pages,
+      // which was removed — an event is shared with the share button now, and a
+      // route nothing reaches is a route nobody maintains.
+      for (const path of [`/api/og/event/${event.slug}`, "/api/og/default"]) {
         const res = await request.get(path);
         expect(res.status(), `${path} should render`).toBe(200);
         expect(res.headers()["content-type"]).toContain("image/png");

@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { seedEvent, deleteEventBySlug, siteContentValue, setSiteContent } from "./helpers";
+import {
+  seedEvent,
+  deleteEventBySlug,
+  seedRegistrationFor,
+  siteContentValue,
+  setSiteContent,
+} from "./helpers";
 
 /**
  * Unsupplied content must render a visible placeholder rather than nothing.
@@ -243,112 +249,6 @@ test.describe("home page language switching", () => {
     await expect(page).toHaveURL(/\/ro$/, { timeout: 25_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "ro");
     await expect(page.getByRole("link", { name: "Explorează", exact: true })).toBeVisible();
-  });
-});
-
-/**
- * The floating "book now" bar, which only exists below `lg`.
- *
- * Three conditions gate it: an event with seats left, the hero's own call to
- * action scrolled out of view, and the page standing still. The last one is
- * what most of this covers — the bar sits over the bottom of the screen, which
- * is exactly where the content someone is scrolling towards keeps appearing.
- */
-// Skipped, not deleted: the bar is switched off in app/[locale]/page.tsx and
-// these go green again the moment that line is uncommented.
-test.describe.skip("home page sticky call to action", () => {
-  test.use({ viewport: { width: 375, height: 667 } });
-
-  const bar = (page: import("@playwright/test").Page) => page.locator("[data-visible]");
-
-  test("stays hidden until the hero CTA is scrolled past, and while scrolling", async ({
-    page,
-  }) => {
-    // Seeded so the bar has something to offer. It decides for itself by
-    // querying Supabase from the browser, so it does not matter that the home
-    // page itself is served from a 300-second cache.
-    const event = await seedEvent({ price: 0, max_participants: 10 });
-    try {
-      await page.goto("/ro");
-
-      // Present in the DOM but hidden: the hero's own "Explorează" button is
-      // still on screen, so a second copy floating over it is just clutter.
-      await expect(bar(page)).toHaveAttribute("data-visible", "false");
-
-      // Scrolled past the hero and left alone, it appears.
-      await page.evaluate(() => window.scrollTo(0, 1600));
-      await expect(bar(page)).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
-      await expect(page.getByRole("button", { name: "Înscrie-te acum" })).toBeVisible();
-
-      // Now the part that matters: it gets out of the way again the moment the
-      // page starts moving.
-      //
-      // Sampled every frame from inside the page while genuinely scrolling,
-      // rather than scrolling and then asserting from the test after a sleep.
-      // Wall-clock timing from outside is a coin toss — the first version of
-      // this waited 120ms and read `true`, because by the time Playwright
-      // actually queried the DOM the scroll had finished and the idle timer had
-      // fired. Scrolling every frame keeps the timer permanently reset, so
-      // "hidden throughout" is a fact about the whole window, not a snapshot.
-      //
-      // It bounces up and down a few pixels instead of scrolling one way so the
-      // page cannot run out of content and stop firing scroll events.
-      const samples = await page.evaluate(async () => {
-        const el = document.querySelector("[data-visible]")!;
-        const seen: { at: number; value: string | null }[] = [];
-        const start = performance.now();
-        let step = 0;
-        while (performance.now() - start < 900) {
-          window.scrollBy(0, step++ % 2 ? 6 : -6);
-          await new Promise((resolve) => requestAnimationFrame(resolve));
-          seen.push({ at: performance.now() - start, value: el.getAttribute("data-visible") });
-        }
-        return seen;
-      });
-
-      // Timestamped rather than counted, because frame rate varies a lot
-      // between the projects — the emulated phone manages about a third of the
-      // frames desktop Chromium does in the same window, so "skip the first
-      // five frames" means two different durations.
-      //
-      // The opening frames are allowed to still read "true": the scroll handler
-      // sets state and React needs a render to get that into the DOM. What must
-      // not happen is the bar sitting there through a sustained scroll.
-      const settled = samples.filter((s) => s.at > 250);
-      expect(settled.length, "expected several frames of scrolling").toBeGreaterThan(3);
-      expect(
-        [...new Set(settled.map((s) => s.value))],
-        "the bar must stay hidden for as long as the page keeps moving"
-      ).toEqual(["false"]);
-
-      // Still is again, so it comes back.
-      await expect(bar(page)).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
-
-      // Back at the top the hero CTA is on screen again, so it goes away.
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await expect(bar(page)).toHaveAttribute("data-visible", "false");
-    } finally {
-      await deleteEventBySlug(event.slug);
-    }
-  });
-
-  // A control that slides in and out must not be reachable while it is out of
-  // frame. `inert` is what keeps it out of the tab order and the accessibility
-  // tree; without it a keyboard user tabs into an invisible button and a screen
-  // reader announces one that is not there.
-  test("is inert while hidden and reachable once shown", async ({ page }) => {
-    const event = await seedEvent({ price: 0, max_participants: 10 });
-    try {
-      await page.goto("/ro");
-      await expect(bar(page)).toHaveAttribute("data-visible", "false");
-      expect(await bar(page).evaluate((el) => el.hasAttribute("inert"))).toBe(true);
-
-      await page.evaluate(() => window.scrollTo({ top: 1600 }));
-      await expect(bar(page)).toHaveAttribute("data-visible", "true", { timeout: 5_000 });
-      expect(await bar(page).evaluate((el) => el.hasAttribute("inert"))).toBe(false);
-    } finally {
-      await deleteEventBySlug(event.slug);
-    }
   });
 });
 
@@ -1118,5 +1018,366 @@ test.describe("footer navigation", () => {
       viewport: window.innerWidth,
     }));
     expect(overflow.doc, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport);
+  });
+});
+
+/**
+ * The home page shows one event at a time and cycles through the rest.
+ *
+ * WHAT IS WORTH PINNING HERE
+ *
+ * The scrolling is the browser's — `.event-carousel-track` is a scroll-snap
+ * container — so these do not test that scrolling works. They test the three
+ * things that are ours and that a refactor could quietly break: the order the
+ * cards are in, the fact that exactly one of them is on screen, and the fact
+ * that the sequence has a beginning it will not wrap past.
+ *
+ * `overscroll-behavior-x: contain` is deliberately not asserted. CLAUDE.md
+ * records that Playwright's WebKit does not implement the property at all —
+ * `CSS.supports` says no and it is missing from computed style — while Safari
+ * has shipped it since 16. Measured again here: Chromium computes `contain`,
+ * Playwright's WebKit returns nothing. A test on it would fail against an
+ * engine no visitor runs.
+ */
+test.describe("home page events carousel", () => {
+  const inDays = (n: number) =>
+    new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
+  const track = (page: import("@playwright/test").Page) =>
+    page.locator(".event-carousel-track");
+  const slides = (page: import("@playwright/test").Page) =>
+    page.locator(".event-carousel-track > li");
+
+  /**
+   * Everything about where the carousel is, read in one go.
+   *
+   * One call, not three, because these are read while a scroll is gliding and
+   * they disagree during it: `index` rounds to the destination as soon as the
+   * scroll passes halfway, while `inside` still sees two cards and `aligned`
+   * is still false. Polling one of them and then reading the others is how a
+   * test ends up asserting against a frame in the middle of the animation —
+   * which is exactly how this one failed the first time it was written.
+   */
+  const position = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>(".event-carousel-track")!;
+      const first = el.children[0] as HTMLElement;
+      const second = el.children[1] as HTMLElement | undefined;
+      const step = second
+        ? second.offsetLeft - first.offsetLeft
+        : first.getBoundingClientRect().width;
+      const index = Math.round(el.scrollLeft / step);
+      const port = el.getBoundingClientRect();
+      return {
+        index,
+        // How many slides have any part of themselves in the scrollport.
+        inside: [...el.children].filter((slide) => {
+          const r = slide.getBoundingClientRect();
+          return r.right > port.left + 1 && r.left < port.right - 1;
+        }).length,
+        aligned: Math.abs(el.scrollLeft - index * step) < 1,
+      };
+    });
+
+  /** Settled on card `n`, whole, with nothing else on screen. */
+  const at = (n: number) => ({ index: n, inside: 1, aligned: true });
+
+  /**
+   * THE ORDERING RULE, WHICH IS THE WHOLE POINT OF THE SECTION
+   *
+   * The card standing there when the page opens is the nearest date somebody
+   * can still book — not simply the nearest date. A sold-out event is not
+   * hidden; it drops behind every bookable one, because leading with it is an
+   * advert for disappointment.
+   *
+   * Seeded rather than read off the existing rows: this asserts the rule, not
+   * whatever seed.sql happens to contain this month.
+   */
+  test("it leads with the soonest event that can still be booked", async ({ page }) => {
+    const sooner = await seedEvent({ date: inDays(1), max_participants: 1 });
+    const bookable = await seedEvent({ date: inDays(2), max_participants: 10 });
+    try {
+      await seedRegistrationFor(sooner.id); // and now it is full
+      await page.goto("/ro");
+
+      await expect(slides(page).first().locator("a")).toHaveAttribute(
+        "href",
+        `/ro/events/${bookable.slug}`
+      );
+
+      /*
+       * And the rest of the order, as an invariant rather than a fixed list:
+       * once a sold-out card has appeared, every card after it is sold out too.
+       * Written this way it keeps holding however many events exist.
+       */
+      const soldOut = await slides(page).evaluateAll((els) =>
+        els.map((el) => (el.textContent ?? "").includes("Locuri epuizate"))
+      );
+      expect(soldOut.length, "the carousel rendered no cards").toBeGreaterThan(1);
+      expect(
+        soldOut.filter(Boolean).length,
+        "no sold-out event on the page, so this proves nothing"
+      ).toBeGreaterThan(0);
+      expect(soldOut, "a bookable event appeared behind a sold-out one").toEqual(
+        [...soldOut].sort((a, b) => Number(a) - Number(b))
+      );
+    } finally {
+      await deleteEventBySlug(sooner.slug);
+      await deleteEventBySlug(bookable.slug);
+    }
+  });
+
+  /**
+   * One card, not three.
+   *
+   * The section used to show a large card and two small ones. The neighbouring
+   * slides are still in the document — that is what makes them crawlable and
+   * swipeable — so "one card" has to be measured against the scrollport rather
+   * than counted in the DOM.
+   */
+  test("exactly one card is on screen, with the others still in the markup", async ({
+    page,
+  }) => {
+    await page.goto("/ro");
+    const count = await slides(page).count();
+    expect(count, "needs at least two upcoming events to be a carousel").toBeGreaterThan(1);
+    await expect.poll(() => position(page)).toEqual(at(0));
+
+    // Every one of them is a real link in the HTML, which is what a crawler and
+    // a visitor whose JavaScript has not arrived both get.
+    for (let i = 0; i < count; i++) {
+      await expect(slides(page).nth(i).locator("a")).toHaveAttribute(
+        "href",
+        /^\/ro\/events\/.+/
+      );
+    }
+  });
+
+  /**
+   * There is a beginning. Cycling runs one way from the lead card, and the only
+   * thing a leftward move does is walk back towards it — never round to the end.
+   */
+  test("it does not wrap backwards past the lead card", async ({ page }) => {
+    await page.goto("/ro");
+    await expect(slides(page).first()).toBeVisible();
+
+    const lead = await slides(page).first().locator("h3").innerText();
+
+    // A hard rightward swipe at the first card.
+    await track(page).evaluate((el) => {
+      el.scrollLeft = -800;
+    });
+    await page.waitForTimeout(400);
+
+    await expect.poll(() => position(page)).toEqual(at(0));
+    expect(await slides(page).first().locator("h3").innerText()).toBe(lead);
+  });
+
+  test("the arrow keys move it, and stop at the lead card", async ({ page }) => {
+    await page.goto("/ro");
+    await expect(slides(page).first()).toBeVisible();
+
+    // `.focus()` rather than Tab: WebKit does not walk links with Tab, so a
+    // tab-driven version of this passes vacuously on the mobile project.
+    await slides(page).first().locator("a").focus();
+
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => position(page)).toEqual(at(1));
+
+    await page.keyboard.press("ArrowLeft");
+    await expect.poll(() => position(page)).toEqual(at(0));
+
+    // And again, from the start. Nothing to go back to.
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForTimeout(500);
+    expect(await position(page)).toEqual(at(0));
+  });
+
+  test("the arrows step one card and disable themselves at each end", async ({ page }) => {
+    // Runs at every viewport now. The arrows used to be `hidden sm:inline-flex`
+    // and this skipped below 640px; they are drawn on a phone too, so the
+    // behaviour is worth checking there as well — that is where somebody with
+    // no pointer is relying on them.
+
+    await page.goto("/ro");
+    const section = page.locator("section#events");
+    const back = section.getByRole("button", { name: "Evenimentul anterior" });
+    const forward = section.getByRole("button", { name: "Evenimentul următor" });
+
+    await expect(back).toBeDisabled();
+    await expect(forward).toBeEnabled();
+
+    await forward.click();
+    await expect.poll(() => position(page)).toEqual(at(1));
+    await expect(back).toBeEnabled();
+
+    await back.click();
+    await expect.poll(() => position(page)).toEqual(at(0));
+    await expect(back).toBeDisabled();
+
+    /*
+     * All the way to the other end, without pausing between clicks — which is
+     * the case that caught a real one. Each click has to count from the card
+     * the last click asked for, not from wherever the glide has got to, or
+     * somebody skimming for a date that suits them loses half their taps.
+     */
+    const last = (await slides(page).count()) - 1;
+    for (let i = 0; i < last; i++) await forward.click();
+    await expect.poll(() => position(page)).toEqual(at(last));
+    await expect(forward).toBeDisabled();
+
+    // Focus must not be left on the button that just disabled itself, or the
+    // next Tab restarts from the top of the page.
+    expect(
+      await page.evaluate(() => document.activeElement?.tagName),
+      "focus was dropped when the forward arrow disabled itself"
+    ).not.toBe("BODY");
+  });
+
+  /**
+   * A phone gets the arrows too, and they are a real target.
+   *
+   * They used to be `hidden sm:inline-flex`, on the reasoning that a finger
+   * swipes and does not need a button. The swipe is still the nicer gesture and
+   * still works — but it was the *only* one below 640px, and a swipe is
+   * invisible: nothing on a still page says the card moves. Somebody who does
+   * not think to try it had no way through the list at all.
+   */
+  test("the arrows and the dots are both drawn on a phone", async ({ page, viewport }) => {
+    test.skip((viewport?.width ?? 0) >= 640, "phone-only layout");
+    await page.goto("/ro");
+    const section = page.locator("section#events");
+
+    const back = section.getByRole("button", { name: "Evenimentul anterior" });
+    await expect(back).toBeVisible();
+
+    // WCAG 2.5.5 asks for 44px, and on a phone these are now a primary control
+    // rather than a convenience beside a swipe.
+    const box = await back.boundingBox();
+    expect(box!.width, "tap target width").toBeGreaterThanOrEqual(44);
+    expect(box!.height, "tap target height").toBeGreaterThanOrEqual(44);
+
+    await expect(
+      section.locator('span[aria-hidden="true"] > span.rounded-full')
+    ).toHaveCount(await slides(page).count());
+  });
+
+  /**
+   * Her descriptions have no length limit — she writes them in a plain
+   * textarea — and in a carousel every slide is as tall as the tallest, so one
+   * rambling paragraph would add white space to every other event.
+   */
+  test("a long description stops after three lines", async ({ page }) => {
+    const wordy = await seedEvent({
+      date: inDays(1),
+      description_ro: "Propoziție lungă despre respirație, mișcare și liniște. ".repeat(20),
+    });
+    try {
+      await page.goto("/ro");
+      const paragraph = slides(page).first().locator("p.line-clamp-3");
+      await expect(paragraph).toBeVisible();
+
+      const box = await paragraph.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return {
+          clamp: cs.webkitLineClamp,
+          lineHeight: parseFloat(cs.lineHeight),
+          drawn: el.clientHeight,
+          wanted: el.scrollHeight,
+        };
+      });
+      expect(box.clamp, "the line clamp is gone").toBe("3");
+      expect(box.wanted, "this description was short enough to fit anyway").toBeGreaterThan(
+        box.drawn
+      );
+      expect(box.drawn).toBeLessThanOrEqual(box.lineHeight * 3 + 2);
+    } finally {
+      await deleteEventBySlug(wordy.slug);
+    }
+  });
+
+  /**
+   * The "see all events" link is an anchor styled as a button, and it was the
+   * one section CTA on this page that was not centred — along with the heading
+   * above it.
+   */
+  test("the heading, the controls and the button all sit on the page's centre line", async ({
+    page,
+  }) => {
+    await page.goto("/ro");
+    const offsets = await page.evaluate(() => {
+      const section = document.querySelector<HTMLElement>("section#events")!;
+      const container = section.querySelector<HTMLElement>("div")!;
+      const middle = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        const c = container.getBoundingClientRect();
+        return Math.round((r.left + r.right) / 2 - (c.left + c.right) / 2);
+      };
+      return {
+        heading: middle(section.querySelector("h2")!),
+        viewAll: middle(section.querySelector('a[href="/ro/events"]')!),
+      };
+    });
+    expect(Math.abs(offsets.heading), "the heading is off-centre").toBeLessThanOrEqual(1);
+    expect(Math.abs(offsets.viewAll), "the button is off-centre").toBeLessThanOrEqual(1);
+  });
+
+  /**
+   * A horizontal scroller one viewport wide is the kind of thing that pushes
+   * the whole document sideways if a width is off by a few pixels, and on a
+   * phone that is the bug people actually report.
+   */
+  /**
+   * Dragging a window narrow and back must leave the card as it found it.
+   *
+   * The track's height is set from JavaScript so a stacked card can be as tall
+   * as its own contents. Above `md` the slides take their height *from* the
+   * track instead, which makes that circular: whatever number went in, the
+   * slide grew to it and the observer measured the same number straight back.
+   * A round trip through the breakpoint left the wide layout wearing the narrow
+   * layout's height — a card twice as tall as its contents with everything
+   * floating in the middle — and only a reload cleared it.
+   *
+   * Asserting against the same page before the resize rather than a literal,
+   * because the height is whatever the content comes to.
+   */
+  test("a resize through the breakpoint and back leaves the card alone", async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!!isMobile, "a device viewport cannot be resized through the breakpoint");
+
+    await page.goto("/ro");
+    const card = page.locator("section#events a[href*='/events/']").first();
+    await expect(card).toBeVisible();
+
+    const wide = (await card.boundingBox())!.height;
+
+    await page.setViewportSize({ width: 430, height: 950 });
+    await expect
+      .poll(async () => (await card.boundingBox())!.height, { timeout: 5000 })
+      .not.toBe(wide);
+
+    await page.setViewportSize({ width: 1400, height: 950 });
+    await expect
+      .poll(async () => (await card.boundingBox())!.height, { timeout: 5000 })
+      .toBe(wide);
+
+    // The inline height belongs to the stacked layout only; left behind, it is
+    // what makes the slide stretch to the wrong size.
+    const inline = await page
+      .locator(".event-carousel-track")
+      .evaluate((el) => (el as HTMLElement).style.height);
+    expect(inline, "no inline height survives into the wide layout").toBe("");
+  });
+
+  test("it does not make the page scroll sideways", async ({ page }) => {
+    await page.goto("/ro");
+    await expect(slides(page).first()).toBeVisible();
+    const overflows = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
+    );
+    expect(overflows).toBe(false);
   });
 });

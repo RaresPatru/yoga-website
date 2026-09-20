@@ -81,9 +81,10 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
+            aria-label={t("admin.close_menu")}
             className="rounded-full p-1 text-charcoal-light hover:bg-white/40 lg:hidden"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
         <nav className="flex-1 space-y-1 p-4">
@@ -134,9 +135,10 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
         <header className="flex h-16 items-center gap-4 border-b border-sage/20 bg-white/40 px-6 backdrop-blur-sm">
           <button
             onClick={() => setSidebarOpen(true)}
+            aria-label={t("admin.open_menu")}
             className="rounded-full p-2 text-charcoal-light hover:bg-white/40 lg:hidden"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
           <h2 className="font-serif text-lg text-charcoal">{t("admin.dashboard")}</h2>
         </header>

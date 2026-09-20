@@ -16,8 +16,7 @@ cunoștințe tehnice pentru nimic din ce urmează.
 5. [Testimoniale](#5-testimoniale)
 6. [Mesaje de la vizitatori](#6-mesaje)
 7. [Emailuri automate](#7-emailuri-automate)
-8. [Imagini pentru Instagram](#8-imagini-pentru-instagram)
-9. [Când ceva nu merge](#9-când-ceva-nu-merge)
+8. [Când ceva nu merge](#8-când-ceva-nu-merge)
 
 ---
 
@@ -76,11 +75,35 @@ Debifezi **Vizibil pe site** dacă vrei să ascunzi temporar o întrebare.
 | Titlu (RO) | Numele evenimentului. Obligatoriu. |
 | Titlu (EN) | Traducerea. Butonul **→ EN** traduce automat; verifică rezultatul. |
 | Slug | Partea din adresă: `/events/atelier-de-yoga`. Litere mici și liniuțe. |
-| Data, Ora | Ora la care începe, ora României. |
-| Locație | Orașul sau adresa. |
+| Data | Ziua în care **începe**. Singurul câmp obligatoriu dintre cele patru. |
+| Ora | Ora la care începe, ora României. **Poți lăsa gol** dacă nu știi încă: atunci pe site nu apare nicio oră, doar data. O completezi mai târziu și apare. |
+| Data de final | Doar dacă ține mai multe zile. Lasă gol pentru un eveniment de o singură zi. |
+| Ora de final | Când se termină. Lasă gol dacă nu vrei să promiți o oră de final. |
+| Locație | Orașul sau adresa. Este textul care se vede pe site. |
+
+> **Cum apare pe site.** Data și ora se hotărăsc separat.
+>
+> *Data:* o singură zi („9 octombrie 2026”), sau intervalul de zile dacă ai pus
+> și o dată de final („28 – 29 octombrie 2026”).
+>
+> *Ora:* dacă ai pus ora de început **și** ora de final, se vede intervalul
+> („18:30 – 19:45”). La un eveniment de mai multe zile asta se citește ca
+> programul ținut în fiecare zi. Dacă ai pus doar ora de început, se vede doar
+> ea. Dacă n-ai pus ora de început, nu apare niciun ceas — nici dacă ai
+> completat ora de final, pentru că „se termină la 17:00” fără o oră de început
+> nu ajută pe nimeni.
+>
+> **Dacă evenimentul trece de miezul nopții** — începe la 22:00 și se termină la
+> 01:00 — pune ziua următoare la **Data de final**. Site-ul arată atunci
+> „7 – 8 noiembrie 2026” și „22:00 – 01:00”.
+>
+> În calendarul oamenilor evenimentul intră întotdeauna cu durata reală, chiar
+> și când site-ul n-o scrie. Fără oră de început intră ca eveniment „toată
+> ziua”, adică o bandă peste zilele respective.
+| Link hartă | **Opțional.** Deschizi Google Maps, apeși *Share/Distribuie* și lipești linkul aici. Sau scrii coordonatele: `46.7712, 23.5949` — util pentru un loc din parc, care nu are adresă. Dacă e completat, adresa de pe pagina evenimentului devine apăsabilă și deschide harta. Dacă lași gol, adresa rămâne text simplu. |
 | Preț | **0 înseamnă gratuit.** Orice număr mai mare cere plata prin card. Nu poate fi negativ. |
 | Moneda | RON, EUR, USD sau GBP. Implicit RON. Clientul plătește exact în moneda aleasă aici. |
-| Participanți maxim | Câte locuri sunt. Lasă gol dacă nu limitezi. Minim 1. |
+| Participanți maxim | Câte locuri pot fi rezervate pe site — singurul loc unde se poate rezerva. Scade numărul dacă vrei să păstrezi locuri pentru cineva: din 15 pui 13 și rămân două ale tale. **Gol sau 0** înseamnă „locuri epuizate": nimeni nu se mai poate înscrie, se poate intra doar pe lista de așteptare. Când pui la loc un număr și rămân locuri libere, primele persoane de pe listă primesc un email — vezi mai jos. |
 | URL Imagine | Alegi din Biblioteca Media. |
 | Link WhatsApp | Grupul evenimentului. Se trimite automat în emailul de confirmare. Vezi mai jos. |
 | Publicat | **Cât timp e debifat, evenimentul nu se vede pe site.** |
@@ -123,6 +146,25 @@ ore**. Dacă nu îl folosește, linkul expiră, dar locul rămâne liber și ori
 poate înscrie normal.
 
 Vezi cine așteaptă: **Evenimente** → butonul **Vezi lista de așteptare**.
+
+#### Când dai drumul la locuri, lista pleacă
+
+La un eveniment cu **Participanți maxim** gol sau 0 nu există niciun loc de dat,
+așa că nimeni de pe listă nu primește nimic, oricât ar aștepta. Lista pornește
+doar când pui tu un număr.
+
+**De fiecare dată când salvezi un eveniment**, site-ul se uită câte locuri sunt
+libere și trimite atâtea linkuri, în ordinea în care oamenii s-au înscris pe
+listă. Dacă sunt 3 locuri libere și 10 pe listă, pleacă 3 emailuri. Dacă nu e
+niciun loc liber, nu pleacă nimic.
+
+După salvare îți spune câte au plecat, într-o bară verde sus. Nimeni nu
+primește același link de două ori: dacă salvezi din nou peste cinci minute, cei
+care au deja un link valabil sunt săriți.
+
+> **Deci:** înainte să pui un număr mare la un eveniment cu listă de așteptare,
+> gândește-te că fiecare loc liber înseamnă un email plecat imediat, în numele
+> tău.
 
 ---
 
@@ -217,21 +259,7 @@ României.
 
 ---
 
-## 8. Imagini pentru Instagram
-
-Pe fiecare pagină de eveniment și de articol există butonul **„Descarcă pentru
-Instagram"**.
-
-Îți generează o imagine verticală (formatul de story) cu titlul, data, locația
-și prețul evenimentului, gata de postat. Nu trebuie să faci nimic în alt program.
-
-Avantajul: imaginea se face din datele reale ale evenimentului. Dacă muți
-evenimentul pe altă dată, imaginea se schimbă odată cu el — nu ai cum să postezi
-din greșeală o dată veche.
-
----
-
-## 9. Când ceva nu merge
+## 8. Când ceva nu merge
 
 **Nu pot intra în panou.** Verifică emailul și parola. Dacă apare mesajul
 „Contul acesta nu are acces la panoul de administrare", contul există dar nu are

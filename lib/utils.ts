@@ -16,7 +16,137 @@ export function formatTime(time: string) {
   return time.slice(0, 5);
 }
 
-const ICS_DURATION_MINUTES = 90;
+/** The shape every surface needs in order to say when an event happens. */
+export interface EventSchedule {
+  date: string;
+  time: string | null;
+  end_date: string | null;
+  end_time: string | null;
+}
+
+/**
+ * When an event happens, as the two strings a card puts beside its two icons.
+ *
+ * `date` always has something in it. `time` is null when there is no hour to
+ * show, and the caller then renders no clock at all rather than an empty one.
+ *
+ *   one day, both hours     "23 septembrie 2026"      "18:30 - 20:00"
+ *   one day, start only     "23 septembrie 2026"      "18:30"
+ *   one day, no hours       "23 septembrie 2026"      null
+ *   several days, hours     "26 - 28 octombrie 2026"  "09:00 - 17:00"
+ *   several days, no hours  "26 - 28 octombrie 2026"  null
+ *   crossing midnight       "7 - 8 noiembrie 2026"    "22:00 - 01:00"
+ *
+ * THE DATE AND THE HOURS ARE DECIDED SEPARATELY
+ *
+ * The date says which days it occupies; the hours say when it runs on them. A
+ * retreat that starts on Friday and ends on Sunday, 09:00 to 17:00, is telling
+ * you both — the days it takes up and the hours kept on each of them — and
+ * there is no reason showing one should suppress the other.
+ *
+ * This is also what makes crossing midnight fall out rather than need handling.
+ * A session from 22:00 to 01:00 has an end date of the following day, because
+ * the database will not accept an end time before its start on the same date;
+ * so the date half prints "7 - 8 noiembrie" and the hours half prints
+ * "22:00 - 01:00", and neither had to know about the other.
+ *
+ * WHY AN END WITHOUT A START SHOWS NOTHING
+ *
+ * An hour to be somewhere is the useful half. "ends 17:00" with no start tells
+ * a visitor nothing they can plan around, and printing it beside a date would
+ * read as the start. She has said when it finishes and not when it begins,
+ * which is a half-filled form rather than a fact worth publishing.
+ *
+ * The dash is an en dash with thin spaces either side, which is how a range is
+ * set; a hyphen is for compound words and reads as a typo at this size. Both
+ * are real characters rather than CSS, so a range survives being copied out of
+ * the page into a message.
+ */
+export function formatEventSchedule(
+  event: EventSchedule,
+  locale: string = "ro"
+): { date: string; time: string | null } {
+  const spansDays = Boolean(event.end_date) && event.end_date !== event.date;
+  const date = spansDays
+    ? formatDateRange(event.date, event.end_date!, locale)
+    : formatDate(event.date, locale);
+
+  const start = event.time ? formatTime(event.time) : null;
+  if (!start) return { date, time: null };
+
+  const end = event.end_time ? formatTime(event.end_time) : null;
+  return { date, time: end ? `${start}\u2009\u2013\u2009${end}` : start };
+}
+
+/**
+ * A range of days, with whatever the two ends share said once.
+ *
+ * Repeating the month and the year on both sides is noise: "26 octombrie 2026
+ * - 28 octombrie 2026" is twice the width to carry one extra number. Crossing a
+ * month, or a new year, re-introduces exactly the part that changed and nothing
+ * else.
+ *
+ * WHY THE TWO LANGUAGES BRANCH
+ *
+ * Only for a range inside one month, and only because the month sits on a
+ * different side of the day in each. Romanian says "28 octombrie", so dropping
+ * the shared month from the first date leaves "28 - 29 octombrie 2026" and the
+ * numbers stay together. English says "October 28", so doing the same thing
+ * leaves "28 - October 29, 2026" \u2014 which is what this used to print, and reads
+ * as a fragment. English has to keep the month on the *first* date and drop it
+ * from the second: "October 28 - 29, 2026".
+ *
+ * The other two branches need no such care. Once the month differs it is
+ * printed on both sides anyway, so each date is simply formatted whole and
+ * `Intl` puts its parts in the right order for the language.
+ */
+export function formatDateRange(start: string, end: string, locale: string = "ro"): string {
+  const tag = locale === "ro" ? "ro-RO" : "en-US";
+  const from = new Date(start);
+  const to = new Date(end);
+
+  const sameYear = from.getFullYear() === to.getFullYear();
+  const sameMonth = sameYear && from.getMonth() === to.getMonth();
+
+  const part = (date: Date, options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(tag, options).format(date);
+
+  const dash = "\u2009\u2013\u2009";
+
+  if (sameMonth) {
+    // "October 28 - 29, 2026" \u2014 the year is appended rather than formatted with
+    // the second day, because `Intl` given only a day and a year produces
+    // "29 2026" with nothing between them.
+    if (locale !== "ro") {
+      return (
+        part(from, { month: "long", day: "numeric" }) +
+        dash +
+        part(to, { day: "numeric" }) +
+        `, ${to.getFullYear()}`
+      );
+    }
+
+    // "26 - 28 octombrie 2026"
+    return (
+      part(from, { day: "numeric" }) +
+      dash +
+      part(to, { day: "numeric", month: "long", year: "numeric" })
+    );
+  }
+
+  // "28 octombrie - 2 noiembrie 2026"
+  if (sameYear) {
+    return (
+      part(from, { day: "numeric", month: "long" }) +
+      dash +
+      part(to, { day: "numeric", month: "long", year: "numeric" })
+    );
+  }
+
+  // "28 decembrie 2026 - 2 ianuarie 2027"
+  return formatDate(start, locale) + dash + formatDate(end, locale);
+}
+
 
 /**
  * The timezone event times are entered in.
@@ -94,22 +224,6 @@ export function zonedWallClockToUtc(date: string, time: string, timeZone: string
   return new Date(asIfUtc.getTime() - offsetMs);
 }
 
-/** Formats an instant as an iCalendar UTC timestamp, e.g. 20260807T150000Z. */
-function formatICSDate(date: Date): string {
-  return date
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}/, "");
-}
-
-function escapeICS(text: string): string {
-  return text
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
-    .replace(/\r?\n/g, "\\n");
-}
-
 /**
  * An event's start as a real instant, for anywhere that needs an unambiguous
  * timestamp — schema.org `startDate`, for instance.
@@ -119,49 +233,16 @@ function escapeICS(text: string): string {
  * between EET (UTC+2) and EEST (UTC+3). Deriving it from the date handles the
  * changeover automatically.
  */
-export function eventStartInstant(date: string, time: string): Date {
-  return zonedWallClockToUtc(date, time.slice(0, 5), EVENT_TIME_ZONE);
-}
-
-export function generateICS(event: {
-  title: string;
-  description: string;
-  date: string;
-  time: string;
-  location: string;
-  /**
-   * Stable identifier for this event, ideally the database id.
+export function eventStartInstant(date: string, time: string | null): Date {
+  /*
+   * Midnight when she has not announced an hour yet.
    *
-   * Calendar apps treat UID as the identity of an entry: send the same UID
-   * twice and the second one updates the first, send a new one and they get a
-   * duplicate. This used to be `Date.now()`, so someone who received both the
-   * registration and the payment confirmation ended up with the same class
-   * sitting in their calendar twice.
+   * This is a sort key and a "has it happened" test, not something shown to
+   * anyone — nothing prints 00:00, because `formatEventSchedule` returns a null
+   * time for exactly this row and the clock is omitted. Midnight is the right
+   * choice for both uses: an event with no stated hour sorts to the top of its
+   * own day, and stays upcoming for the whole of that day rather than expiring
+   * at an hour nobody was told about.
    */
-  uid?: string;
-}) {
-  const start = zonedWallClockToUtc(
-    event.date,
-    event.time.slice(0, 5),
-    EVENT_TIME_ZONE
-  );
-  const end = new Date(start.getTime() + ICS_DURATION_MINUTES * 60 * 1000);
-
-  return [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Yoga Website//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:${event.uid || `${event.date}-${event.time}`}@yoga-website`,
-    `DTSTAMP:${formatICSDate(new Date())}`,
-    `DTSTART:${formatICSDate(start)}`,
-    `DTEND:${formatICSDate(end)}`,
-    `SUMMARY:${escapeICS(event.title)}`,
-    `DESCRIPTION:${escapeICS(event.description)}`,
-    `LOCATION:${escapeICS(event.location)}`,
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ].join("\r\n");
+  return zonedWallClockToUtc(date, (time ?? "00:00").slice(0, 5), EVENT_TIME_ZONE);
 }

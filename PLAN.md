@@ -249,15 +249,6 @@ She fills it in herself at `/admin/content` — no developer needed.
       deliberately: it is currently in use for testing, and the account is the
       only one on the project.
 
-## Paused
-
-### The floating "book now" bar
-
-Built, tested and switched off at the owner's request — one commented-out
-`<StickyCta />` in `app/[locale]/page.tsx`. The component, the `#hero-cta-end`
-marker and its two Playwright tests are intact; uncommenting the line and
-changing `test.describe.skip` back to `test.describe` restores it.
-
 ## Next
 
 ### Share images should use the brand typeface

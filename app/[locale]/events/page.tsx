@@ -3,10 +3,10 @@ import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { SeatCount } from "@/components/events/seat-count";
 import { eventAvailability } from "@/lib/event-availability";
-import { formatDate, formatTime, eventStartInstant } from "@/lib/utils";
+import { formatEventSchedule, eventStartInstant } from "@/lib/utils";
 import { formatPrice } from "@/lib/money";
 import { getLocale, getTranslations } from "next-intl/server";
-import { buildPageMetadata } from "@/lib/metadata";
+import { buildPageMetadata, toPlainText } from "@/lib/metadata";
 import { absoluteUrl } from "@/lib/site-config";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import Image from "next/image";
@@ -43,7 +43,7 @@ export default async function EventsPage() {
 
   const { data: upcoming } = await supabase
     .from("events")
-    .select("id, slug, title_ro, title_en, date, time, location, price, currency, max_participants, image_url, description_ro, description_en")
+    .select("id, slug, title_ro, title_en, date, time, end_date, end_time, location, price, currency, max_participants, image_url, description_ro, description_en")
     .eq("published", true)
     .gte("date", today)
     .order("date", { ascending: true })
@@ -96,11 +96,25 @@ export default async function EventsPage() {
         <p className="mt-8 text-charcoal-light">{t("no_events")}</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {events.map((event) => (
+          {events.map((event) => {
+            // One place decides how a date and an hour are said, so the card
+            // here, the carousel slide on the home page and the event page
+            // itself cannot drift apart.
+            const schedule = formatEventSchedule(event, locale);
+            return (
             <Link key={event.id} href={`/events/${event.slug}`} className="block rounded-2xl">
               <GlassCard className="group h-full">
                 {event.image_url && (
-                  <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl bg-sage/10">
+                  /*
+                    Left, top and right, because this card is always stacked:
+                    the photograph is its lid. `-3` against the card's `p-6`
+                    gives it half that padding and leaves the other half, so it
+                    sits a little proud of the text without reaching the edge —
+                    which it cannot do, for the reason written out in
+                    components/events/event-feature-card.tsx: this card's
+                    backdrop-filter defeats rounded overflow clipping.
+                  */
+                  <div className="relative -mx-3 -mt-3 mb-4 aspect-[3/2] overflow-hidden rounded-xl bg-sage/10">
                     <Image
                       src={event.image_url}
                       alt={locale === "ro" ? event.title_ro : (event.title_en || event.title_ro)}
@@ -121,19 +135,33 @@ export default async function EventsPage() {
                 <h2 className="font-serif text-xl text-charcoal">
                   {locale === "ro" ? event.title_ro : (event.title_en || event.title_ro)}
                 </h2>
+                {/* Stripped of markup — the column holds HTML, which the event
+                    page renders and which this card would otherwise print. */}
                 <p className="mb-4 mt-2 line-clamp-2 text-sm text-charcoal-light">
-                  {locale === "ro" ? event.description_ro : (event.description_en || event.description_ro)}
+                  {toPlainText(
+                    locale === "ro"
+                      ? event.description_ro
+                      : event.description_en || event.description_ro
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-3 text-sm text-charcoal-light">
                   <span className="flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" /> {formatDate(event.date, locale)}
+                    <Calendar className="h-3.5 w-3.5" aria-hidden="true" />{" "}
+                    {schedule.date}
                   </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" /> {formatTime(event.time)}
-                  </span>
+                  {/* No clock at all when she has not announced an hour — an
+                      empty one beside a date reads as a rendering fault. */}
+                  {schedule.time && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" aria-hidden="true" /> {schedule.time}
+                    </span>
+                  )}
                   {event.location && (
                     <span className="flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" /> {event.location}
+                      {/* Optically matched to the `h-3.5` icons beside it —
+                          see the note on the same icon in the feature card. */}
+                      <MapPin className="h-[16px] w-[16px]" aria-hidden="true" />{" "}
+                      {event.location}
                     </span>
                   )}
                 </div>
@@ -145,7 +173,8 @@ export default async function EventsPage() {
                 </div>
               </GlassCard>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

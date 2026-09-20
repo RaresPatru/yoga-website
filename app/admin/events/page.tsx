@@ -21,8 +21,15 @@ interface Event {
   description_ro: string | null;
   description_en: string | null;
   date: string;
-  time: string;
+  /** NULL means she has not announced an hour yet. See the migration. */
+  time: string | null;
+  /** NULL means it ends on the day it starts. */
+  end_date: string | null;
+  /** NULL means she has not said when it ends. */
+  end_time: string | null;
   location: string | null;
+  /** A pasted map URL or a "lat, lng" pair. See lib/map-link.ts. */
+  map_link: string | null;
   price: number;
   currency: string | null;
   max_participants: number | null;
@@ -150,8 +157,14 @@ function EventForm({
     description_ro: event?.description_ro || "",
     description_en: event?.description_en || "",
     date: event?.date || "",
-    time: event?.time || "",
+    // Sliced because Postgres hands back "18:30:00" and `<input type="time">`
+    // shows an empty box for anything that is not "HH:MM" — which reads as the
+    // time having been lost every time she reopens an event to edit it.
+    time: event?.time?.slice(0, 5) || "",
+    end_date: event?.end_date || "",
+    end_time: event?.end_time?.slice(0, 5) || "",
     location: event?.location || "",
+    map_link: event?.map_link || "",
     price: event?.price?.toString() || "0",
     currency: event?.currency || DEFAULT_CURRENCY,
     max_participants: event?.max_participants?.toString() || "",
@@ -160,6 +173,18 @@ function EventForm({
     published: event?.published || false,
   });
   const [saving, setSaving] = useState(false);
+  /*
+   * Only set when she has actually tried to save.
+   *
+   * A required field that complains before anybody has typed in it is the
+   * commonest way to make a form feel hostile — it opens already telling you
+   * you are wrong. The browser's own `:user-invalid` exists for this and waits
+   * for a blur or a submit; there is no <form> here to submit, so the wait is
+   * expressed as "this is empty until handleSave says otherwise". The Input
+   * component turns it into `aria-invalid` plus a `role="alert"` message.
+   */
+  const [endError, setEndError] = useState<string | null>(null);
+  const endRef = useRef<HTMLInputElement>(null);
   const [translatingTitle, setTranslatingTitle] = useState(false);
   const [translatingDesc, setTranslatingDesc] = useState(false);
   const [spell, setSpell] = useState<SpellcheckLang>("ro");
@@ -239,15 +264,68 @@ function EventForm({
   const handleSave = async () => {
     setSaving(true);
     const price = Math.max(0, Math.trunc(Number(form.price) || 0));
-    const capacity = form.max_participants
-      ? Math.max(1, Math.trunc(Number(form.max_participants)))
-      : null;
+    /*
+     * Blank stays NULL and zero stays zero, because both now mean sold out.
+     *
+     * This used to floor at 1, which quietly turned "0" into "1" — she would
+     * type zero to mark an event already full and get one bookable seat back.
+     * `Number("")` is 0, so the blank check has to come first and has to test
+     * the string, not the number.
+     */
+    const typed = form.max_participants.trim();
+    const capacity = typed === "" ? null : Math.max(0, Math.trunc(Number(typed) || 0));
+
+    /*
+     * An end before its start is the one combination worth stopping here.
+     *
+     * The database refuses it too — see `events_end_not_before_start` — but a
+     * constraint violation surfaces as a failed save with no explanation, and
+     * she would be left guessing which of four fields it meant. `min` on the
+     * input catches most of it, and is advisory because there is no <form> to
+     * run native validation.
+     *
+     * Everything else about these four is allowed to be blank. Blank is a real
+     * answer: she has not announced it yet.
+     */
+    const endDate = form.end_date.trim() || null;
+    const endTime = form.end_time.trim() || null;
+    const startTime = form.time.trim() || null;
+
+    const endsBeforeStart =
+      (endDate !== null && endDate < form.date) ||
+      (endDate !== null &&
+        endDate === form.date &&
+        startTime !== null &&
+        endTime !== null &&
+        endTime <= startTime);
+
+    if (endsBeforeStart) {
+      setEndError(t("admin.end_before_start"));
+      setSaving(false);
+      // Native submit would focus the first invalid field; there is no native
+      // submit, so this does it by hand. Without it the message can be off
+      // screen on the phone she edits from.
+      endRef.current?.focus();
+      return;
+    }
+    setEndError(null);
 
     await onSave({
       id: event?.id,
       ...form,
       price,
       max_participants: capacity,
+      // Blank is NULL, not "": the columns mean "not announced yet", and an
+      // empty string would be a value that renders the same while making
+      // `where end_date is null` stop finding the events that have no end.
+      time: startTime,
+      end_date: endDate,
+      end_time: endTime,
+      // Trimmed to NULL rather than spread through as "". The column comment in
+      // 20260918000001_event_map_link.sql says NULL means she has not supplied
+      // one, and an empty string renders identically while making
+      // `where map_link is null` stop finding the events that have no pin.
+      map_link: form.map_link.trim() || null,
     });
     setSaving(false);
   };
@@ -275,7 +353,7 @@ function EventForm({
             <button
               onClick={handleTranslateTitle}
               disabled={translatingTitle || !form.title_ro.trim()}
-              title={t("admin.translate_to_en")}
+              data-tooltip={t("admin.translate_to_en")}
               className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
               {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -295,7 +373,7 @@ function EventForm({
             <button
               onClick={handleTranslateDesc}
               disabled={translatingDesc || !form.description_ro.trim()}
-              title={t("admin.translate_to_en")}
+              data-tooltip={t("admin.translate_to_en")}
               className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
               {translatingDesc ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
@@ -358,10 +436,69 @@ function EventForm({
         </div>
       </div>
 
+      {/*
+        Start and end, laid out as two pairs rather than four equal boxes, so
+        the grouping is visible before anything is read: a date next to its own
+        time, and the second pair plainly the counterpart of the first.
+
+        Only the start date is required. She books a venue for a weekend in
+        March and announces it long before she knows what time Friday begins;
+        the fields she cannot answer yet stay empty and the page says nothing
+        about them rather than inventing an hour.
+      */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Input label={t("admin.date")} type="date" value={form.date} onChange={(e) => setForm({...form, date: e.target.value})} />
-        <Input label={t("admin.time")} type="time" value={form.time} onChange={(e) => setForm({...form, time: e.target.value})} />
+        <Input
+          label={t("admin.date")}
+          type="date"
+          required
+          value={form.date}
+          onChange={(e) => setForm({ ...form, date: e.target.value })}
+        />
+        <Input
+          label={t("admin.time")}
+          type="time"
+          value={form.time}
+          onChange={(e) => setForm({ ...form, time: e.target.value })}
+          hint={t("admin.time_hint")}
+        />
+        <Input
+          ref={endRef}
+          label={t("admin.end_date")}
+          type="date"
+          // The browser refuses an earlier date where it can, which is the
+          // cheap half of the check. The database constraint is the half that
+          // actually holds, because `min` is advisory without a <form>.
+          min={form.date || undefined}
+          value={form.end_date}
+          onChange={(e) => {
+            setForm({ ...form, end_date: e.target.value });
+            if (endError) setEndError(null);
+          }}
+          error={endError ?? undefined}
+          hint={t("admin.end_date_hint")}
+        />
+        <Input
+          label={t("admin.end_time")}
+          type="time"
+          value={form.end_time}
+          onChange={(e) => {
+            setForm({ ...form, end_time: e.target.value });
+            if (endError) setEndError(null);
+          }}
+          hint={t("admin.end_time_hint")}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
         <Input label={t("admin.location")} value={form.location} onChange={(e) => setForm({...form, location: e.target.value})} />
+        <Input
+          label={t("admin.map_link")}
+          value={form.map_link}
+          onChange={(e) => setForm({...form, map_link: e.target.value})}
+          inputMode="url"
+          placeholder="https://maps.app.goo.gl/..."
+          hint={t("admin.map_link_hint")}
+        />
 
         {/* Price and its currency read as one field, so they sit in one box. */}
         <div className="space-y-1.5">
@@ -402,11 +539,19 @@ function EventForm({
         <Input
           label={t("admin.max_participants")}
           type="number"
-          // Blank means no limit; 1 is the smallest event that can actually be
-          // booked. Zero would mark the event permanently sold out.
-          min={1}
+          // How many people can book on the website, which is the only place
+          // anyone can book: Instagram carries the announcement and sends them
+          // here. So this is the room, minus any places she is holding back —
+          // lowering 15 to 13 keeps two for a collaborator or a gift.
+          //
+          // Zero closes bookings and leaves only the waiting list; blank means
+          // she has not said yet, and is treated the same way. Raising the
+          // number again releases the queue, which is what the note under the
+          // field is warning about. Negatives floor to zero.
+          min={0}
           step={1}
           inputMode="numeric"
+          hint={t("admin.max_participants_hint")}
           value={form.max_participants}
           onChange={(e) => setForm({...form, max_participants: e.target.value})}
         />
@@ -438,6 +583,15 @@ export default function AdminEventsPage() {
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState<Record<string, { registrations: number; waiting: number }>>({});
   const [waitingFor, setWaitingFor] = useState<Event | null>(null);
+  /*
+   * How many claim links the last save sent, when it sent any.
+   *
+   * Saving an event can email people in her name, which she has to be told
+   * about — she wrote none of it and it goes out under her address. Announced
+   * rather than silent, and dismissible rather than timed, because the number
+   * matters: it is how many seats she has just promised away.
+   */
+  const [notified, setNotified] = useState<number | null>(null);
 
   const loadEvents = useCallback(async () => {
     const supabase = createClient();
@@ -527,14 +681,53 @@ export default function AdminEventsPage() {
 
   const handleSave = async (data: Partial<Event>) => {
     const supabase = createClient();
+    let eventId = data.id;
     if (data.id) {
       await supabase.from("events").update(data).eq("id", data.id);
     } else {
-      await supabase.from("events").insert(data);
+      // The id comes back from the insert because the next step needs it, and
+      // asking the database which event we just wrote is worse than being told.
+      const { data: created } = await supabase
+        .from("events")
+        .insert(data)
+        .select("id")
+        .single();
+      eventId = created?.id;
     }
     setEditing(null);
     setCreating(false);
     loadEvents();
+
+    /*
+     * Let the waiting list know, if there is anything to tell it.
+     *
+     * Fired after every save rather than only after a capacity change, which is
+     * both simpler and more correct: the route counts the free seats itself, so
+     * a save that leaves none does nothing, and a save that leaves some
+     * releases the queue whether or not capacity is what moved. An event can
+     * become bookable again without her touching the number at all — a pending
+     * checkout that was holding the last seat simply expires.
+     *
+     * It cannot be done from here directly. Emailing needs the service-role
+     * key, which is a server secret, and the panel runs in her browser.
+     */
+    if (!eventId) return;
+    try {
+      const response = await fetch("/api/admin/events/notify-waiting-list", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await getAuthToken()}`,
+        },
+        body: JSON.stringify({ eventId }),
+      });
+      const { notified } = await response.json();
+      if (notified > 0) setNotified(notified);
+    } catch (error) {
+      // A failure here must not read as a failed save — the event is saved.
+      // She can release the queue by saving again.
+      console.error("Waiting list notification failed:", error);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -560,6 +753,26 @@ export default function AdminEventsPage() {
           <Plus className="mr-2 h-4 w-4" /> {t("admin.new_event")}
         </Button>
       </div>
+
+      {notified !== null && (
+        // `role="status"` rather than `alert`: this is the outcome of something
+        // she just did, not an interruption, so it is read after whatever the
+        // screen reader is already saying rather than cutting across it.
+        <div
+          role="status"
+          className="mt-6 flex items-start justify-between gap-4 rounded-xl border border-sage/30 bg-sage/10 px-4 py-3 text-sm text-charcoal"
+        >
+          <span>{t("admin.waiting_list_notified").replace("{count}", String(notified))}</span>
+          <button
+            type="button"
+            onClick={() => setNotified(null)}
+            aria-label={t("admin.close")}
+            className="shrink-0 rounded-sm text-charcoal-light transition-colors hover:text-charcoal"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="mt-8 flex justify-center">
@@ -595,17 +808,41 @@ export default function AdminEventsPage() {
                     )}
                   </div>
                 </div>
+                {/*
+                  Each button names the event it acts on, not just the verb.
+                  These are icon-only and there are three of them per card down
+                  a long list, so "Edit" on its own would be announced
+                  identically a dozen times over with nothing to tell them
+                  apart — and the row that carries the waiting-list button is
+                  not the same shape as the rows that do not, so position is no
+                  help either.
+                */}
                 <div className="flex gap-2">
                   {c && c.waiting > 0 && (
-                    <Button variant="ghost" size="sm" onClick={() => setWaitingFor(event)}>
-                      <Users className="h-4 w-4 text-warning" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`${t("admin.view_waiting_list")}: ${event.title_ro}`}
+                      onClick={() => setWaitingFor(event)}
+                    >
+                      <Users className="h-4 w-4 text-warning" aria-hidden="true" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => setEditing(event)}>
-                    <Edit2 className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${t("admin.edit_event")}: ${event.title_ro}`}
+                    onClick={() => setEditing(event)}
+                  >
+                    <Edit2 className="h-4 w-4" aria-hidden="true" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDelete(event.id)}>
-                    <Trash2 className="h-4 w-4 text-error" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${t("admin.delete")}: ${event.title_ro}`}
+                    onClick={() => handleDelete(event.id)}
+                  >
+                    <Trash2 className="h-4 w-4 text-error" aria-hidden="true" />
                   </Button>
                 </div>
               </GlassCard>
