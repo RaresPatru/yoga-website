@@ -97,12 +97,18 @@ export async function EventFeatureCard({
           read as a card that had failed to load the rest of itself. Centred, the
           same slack is margin.
 
-          The photograph was a square here, which at a fifth of a 1120px card is
-          433px tall against roughly 250px of text — a third of every card was
-          void. That was survivable while this was the only card on the page;
-          the carousel makes every slide as tall as the tallest, so it became
-          the whole section. 4:3 keeps enough height for a portrait crop while
-          landing much closer to what the text actually needs.
+          The photograph was a square here, which across two of the five columns
+          is 426px tall against roughly 270px of text — a third of every card
+          was void. That was survivable while this was the only card on the
+          page; the carousel makes every slide as tall as the tallest, so it
+          became the whole section, and the crop went to 4:3.
+
+          4:3 overcorrected. It took a hundred pixels out of the card — 450 down
+          to 345, measured at 1400px — and a section that had been the page's
+          centrepiece started reading as a strip. 8:7 is the midpoint of the
+          two, exactly: a square's height is the column's full width and 4:3's
+          is three quarters of it, so seven eighths sits halfway between. The
+          card comes back to 398 — half of what 4:3 took.
 
           All three of those are `md:` only, and that is the point. Stacked on a
           phone there is no column beside anything to line up with, and a card
@@ -139,7 +145,7 @@ export async function EventFeatureCard({
               thing, and its own `rounded-xl` then reads as concentric with the
               card's `rounded-2xl` rather than fighting it.
             */
-            <div className="relative -mx-3 -mt-3 aspect-video overflow-hidden rounded-xl md:col-span-2 md:mx-0 md:-my-3 md:-ml-3 md:aspect-[4/3]">
+            <div className="relative -mx-3 -mt-3 aspect-video overflow-hidden rounded-xl md:col-span-2 md:mx-0 md:-my-3 md:-ml-3 md:aspect-[8/7]">
               <Image
                 src={event.image_url}
                 alt={title}
@@ -169,24 +175,40 @@ export async function EventFeatureCard({
               <p className="mt-3 line-clamp-3 text-charcoal-light">{description}</p>
             )}
 
-            <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-charcoal-light">
-              <span className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" aria-hidden="true" />
-                {/* A day, or a run of them: "26 – 28 octombrie 2026". */}
-                {schedule.date}
-              </span>
-              {/* No clock at all until she has announced an hour. An empty one
-                  beside a date reads as something that failed to load. */}
-              {schedule.time && (
+            {/*
+              WHEN, THEN WHERE — ON TWO LINES, ALWAYS
+
+              These three used to share one wrapping row, which let the layout
+              decide where the break fell: a short place name rode up beside the
+              hour, a long one dropped to its own line, and the same card
+              changed shape as the window moved. The two questions are not the
+              same question, so the break is written down rather than left to
+              the available width.
+
+              Not a breakpoint either. The card has a stacked state and a
+              side-by-side one, and in both of them the date and the hour belong
+              together and the place belongs under them.
+            */}
+            <div className="mt-4 flex flex-col items-center gap-2 text-sm text-charcoal-light">
+              <div className="flex flex-wrap justify-center gap-x-5 gap-y-2">
                 <span className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" aria-hidden="true" />
-                  {schedule.time}
+                  <Calendar className="h-4 w-4" aria-hidden="true" />
+                  {/* A day, or a run of them: "26 – 28 octombrie 2026". */}
+                  {schedule.date}
                 </span>
-              )}
+                {/* No clock at all until she has announced an hour. An empty one
+                    beside a date reads as something that failed to load. */}
+                {schedule.time && (
+                  <span className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" aria-hidden="true" />
+                    {schedule.time}
+                  </span>
+                )}
+              </div>
               {event.location && (
                 <span className="flex items-center gap-2">
                   {/*
-                    A shade larger than the calendar and the clock beside it,
+                    A shade larger than the calendar and the clock above it,
                     which are `h-4`. Not an inconsistency: those two fill their
                     box — a square and a circle — while a map pin is a narrow
                     teardrop with empty corners, so at a matching box size it

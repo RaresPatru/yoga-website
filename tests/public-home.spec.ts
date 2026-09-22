@@ -1297,6 +1297,64 @@ test.describe("home page events carousel", () => {
   });
 
   /**
+   * When and where are two different questions, so the break between them is
+   * written into the markup rather than left to the available width.
+   *
+   * They used to share one wrapping row: a short place name rode up beside the
+   * hour, a long one dropped below it, and the same card changed shape as the
+   * window moved. Both widths are checked because the card has two layouts —
+   * stacked on a phone, photograph-beside-text above `md` — and the rule is the
+   * same in both.
+   *
+   * The assertion is geometric rather than structural on purpose. It would be
+   * easy to keep the two <div>s and still have them render on one line.
+   */
+  test("the place is on its own line, under the date and the hour", async ({ page }) => {
+    const where = "Parcul Memorandumului, Cluj-Napoca";
+    const event = await seedEvent({
+      date: inDays(1),
+      time: "18:30",
+      end_time: "19:45",
+      location: where,
+    });
+    try {
+      for (const width of [1400, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto("/ro");
+
+        const rows = await slides(page)
+          .first()
+          .evaluate((slide, place) => {
+            const pin = [...slide.querySelectorAll("span")].find(
+              (span) => span.textContent?.trim() === place
+            );
+            const meta = pin?.parentElement;
+            if (!meta) return null;
+            return [...meta.children].map((row) => {
+              const box = row.getBoundingClientRect();
+              return {
+                text: row.textContent!.trim().replace(/\s+/g, " "),
+                top: box.top,
+                bottom: box.bottom,
+              };
+            });
+          }, where);
+
+        expect(rows, `no location found at ${width}px`).not.toBeNull();
+        expect(rows!.length, `expected a when row and a where row at ${width}px`).toBe(2);
+        expect(rows![0].text, "the hour left the first row").toContain("18:30");
+        expect(rows![1].text).toBe(where);
+        expect(
+          rows![1].top,
+          `the place is still beside the hour at ${width}px`
+        ).toBeGreaterThanOrEqual(rows![0].bottom - 1);
+      }
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  /**
    * The "see all events" link is an anchor styled as a button, and it was the
    * one section CTA on this page that was not centred — along with the heading
    * above it.
