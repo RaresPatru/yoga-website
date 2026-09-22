@@ -80,6 +80,13 @@ Debifezi **Vizibil pe site** dacă vrei să ascunzi temporar o întrebare.
 | Data de final | Doar dacă ține mai multe zile. Lasă gol pentru un eveniment de o singură zi. |
 | Ora de final | Când se termină. Lasă gol dacă nu vrei să promiți o oră de final. |
 | Locație | Orașul sau adresa. Este textul care se vede pe site. |
+| Link hartă | **Opțional.** Deschizi Google Maps, apeși *Share/Distribuie* și lipești linkul aici. Sau scrii coordonatele: `46.7712, 23.5949` — util pentru un loc din parc, care nu are adresă. Dacă e completat, adresa de pe pagina evenimentului devine apăsabilă și deschide harta. Dacă lași gol, adresa rămâne text simplu. |
+| Preț | **0 înseamnă gratuit.** Orice număr mai mare cere plata prin card. Nu poate fi negativ. |
+| Moneda | RON, EUR, USD sau GBP. Implicit RON. Clientul plătește exact în moneda aleasă aici. |
+| Participanți maxim | Câte locuri pot fi rezervate pe site — singurul loc unde se poate rezerva. Scade numărul dacă vrei să păstrezi locuri pentru cineva: din 15 pui 13 și rămân două ale tale. **Gol sau 0** înseamnă „locuri epuizate”: nimeni nu se mai poate înscrie, se poate intra doar pe lista de așteptare. Când pui la loc un număr și rămân locuri libere, primele persoane de pe listă primesc un email — vezi mai jos. |
+| URL Imagine | Deocamdată lipești adresa completă a imaginii. Un buton care deschide Biblioteca Media direct aici nu există încă. |
+| Link WhatsApp | Grupul evenimentului. Se trimite automat în emailul de confirmare. Vezi mai jos. |
+| Publicat | **Cât timp e debifat, evenimentul nu se vede pe site.** |
 
 > **Cum apare pe site.** Data și ora se hotărăsc separat.
 >
@@ -100,13 +107,6 @@ Debifezi **Vizibil pe site** dacă vrei să ascunzi temporar o întrebare.
 > În calendarul oamenilor evenimentul intră întotdeauna cu durata reală, chiar
 > și când site-ul n-o scrie. Fără oră de început intră ca eveniment „toată
 > ziua”, adică o bandă peste zilele respective.
-| Link hartă | **Opțional.** Deschizi Google Maps, apeși *Share/Distribuie* și lipești linkul aici. Sau scrii coordonatele: `46.7712, 23.5949` — util pentru un loc din parc, care nu are adresă. Dacă e completat, adresa de pe pagina evenimentului devine apăsabilă și deschide harta. Dacă lași gol, adresa rămâne text simplu. |
-| Preț | **0 înseamnă gratuit.** Orice număr mai mare cere plata prin card. Nu poate fi negativ. |
-| Moneda | RON, EUR, USD sau GBP. Implicit RON. Clientul plătește exact în moneda aleasă aici. |
-| Participanți maxim | Câte locuri pot fi rezervate pe site — singurul loc unde se poate rezerva. Scade numărul dacă vrei să păstrezi locuri pentru cineva: din 15 pui 13 și rămân două ale tale. **Gol sau 0** înseamnă „locuri epuizate": nimeni nu se mai poate înscrie, se poate intra doar pe lista de așteptare. Când pui la loc un număr și rămân locuri libere, primele persoane de pe listă primesc un email — vezi mai jos. |
-| URL Imagine | Alegi din Biblioteca Media. |
-| Link WhatsApp | Grupul evenimentului. Se trimite automat în emailul de confirmare. Vezi mai jos. |
-| Publicat | **Cât timp e debifat, evenimentul nu se vede pe site.** |
 
 ### Moneda
 
@@ -137,10 +137,10 @@ deja rămân exact cum au fost trimise.
 
 Site-ul numără singur locurile ocupate. Când se umple:
 
-- pe site apare **„Locuri epuizate"**;
+- pe site apare **„Locuri epuizate”**;
 - formularul de înscriere e înlocuit cu **lista de așteptare**.
 
-Dacă se eliberează un loc — cineva nu finalizează plata, sau ceri o restituire —
+Dacă se eliberează un loc — cineva nu finalizează plata, sau (după ce restituirile sunt activate în Stripe) ceri o restituire —
 prima persoană de pe listă primește automat un email cu un link valabil **24 de
 ore**. Dacă nu îl folosește, linkul expiră, dar locul rămâne liber și oricine se
 poate înscrie normal.
@@ -182,7 +182,7 @@ Starea plății:
 | Gratuit | Eveniment fără plată. Locul e confirmat. |
 | În așteptare | A început plata dar nu a finalizat-o încă. Locul e rezervat temporar. |
 | Plătit | Banii au intrat. Locul e confirmat. |
-| Restituit | Ai returnat banii. Locul s-a eliberat automat. |
+| Restituit | Ai returnat banii. Locul se eliberează automat după ce restituirile sunt activate în Stripe (încă nu sunt). |
 
 > **Datele acestea sunt personale.** Numele, emailurile și telefoanele
 > participantelor sunt vizibile **doar** aici, doar pentru tine. Nu apar nicăieri
@@ -252,7 +252,7 @@ acolo se completează automat datele reale.
 |---|---|
 | Confirmare înscriere | Imediat, la evenimente gratuite. |
 | Confirmare plată | După ce plata a intrat, la evenimentele cu preț. |
-| Cerere testimonial | Când o trimiți tu. |
+| Cerere testimonial | Deocamdată nu pleacă niciodată: site-ul nu are încă butonul care să-l trimită. |
 
 Fiecare confirmare are atașată invitația pentru calendar, cu ora corectă a
 României.

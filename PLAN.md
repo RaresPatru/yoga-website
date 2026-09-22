@@ -23,7 +23,7 @@ What is left to do. Forward-looking only.
 
 | | |
 |---|---|
-| Tests | 235 passing, 11 skipped |
+| Tests | 392 passing, 11 skipped (22 September 2026, local, one worker) |
 | Critical vulnerabilities | 0 open |
 | Deployed | production is public; preview deployments require Vercel login |
 | Blocking launch | real content from the instructor |
@@ -34,15 +34,22 @@ What is left to do. Forward-looking only.
 
 ### Content — the actual blocker
 
-Nothing technical is stopping this site going live. What is missing is her: no
-photograph, no bio, no About text, no FAQs, and the business is still called
-"Yoga Flow".
+What is missing is mostly her: no photograph, no bio, no About text, no FAQs,
+and the live site still shows the placeholder name "Yoga Flow". The real name,
+**flow4ward**, only needs typing into `/admin/content`.
 
 Full prioritised list: [docs/CONTENT-NEEDED.md](docs/CONTENT-NEEDED.md).
 She fills it in herself at `/admin/content` — no developer needed.
 
 - [ ] Photograph, intro, and About story (the three that matter most)
-- [ ] A real business name → one line in `lib/site-config.ts`
+- [ ] Business name: type **flow4ward** into `/admin/content` → "Numele
+      site-ului". It has been an admin field since
+      `20260915000000_editable_site_name.sql`; `SITE_NAME` in
+      `lib/site-config.ts` is only the fallback.
+- [ ] Take the hardcoded location and name out of the structured data.
+      `SITE_LOCALITY = "Cluj-Napoca"` is published as the business's town on
+      every page, but she hosts events all over Romania; `INSTRUCTOR_NAME` is
+      still the placeholder "Yoga Flow". Both live in `lib/site-config.ts`.
 - [ ] 4–5 FAQs
 - [ ] Instagram and Facebook addresses → `/admin/content`, under "Footer". Both
       fields accept a full address or just `@nume`; an icon with nothing behind
@@ -50,9 +57,13 @@ She fills it in herself at `/admin/content` — no developer needed.
 
 ### Verification that has never run against production
 
-- [ ] **One real Stripe test payment, end to end.** The confirmation email now
-      sends from the webhook rather than at registration, and that path has
-      never executed in production.
+- [ ] **One Stripe test payment, end to end, on the current code.** One was
+      made in August (docs/JOURNEY.md, 4.5) and found three problems; the
+      payment, expiry and waiting-list code has changed a lot since, and no
+      automated test sends a Stripe webhook.
+- [ ] **Subscribe the webhook endpoint to `charge.refunded`**, then test a
+      refund. The handler exists, but Stripe never sends it the event, so a
+      refund does not free the seat or notify the waiting list yet.
 - [ ] Confirm the Stripe webhook endpoint points at the production domain.
 - [ ] Check the site in Instagram's in-app browser on a real iPhone. WebKit is
       covered by the test suite; the webview itself is not.
@@ -163,9 +174,10 @@ She fills it in herself at `/admin/content` — no developer needed.
       diffing a linked `db dump` against a local one. Every table, column,
       constraint, index, grant and policy matched except two things, both since
       fixed: three RLS policies that existed only in production, and the object
-      descriptions. `supabase_migrations.schema_migrations` does not exist in
-      production, which confirms the CLI has never driven it — there is no
-      migration ledger to repair, and `db push` must never be run against it.
+      descriptions. At the time production had no migration ledger, so
+      `db push` was not safe; that changed on 11 September, when the ledger was
+      created (the first item in this list), and `db push` is now the way
+      schema reaches production.
 
 - [x] **Drop three stale waiting-list policies.** Applied 12 August 2026. They
       existed in production and in no migration: the August hardening ran
@@ -259,10 +271,11 @@ the first thing anyone sees of the site.
 
 ### Re-notify a waiting list that goes quiet
 
-If the first person does not use their 24-hour claim link, nobody else is
-contacted automatically. The seat is not lost — the event simply becomes bookable
-again — but the next person on the list is never told. Wants either a scheduled
-job or a "notify next" button in the admin waiting-list modal.
+Partly done: saving an event in the admin panel now offers every free seat to
+the front of the queue (`lib/notify-waiting-list.ts`), and a second save skips
+anyone still holding a live link. Still missing: when a claim link lapses
+unused, nobody else is told until the next save or checkout expiry. Wants a
+scheduled job, or a "notify next" button in the admin waiting-list modal.
 
 ### Rate limiting that survives serverless
 
@@ -281,7 +294,6 @@ ideally video, which is the highest-converting format.
 
 - Google Business Profile, then a reviews embed. Needs an established profile
   first.
-- Per-event duration. Calendar invites currently assume 90 minutes.
 - Admin dashboard revenue figures.
 - Instagram feed on the home page.
 

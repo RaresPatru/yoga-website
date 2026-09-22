@@ -69,9 +69,10 @@ and a confirmation email with a calendar invite.
 
 - **Instagram does not expand links into preview cards inside stories.** A
   1200×630 Open Graph image — the standard advice — is useless there. What she
-  needs is a **1080×1920 image she can post**. The site generates one per event
-  and per article, from the event's real data, so a rescheduled event cannot be
-  advertised with an outdated date.
+  needs is a **1080×1920 image she can post**. The site generated one per event
+  and per article for a while; it was removed again because downloading one and
+  posting it by hand turned out no easier than making one (`lib/og-card.tsx`).
+  The 1200×630 cards remain, for everywhere a link *is* expanded.
 - **The in-app browser is a WKWebView on iOS.** It behaves like Safari, not
   Chrome. This is not theoretical: a Content Security Policy directive that
   Chromium quietly ignores for local addresses broke the entire event page on

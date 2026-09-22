@@ -245,10 +245,12 @@ Unsupplied content renders with a dashed outline rather than plausible filler.
 The previous page filled its gaps with invented statistics, which look finished
 and are therefore never questioned. A visible gap gets closed.
 
-### `Button asChild` for links
+### `Button asChild` for links — client components only
 
 `<Link><Button>` puts a `<button>` inside an `<a>` — invalid, and ambiguous for
-screen readers. `asChild` renders one styled `<a>`.
+screen readers. `asChild` renders one styled `<a>`, but only inside a client
+component; from a Server Component use `buttonClasses()` on the link (see
+"`buttonClasses()` lives outside the `"use client"` boundary" above).
 
 ### Optional ratings on testimonials
 
@@ -292,12 +294,11 @@ Almost every real visitor arrives from Instagram on a phone; on iOS that is a
 WKWebView. The project paid for itself within hours by catching a CSP bug
 invisible in Chrome.
 
-### Two workers and one retry
+### One retry, everywhere
 
-Two browser engines against a production build alongside Postgres in Docker was
-killing WebKit processes at three workers, failing unrelated specs. Retries are
-on locally as well as in CI: a developer who sees red they cannot reproduce
-learns to ignore red.
+Retries are on locally as well as in CI: a developer who sees red they cannot
+reproduce learns to ignore red. The worker count went 3 → 2 → 1; the reasons
+are under "One Playwright worker, measured rather than assumed" below.
 
 ### A warm-up pass before the suite
 
@@ -361,10 +362,11 @@ currency at checkout, which is the worst possible moment to discover one.
 
 The admin panel writes to Supabase directly from the browser, so `min="0"` on an
 input is advice to whoever is typing and nothing more. A negative price would
-reach Stripe as a negative charge; a capacity of zero makes
-`taken >= max_participants` true for every event and marks the whole calendar
-sold out. Both are CHECK constraints, and the tests assert the *write* is
-refused rather than that the attribute is spelled correctly.
+reach Stripe as a negative charge, and a negative capacity is always a typo.
+Both are refused by CHECK constraints, and the tests assert the *write* is
+refused rather than that the attribute is spelled correctly. Zero capacity was
+refused too, until `20260918000000_capacity_is_required.sql` made 0 — and
+NULL — mean "sold out, waiting list only".
 
 ### The WhatsApp link library copies, it does not reference
 
@@ -379,6 +381,13 @@ The table is also the one place with no public read policy. A WhatsApp invite UR
 is a capability: anyone holding it can join the group. Anonymous callers get a
 hard permission error rather than an empty list, because there is no GRANT — a
 better failure than RLS filtering silently.
+
+**The copy on each event is not secret, by decision (September 2026).** The
+event page shows it to every visitor and the public API can read the column.
+That is acceptable for now because joining the group needs the admin's
+approval, so the link is not the gate. How it should ultimately be handled is
+Rares's call and still open; until he decides, do not treat the exposure as a
+bug to fix.
 
 ### The language switcher shows where you are, not where you would go
 
@@ -409,12 +418,21 @@ theoretical. Check the dependency, not the version number: this unblocks when
 jsdom drops that package or ships a CommonJS entry point, not when the major
 number changes again.
 
+Re-checked 22 September 2026: every release after 2.26.0 moved to jsdom 27 or
+later (2.27 through 2.36, and 4.3.0 on jsdom 30), and all of them still pull
+`@exodus/bytes`, which remains ESM-only. One thing has changed underneath:
+Node 24, which `engines` now pins, can `require()` an ES module by default. The
+original failure may therefore no longer happen on Vercel at all — one preview
+deployment of the upgrade would settle it, and is worth doing before assuming
+this hold is still needed.
+
 **`typescript` is `~6.0.3`, not `^6`.** `@typescript-eslint/parser` declares
 `typescript: ">=4.8.4 <6.1.0"` as a *required* peer. A caret would let
 `npm install` pick 6.1 the day it ships and break the lint chain — and Vercel
 runs `npm install`, not `npm ci`, so it is free to resolve differently from CI.
 The tilde keeps us inside the peer range no matter what is published. TypeScript
-7 is out for the same reason, one major further along.
+7 is out for the same reason, one major further along. Re-checked 22 September
+2026: typescript-eslint 8.70 still declares `<6.1.0`.
 
 **`eslint` stays on 9.** ESLint 10 itself would be fine — the config is already
 flat, there are no `eslint-env` comments, and Node 24 satisfies its engines. The
@@ -422,6 +440,7 @@ blocker is Next's lint preset: `eslint-config-next` pulls
 `eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, and
 all three cap their peer at `^9`. Only `eslint-plugin-react-hooks` accepts `^10`.
 This unblocks when those three ship v10 support, which is not ours to do.
+Re-checked 22 September 2026: all three still cap at `^9`.
 
 **`@types/node` tracks the runtime, not the registry.** `engines.node` pins
 Vercel to 24.x, so the types must describe Node 24. Taking `@types/node` 26
@@ -483,18 +502,17 @@ learn which ones are registered. The copy is written to stay honest under that
 constraint: it says an email has been sent *if* the address has an account,
 rather than claiming one was sent.
 
-### Other sessions are revoked on reset, explicitly
+### Every session is revoked on reset, explicitly
 
-After a successful change the page calls `signOut({ scope: "others" })`.
-Changing a password does not by itself end sessions that already exist, and the
-reason someone resets one is usually that they believe it is known to somebody
-else. Without this, an attacker holding a stolen refresh token keeps their
-access and the reset accomplishes nothing against the threat that prompted it.
-Supabase's "Secure password change" setting covers part of this and is off on
-this project, so it is done in code where it is visible and testable.
-
-`others` rather than `global`: this browser has just proved control of the
-mailbox, and it is about to be sent to the login page anyway.
+After a successful change the page signs out every session, this one included
+(`global` scope — "A completed reset ends every session" below explains why the
+first attempt, `others`, was not enough). Changing a password does not by itself
+end sessions that already exist, and the reason someone resets one is usually
+that they believe it is known to somebody else. Without this, an attacker
+holding a stolen refresh token keeps their access and the reset accomplishes
+nothing against the threat that prompted it. Supabase's "Secure password
+change" setting covers part of this and is off on this project, so it is done in
+code where it is visible and testable.
 
 ### The test uses a throwaway account and the real mailbox
 
@@ -890,7 +908,7 @@ a fresh clone and CI both have them without anyone needing the originals.
 Deliberately not wired into `predev` or `prebuild`: it would be dead work on
 every build and it needs a folder most clones will not have.
 
-### Which three events the home page leads with
+### Which event the home page's carousel leads with
 
 Soonest first, except that an event with no seats left gives up its place to a
 later one somebody can still book. A full event is not hidden — it drops behind
@@ -903,8 +921,8 @@ worth more.
 
 Nothing has to happen when a seat frees up. `hasRoom` is computed per render
 from live registration counts, so a cancellation restores that event to its
-natural place by date on the next render — within the five minutes the page is
-cached for.
+natural place by date on the very next request — the page is rendered on
+demand, not cached (see CLAUDE.md on why `revalidate` is inert here).
 
 Three implementation notes:
 

@@ -7,7 +7,7 @@ The schema itself lives in
 — one file, commented, in dependency order. This page is the map; that file is
 the territory. When they disagree, the file is right.
 
-- **Source of truth:** `supabase/migrations/` — the baseline, plus whatever has not been folded into it yet
+- **Source of truth:** `supabase/migrations/` — the baseline (frozen since September 2026) plus every dated migration after it
 - **History:** [`supabase/migrations-archive/`](../supabase/migrations-archive/README.md) — every migration that has been applied, kept for the *why*
 - **Descriptions:** `20260912000001_object_comments.sql` — 30 `COMMENT ON` statements, collected in one file rather than folded into the baseline. No longer edited in place; a new object needs a new dated migration.
 - **The Supabase SQL Editor holds no schema.** See [Working with production](#working-with-production).
@@ -47,7 +47,7 @@ because only one of the two was done.
 | `blog_posts` | Articles. | `select` where `published and not hidden` | `app/[locale]/blog/*`, `app/admin/blog` |
 | `testimonials` | Attendee feedback. | `select` where `approved` | home + testimonials pages, `/api/testimonials` |
 | `site_content` | Key/value page copy the instructor edits. | `select` (all) | `lib/site-content.ts`, `app/admin/content` |
-| `faqs` | Questions on the events page. | `select` where `published` | events page, `app/admin` |
+| `faqs` | Questions on the home page. | `select` where `published` | home page, `app/admin/content` |
 | `event_availability` | **View.** `(event_id, capacity, taken)`. | `select` | every page showing seat counts |
 
 ### Private — admins only, no public policy in either direction
@@ -171,9 +171,10 @@ npm run test:e2e
 
 Checklist for a new table — the third item is the one people forget:
 
-- [ ] `create table if not exists`
+- [ ] `create table` — not `if not exists`: a migration runs exactly once, and `if not exists` would silently skip a table that already exists in another shape
 - [ ] `alter table ... enable row level security`
-- [ ] **`revoke all ... from anon`, then grant back only what is public**
+- [ ] **`revoke all ... from anon, authenticated`, then grant back only what is needed**
+- [ ] For a function: **`revoke all on function ... from public`** first — see "Every function in `public` is an HTTP endpoint" above
 - [ ] **`grant`** for each of `anon` / `authenticated` / `service_role`
 - [ ] `drop policy if exists` then `create policy` (idempotent, so it re-runs)
 - [ ] Index anything a query filters or orders on
@@ -183,8 +184,11 @@ Checklist for a new table — the third item is the one people forget:
 
 **Why the revoke comes first, and is not optional.** Supabase's project setup
 runs `alter default privileges in schema public grant all on tables to anon`.
-Every table you create inherits *all* privileges for `anon` — SELECT, INSERT,
-UPDATE and DELETE — before you have written a single grant. Nothing in this
+On the local stack, every table you create inherits *all* privileges for
+`anon` — SELECT, INSERT, UPDATE and DELETE — before you have written a single
+grant. Re-verified on 22 September 2026 with CLI 2.117.0, despite a comment in
+`supabase/config.toml` suggesting new tables are no longer exposed by default.
+Production grants less by default; see the last section. Nothing in this
 repository says so, and `pg_dump` does not print default privileges as table
 grants, so the only way to see it is to ask a freshly built database:
 
@@ -315,10 +319,9 @@ select grantee, table_name, string_agg(privilege_type, ', ' order by privilege_t
  order by grantee, table_name;
 ```
 
-Note there is deliberately **no** "applied migrations" query. The CLI has never
-driven this project and `supabase_migrations.schema_migrations` does not exist
-here — a query against it errors, which is more misleading than useful. That is
-changing; see below.
+There is no saved "applied migrations" query because the CLI answers that
+better: `npx supabase migration list --linked`. The ledger behind it,
+`supabase_migrations.schema_migrations`, has existed since 11 September 2026.
 
 ### Applying a change
 
@@ -333,7 +336,8 @@ changing; see below.
    that check; prefer renaming the file to a later timestamp, because the check
    is worth keeping.
 5. Deploy the code, if the change needs any.
-6. Once it is live, it gets folded into the baseline — see below.
+6. Leave the file where it is. Migrations stay in `supabase/migrations/` for
+   good — see "The baseline is frozen" below.
 
 The remote has had a migration ledger since 11 September 2026. Before that it
 had none, and every change went in through the SQL Editor by hand.
@@ -377,10 +381,10 @@ itself, which is the whole point of having a ledger.
 honest if it really has. That was checked first, by dumping both schemas and
 diffing:
 
-```bash
+```powershell
 npx supabase db dump --linked -f prod-schema.sql
 npx supabase db dump --local  -f local-schema.sql
-diff prod-schema.sql local-schema.sql
+git diff --no-index prod-schema.sql local-schema.sql   # not `diff`: in PowerShell that is Compare-Object, which compares the two names
 ```
 
 77 lines differed, in three categories and none of them structural: comment text
@@ -391,32 +395,39 @@ exactly — 13 tables, 18 policies, 11 indexes, 25 constraints, 3 functions, sam
 names on both sides.
 
 Delete the dumps afterwards. They are a snapshot that goes stale immediately,
-and a full one carries real people's names and email addresses.
+and a full one carries real people's names and email addresses. `.gitignore`
+does not cover these two file names, so a stray `git add -A` would commit them.
 
-### Folding into the baseline
+### The baseline is frozen — nothing is folded into it any more
 
-The baseline is only trustworthy if it describes what production actually has,
-so a migration is merged into it **after** it has been applied to production,
-never before. Folding early would make the baseline assert a schema that does
-not exist yet, and a fresh `db reset` would then disagree with the live site.
+Folding used to be the routine: once a few migrations had reached production,
+merge them into the baseline and `git mv` the originals to
+`migrations-archive/`. Since production gained a migration ledger on
+11 September 2026 that routine is unsafe, for two reasons:
 
-The cycle, per batch:
+- **It breaks `db push`.** The ledger records every version it applied. Move a
+  file out of `supabase/migrations/` and the remote holds a version the local
+  folder no longer has, so the next `npx supabase db push` refuses to run until
+  each folded version is marked `reverted` with `migration repair`.
+- **The baseline is already applied.** Production recorded `00000000000000` as
+  done, so editing that file changes nothing live — which is why CLAUDE.md
+  forbids editing it.
 
-1. Migrations accumulate in `supabase/migrations/` as they are written, applied
-   and committed. Reading the baseline plus two or three files is fine.
-2. When about five have built up — or at a milestone — fold them into the
-   baseline and `git mv` the originals to `migrations-archive/`.
-3. Prove the fold changed nothing: dump the schema before and after, and diff
-   the `CREATE`/`GRANT`/`POLICY`/`COMMENT` lines. They must be identical. This
-   is not optional; hand-merging SQL is where a silent divergence gets baked in
-   permanently.
-4. Run the suite, then commit the fold on its own.
+So every change stays a dated migration, permanently. The price is that the
+current schema is the baseline *plus* every file after it, and the baseline's
+own comments describe 11 September 2026 — "NULL capacity means unlimited", for
+one, which `20260918000000_capacity_is_required.sql` reversed. Read the later
+migrations before trusting a baseline comment.
 
-`20260912000001_object_comments.sql` never participates: the descriptions are
-easier to read collected in one file than scattered through a baseline of a
-thousand lines. It is no longer edited in place — `db push` will not re-apply a
-migration it has already recorded — so describing a new object means a new dated
-migration, which the fold will absorb like any other.
+If the list ever grows unwieldy, squashing is still possible — as a planned
+operation agreed with Rares, not a habit: dump production's schema, write the
+new baseline from it, prove the two identical by diffing, and repair the ledger
+in the same sitting (`migration repair --linked --status reverted` for the old
+versions, `--status applied` for the new baseline).
+
+Object descriptions follow the same rule. `20260912000001_object_comments.sql`
+is history now; describing a new object, or correcting an old description,
+means a new dated migration with the `comment on` lines in it.
 
 ### A note on default privileges
 

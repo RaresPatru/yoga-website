@@ -36,8 +36,8 @@ name are what convert a visitor into a booking.
 | Home page headline | Home hero | `home.hero_title` | Optional — falls back to "Îți ghidez călătoria către echilibru". |
 | Home page subtitle | Home hero | `home.hero_subtitle` | Optional — falls back to "Yoga pentru corp, minte și suflet". |
 | About page title | About page | `about.title` | Optional — falls back to "Despre mine". |
-| Instagram link | Footer | `contact.instagram_url` | The footer icons currently link to `#`. |
-| Public email address | Footer | `contact.email` | |
+| Instagram | Footer | `contact.instagram_url` | A full address or just `@nume`. The icon only appears once this is filled in. |
+| Facebook | Footer | `contact.facebook_url` | A full address or the page name. Same rule as Instagram. |
 
 ## Priority 3 — reduces hesitation before booking
 
@@ -66,14 +66,19 @@ they bring in visitors who have never heard of her. Suggested starting set:
 
 ## Still hardcoded, needs a decision rather than a form
 
-**The business name.** The site currently says "Yoga Flow" everywhere — a
-placeholder from the original build. When she chooses a name, it is a one-line
-change in `lib/site-config.ts` (`SITE_NAME`), which updates the header, footer,
-page titles, share cards and structured data together.
+**The business name is a form field now, not code.** Type **flow4ward** into
+`/admin/content` → "Numele site-ului" and it replaces the "Yoga Flow"
+placeholder in the header, footer, page titles, share cards and structured data
+together. `SITE_NAME` in `lib/site-config.ts` is only what shows until then.
 
-`INSTRUCTOR_NAME` in the same file should become her actual name; it is used in
-the About page's structured data, which is what tells Google who runs this
-business.
+Two things in that file are still hardcoded, and both are wrong:
+
+- `INSTRUCTOR_NAME` ("Yoga Flow") is published as *her* name in the About page's
+  and the blog's structured data — what tells Google who runs this business. It
+  should become her real name, ideally as an admin field like the business name.
+- `SITE_LOCALITY` ("Cluj-Napoca") is published as the business's town on every
+  page. She hosts events all over Romania rather than in one city, so this
+  should be removed or made editable, not set to a different city.
 
 ---
 

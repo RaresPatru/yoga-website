@@ -7,6 +7,12 @@ most of the odd-looking things are deliberate and explained there.
 [docs/DATABASE.md](docs/DATABASE.md) maps the schema: what exists, who can read
 it, and the checklist for adding to it.
 
+**Every file here, docs included, was written by AI models,** and a full audit
+on 22 September 2026 found the docs and code comments had drifted from the code
+in dozens of places. When a document and the code or schema disagree, the code
+wins — verify a claim before acting on it, and fix the document when it is
+wrong.
+
 ## Non-negotiables
 
 - **Never push to `main`, and never commit or push without being asked.**
@@ -82,6 +88,20 @@ it, and the checklist for adding to it.
   on iPhone.
 - **Romanian is the primary language.** English falls back to Romanian when a
   translation is blank.
+- **What the business actually is.** She is **flow4ward**, and she *hosts
+  events*: yoga, sometimes combined with other activities such as horse riding
+  or creative writing. No class timetable, no teacher training, and no fixed
+  city — events happen anywhere in Romania. So nothing should hardcode a
+  location: `SITE_LOCALITY = "Cluj-Napoca"` in `lib/site-config.ts` is a wrong
+  placeholder that reaches structured data on every page, not a fact.
+- **Status, 22 September 2026: pre-launch.** Production is publicly reachable
+  but only Rares uses it, to test. There are no real customers and no real
+  personal data in it, and Stripe is a test sandbox. Still treat it as live: it
+  is the database she will run the business on.
+- **The WhatsApp group link is public on purpose, for now.** Joining the group
+  needs the admin's approval, so the link itself is not the gate. Rares will say
+  how it should eventually work — do not lock it down unprompted, even though
+  DECISIONS.md and the `whatsapp_links` table treat an invite URL as a secret.
 - **The instructor runs the site herself.** Anything she might reasonably want
   to change — copy, photos, FAQs, her Instagram and Facebook addresses — belongs
   in the database and the admin panel, not in the source. Half-wiring it counts
@@ -93,14 +113,21 @@ it, and the checklist for adding to it.
 
 ## Commands
 
-```bash
-npx supabase start / db reset    # local database (needs Docker Desktop)
-npx supabase db push             # send new migrations to production
-npm run dev                      # local database — prints which one on startup
-npm run dev:prod                 # the live database; everything you do there is live
-npm run mock:images              # rebuild /public/mock from ./mock-images
+Rares runs **PowerShell 7 on Windows 11**, so every command or script handed to
+him is PowerShell. Claude's own Bash tool is Git Bash; the `npm`/`npx` lines are
+identical in both shells — only environment variables and deleting files differ.
+
+```powershell
+npx supabase start                # local database (needs Docker Desktop)
+npx supabase db reset --local     # replay every migration + seed.sql. LOCAL — never --linked
+npx supabase db push              # send new migrations to production
+npm run dev                       # local database — prints which one on startup
+npm run dev:prod                  # the live database; everything you do there is live
+npm run mock:images               # rebuild /public/mock from ./mock-images
 npm run lint && npx tsc --noEmit
-npm run test:e2e                 # production build, one worker; PW_DEV=1 for the fast loop
+npm run test:e2e                  # production build, one worker, 10+ minutes
+$env:PW_DEV = "1"; npm run test:e2e; Remove-Item Env:PW_DEV   # the faster dev-server loop
+Remove-Item -Recurse -Force .next                              # see "A stale .next" below
 ```
 
 ## Gotchas that have cost time
@@ -114,6 +141,11 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   session for that user.
 - Row Level Security is a filter, not a lock: denied rows come back as an empty
   result with no error. An empty list may be a permissions failure.
+- **Supabase writes and Resend sends return their errors; neither throws.**
+  `const { error } = await supabase.from("events").update(…)` — ignore `error`
+  and a failed save looks exactly like a successful one, which is how the admin
+  editors silently lost edits. Resend's `emails.send()` returns `{ error }` too,
+  and logs it only outside production. Check `error` on every call.
 - Playwright's `isVisible()` does not auto-wait. Branch on viewport width, not
   on a visibility probe.
 - **A Suspense boundary high in the tree costs you HTTP status codes.** Wrapping
@@ -158,8 +190,9 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
 - **A stale `.next` makes the build lie.** `npm run build` reported `Failed to
   type check` with parse errors inside the `validator.ts` that Next generates —
   a file overwritten without being truncated, so it resumed mid-token from a
-  longer earlier version. `rm -rf .next` and rebuild before believing a type
-  error you cannot find anywhere in your own source.
+  longer earlier version. Delete `.next` (`Remove-Item -Recurse -Force .next`)
+  and rebuild before believing a type error you cannot find anywhere in your
+  own source.
 - **A form that "does nothing" on WebKit is usually a hydration race.** Clicking
   submit before React has hydrated is swallowed silently — these forms have no
   `action`, so the native submit is a no-op too — and the test just sees a page
@@ -187,6 +220,16 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   built**, and every test then fails with `Database error querying schema` —
   which reads like the migration you just wrote destroyed the schema. It did
   not. Stop and start the stack, run `db reset` again, and it applies cleanly.
+
+  Two more, both met on 22 September 2026:
+  - `supabase start` failing its **health check** on storage is often just
+    slowness: storage creates a `storage_vectors` database for the unused
+    `[storage.vector]` feature and misses the CLI's deadline.
+    `npx supabase start --ignore-health-check` brings everything up healthy.
+  - "Starting database from backup..." can restore an **empty** database — no
+    tables, no migration ledger — left over from an earlier failed start. Check
+    `npx supabase migration list --local`: if every applied column is blank,
+    `npx supabase db reset --local` rebuilds it.
 - **The suite runs on one worker, and that is deliberate.** Two engines against
   a production build with Postgres in Docker beside them was enough to get
   WebKit killed mid-test, scattering one to three failures across unrelated
@@ -207,10 +250,12 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   The test suite is separate again: `playwright.config.ts` loads `.env.test`
   first and `tests/helpers.ts` hard-crashes on a non-local URL.
 - **Local content comes from `supabase/seed.sql`,** which `npx supabase db reset`
-  replays: five events, five posts, five testimonials, five FAQs and her copy,
-  all invented. The soonest event is deliberately full so the home page's
-  ordering rule has something to do, and the lead event deliberately has no
-  photograph. Pictures live in `/public/mock`, built from the gitignored
+  replays: six events, five posts, five testimonials, five FAQs and her copy,
+  all invented except the business name. The soonest event is deliberately
+  full so the home page's ordering rule has something to do, one is closed at
+  capacity 0 with a waiting list, one has no start time yet, and the lead event
+  deliberately has no photograph. None has a WhatsApp link, so anything that
+  renders one is invisible locally until you add it in `/admin`. Pictures live in `/public/mock`, built from the gitignored
   `mock-images/` by `npm run mock:images`.
 - **Tailwind v4 compiles `scale-*` to the individual `scale` property**, which
   does **not** override `transform` — the browser applies translate, rotate,
