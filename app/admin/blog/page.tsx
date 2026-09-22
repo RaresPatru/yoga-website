@@ -10,7 +10,8 @@ import { Plus, Edit2, Trash2, EyeOff, ChevronDown, Loader2 } from "lucide-react"
 import {
   Bold, Italic, List, ListOrdered, TextQuote, Code2,
   ImageIcon, PlaySquare, Link2, Undo2, Redo2, Minus, Pilcrow,
-  Heading1, Heading2, Heading3, Languages, Info, X,
+  Heading1, Heading2, Heading3,
+  Languages, Info, X,
   type LucideIcon,
 } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -36,12 +37,53 @@ interface BlogPost {
 
 type SpellcheckLang = "ro" | "en" | "off";
 
+/**
+ * The heading levels a blog post may contain: 1, 2 and 3.
+ *
+ * Deeper levels are left out on purpose. At body size an H4 reads as a bold
+ * paragraph, and H5 and H6 add nothing a two-level outline under the title
+ * needs. The limit is on TipTap's schema, not only the menu, so a heading
+ * pasted in at level 4 to 6 arrives as a paragraph rather than as a level the
+ * toolbar cannot name.
+ */
+const HEADING_LEVELS = [1, 2, 3] as const;
+
+/**
+ * Every format the editor can be *in*, in document order.
+ *
+ * This list answers "what is the cursor sitting in", which is what the toolbar
+ * button shows. What she may switch to is `offeredFormats` below, and the two
+ * are deliberately not the same list.
+ */
 const headingLevels = [
   { level: 0, label: "Paragraph", icon: Pilcrow },
   { level: 1, label: "Heading 1", icon: Heading1 },
   { level: 2, label: "Heading 2", icon: Heading2 },
   { level: 3, label: "Heading 3", icon: Heading3 },
 ] as const;
+
+/**
+ * What the Format menu offers — everything above except Heading 1.
+ *
+ * WHY H1 IS RECOGNISED BUT NOT OFFERED
+ *
+ * The blog page already prints the post's title as the page's <h1>
+ * (app/[locale]/blog/[slug]/page.tsx), so a level-1 heading typed into the body
+ * gives the document a second one. A page with two <h1>s gives a screen reader
+ * and a crawler two competing answers to "what is this about", and the one they
+ * pick is not the title. H2 is the first level a body heading can honestly be.
+ *
+ * It stays in the list above rather than being deleted, because posts written
+ * before this change still contain one — there is an <h1> in production right
+ * now. TipTap's schema keeps level 1 (see `HEADING_LEVELS`), so that heading
+ * loads, survives a save, and reads here as "Heading 1" instead of being
+ * mislabelled a paragraph. Dropping level 1 from the schema as well would have
+ * quietly flattened it to a paragraph the first time the post was opened.
+ *
+ * So the only thing she can do with an existing H1 is turn it into something
+ * else, which is the outcome we want anyway.
+ */
+const offeredFormats = headingLevels.filter((format) => format.level !== 1);
 
 function ToolbarButton({
   onClick,
@@ -127,7 +169,7 @@ function BlogEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ link: false }),
+      StarterKit.configure({ link: false, heading: { levels: [...HEADING_LEVELS] } }),
       ImageExtension,
       LinkExtension.configure({ openOnClick: false }),
       Iframe,
@@ -274,7 +316,7 @@ function BlogEditor({
     if (level === 0) {
       editor.chain().focus().setParagraph().run();
     } else {
-      editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
+      editor.chain().focus().toggleHeading({ level: level as 2 | 3 }).run();
     }
     setHeadingOpen(false);
   };
@@ -354,7 +396,7 @@ function BlogEditor({
                 </ToolbarButton>
                 {headingOpen && (
                   <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-xl border border-sage/20 bg-white/90 p-1 shadow-xl backdrop-blur-xl">
-                    {headingLevels.map((h) => (
+                    {offeredFormats.map((h) => (
                       <DropdownItem
                         key={h.level}
                         label={h.label}
