@@ -21,7 +21,7 @@ deployed on Vercel.
 | [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md) | Guide for the instructor, in Romanian. |
 | [docs/CONTENT-NEEDED.md](docs/CONTENT-NEEDED.md) | Content still to be supplied. |
 | [PLAN.md](PLAN.md) | What is left to do. |
-| [RESEARCH_FINDINGS.md](RESEARCH_FINDINGS.md) | Research into comparable sites, filtered to what applies here. |
+| [RESEARCH_FINDINGS.md](RESEARCH_FINDINGS.md) | Inspiration: what comparable yoga sites do, and how blogging platforms store posts. Not a blueprint. |
 
 ---
 
