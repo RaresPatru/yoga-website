@@ -170,8 +170,9 @@ export default defineConfig({
       // Public pages only. The admin panel is a desktop tool the instructor
       // uses at a computer, and its layout collapses the sidebar below `lg`,
       // so running those specs here would test a screen nobody administers
-      // from.
-      testIgnore: [/auth\.setup\.ts/, /admin-.*\.spec\.ts/],
+      // from. The sanitizer runs on the server, so no engine changes what it
+      // does; the chromium project covers it once.
+      testIgnore: [/auth\.setup\.ts/, /admin-.*\.spec\.ts/, /sanitize\.spec\.ts/],
     },
   ],
 });
