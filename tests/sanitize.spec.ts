@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 import { sanitizeHtml } from "../lib/sanitize";
 import { deletePostBySlug, seedPost } from "./helpers";
 
@@ -7,15 +8,33 @@ import { deletePostBySlug, seedPost } from "./helpers";
  * rendered with dangerouslySetInnerHTML: blog posts, event descriptions, and
  * her About and home-page copy.
  *
- * The first block calls sanitizeHtml directly, in the test runner's own Node
- * process. That loads isomorphic-dompurify through require(), as a Vercel
- * function does, and jsdom depends on an ES-module-only package that
- * require() can load only on Node 20.19, 22.12, 24 or later — so on a runtime
- * that cannot, this file fails before a single assertion runs. It is the local
- * half of that check; docs/DECISIONS.md has the deployed half.
- *
- * The second block renders a stored post through the production server.
+ * The first block pins what it keeps and what it removes, by calling
+ * sanitizeHtml directly in the test runner's own Node process. The second
+ * renders a stored post through the production server.
  */
+test.describe("the sanitizer's package", () => {
+  /**
+   * Vercel's functions will not require() an ES module, even on Node 24,
+   * which can. jsdom loads its dependencies with require(), and from jsdom 27
+   * one of them, @exodus/bytes, is ES-module-only: every page that sanitizes
+   * then answers 500 on Vercel while `next start` serves it happily here.
+   * That happened in production in August 2026 and again on a preview in
+   * September; see "isomorphic-dompurify stays on 2.x" in docs/DECISIONS.md.
+   *
+   * Switching that one Node feature off reproduces Vercel's error exactly, so
+   * an upgrade that would take the site down fails here first. If Node ever
+   * drops the flag, this fails with "bad option" rather than passing quietly.
+   */
+  test("loads without require() of ES modules, as Vercel's functions demand", () => {
+    const load = spawnSync(
+      process.execPath,
+      ["--no-experimental-require-module", "-e", "require('isomorphic-dompurify')"],
+      { cwd: process.cwd(), encoding: "utf8" }
+    );
+    expect(load.status, `isomorphic-dompurify cannot load the way Vercel loads it:\n${load.stderr}`).toBe(0);
+  });
+});
+
 test.describe("sanitizeHtml", () => {
   test("keeps the formatting the editor produces, unchanged", () => {
     const editorHtml =

@@ -407,24 +407,49 @@ Everything else tracks the latest release. These four do not, and each has a
 reason that outlived the upgrade that produced it. Re-checking them is cheap;
 raising them because they look stale is how the site breaks.
 
-**`isomorphic-dompurify` stays on 2.x.** Version 3 moved to a jsdom that depends
-on `@exodus/bytes`, which is `"type": "module"` — ESM only. Vercel traces the
-serverless bundle with `require()`, so the sanitizer 500'd every page that
-renders stored HTML: blog posts, event descriptions, About and the home page.
-Version 4 pulls jsdom 30, and jsdom 30 still lists `@exodus/bytes`, so the
-condition that caused the outage is unchanged. The `.nft.json` files under
-`.next/server` confirm jsdom really is traced into those routes, so this is not
-theoretical. Check the dependency, not the version number: this unblocks when
-jsdom drops that package or ships a CommonJS entry point, not when the major
-number changes again.
+**`isomorphic-dompurify` stays on 2.x.** Every release after 2.26.0 runs on
+jsdom 27 or later, up to jsdom 30 in 4.x. jsdom loads its dependencies with
+`require()`, and one of them, `@exodus/bytes`, is `"type": "module"`:
+ES-module-only. Vercel's functions refuse to `require()` an ES module. So every
+page that renders stored HTML answers 500: blog posts, event descriptions,
+About and the home page. Each fails with:
 
-Re-checked 22 September 2026: every release after 2.26.0 moved to jsdom 27 or
-later (2.27 through 2.36, and 4.3.0 on jsdom 30), and all of them still pull
-`@exodus/bytes`, which remains ESM-only. One thing has changed underneath:
-Node 24, which `engines` now pins, can `require()` an ES module by default. The
-original failure may therefore no longer happen on Vercel at all — one preview
-deployment of the upgrade would settle it, and is worth doing before assuming
-this hold is still needed.
+```
+Failed to load external module jsdom-…: Error [ERR_REQUIRE_ESM]: require() of
+ES Module …/@exodus/bytes/encoding-lite.js from
+…/html-encoding-sniffer/lib/html-encoding-sniffer.js not supported
+```
+
+**It is not about the Node version.** That error took production down in August
+2026, before `engines` pinned Node 24. Node 24 *can* `require()` an ES module,
+and `next start` on Node 24 serves the upgrade without complaint. Then on
+23 September 2026 a preview of 4.3.0 ran on Vercel's Node 24.x ("fluid"
+functions). It failed with exactly that error on every route that sanitizes,
+while the 2.26.0 preview beside it answered 200. Whatever Vercel's function
+loader does, it does not allow this. A local production build is therefore no
+evidence either way.
+
+`tests/sanitize.spec.ts` reproduces Vercel's refusal: it loads the package with
+Node's `--no-experimental-require-module`. An upgrade that would take the site
+down fails CI first.
+
+This unblocks when either of these happens:
+- jsdom stops depending on an ES-module-only package, or ships CommonJS.
+- Vercel documents that its functions allow `require()` of an ES module.
+
+Either way, prove it on a preview before trusting it:
+
+```powershell
+$preview = "https://yoga-website-<id>-patru.vercel.app"   # from the Vercel check on the commit
+foreach ($path in "/ro", "/en", "/ro/about") {            # all three render sanitized HTML
+  vercel curl $path --deployment $preview -- --silent --output NUL --write-out "$path %{http_code}`n"
+}
+vercel logs --deployment $preview --level error --since 30m
+```
+
+Previews sit behind Vercel Authentication. `vercel curl` gets past it with the
+project's "Protection Bypass for Automation" secret, and creates that secret
+if the project has none.
 
 **`typescript` is `~6.0.3`, not `^6`.** `@typescript-eslint/parser` declares
 `typescript: ">=4.8.4 <6.1.0"` as a *required* peer. A caret would let

@@ -21,11 +21,8 @@ const ALLOWED_IFRAME_SRC = [
 ];
 
 /**
- * Registered once at module load. DOMPurify keeps hooks on its instance for
- * the life of the module, so adding this per call would stack duplicates on
- * every render. For the same reason, do not call isomorphic-dompurify's
- * `clearWindow()`: it starts a fresh instance, this hook would silently stop
- * applying, and frames from any host would be let through.
+ * Registered once at module load. DOMPurify keeps hooks on a global instance,
+ * so adding this per call would stack duplicates on every render.
  *
  * `uponSanitizeElement` runs for each node as it is processed; removing the
  * node here drops the whole embed rather than leaving a broken empty frame.
