@@ -255,12 +255,6 @@ She fills it in herself at `/admin/content` — no developer needed.
       is documented in
       `migrations-archive/20260812000004_advisor_policy_tuning.sql`.
 
-- [ ] **Rotate the admin password.** It was sitting in plaintext in
-      `ProductionQuery.SQL` on disk (since redacted, and the file is
-      gitignored). Never committed — verified with `git log --all -S`. Deferred
-      deliberately: it is currently in use for testing, and the account is the
-      only one on the project.
-
 ## Next
 
 ### Share images should use the brand typeface
