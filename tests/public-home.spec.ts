@@ -279,17 +279,14 @@ test.describe("home page navigation drawer", () => {
   // The panel slides, so "visible" arrives well before "arrived". Every test
   // here waits for it to be flush with the edge before touching anything.
   const openDrawer = async (page: import("@playwright/test").Page) => {
-    // Proof that the client is running, before anything is pressed.
+    // Proof that the client is running, before anything is pressed. The
+    // hamburger is a bare <button> in no form, so a click that lands before
+    // hydration is swallowed with nothing to show for it. Next's client runtime
+    // appends <next-route-announcer>, and it appears nowhere in the server
+    // HTML, so it cannot be there until the JavaScript has run.
     //
-    // WebKit hydrates noticeably later than Chromium, and a click that lands
-    // first is swallowed without a trace: the hamburger is a bare <button> in
-    // no form, so there is no native behaviour to fall back on, and the test
-    // simply sees a menu that never opened. Caught as a one-in-a-run flake on
-    // the mobile project, which is the engine most of this audience uses.
-    //
-    // <next-route-announcer> is what proves it. Next's client runtime appends
-    // it on hydration and it appears nowhere in the server HTML, so it cannot
-    // be there until the JavaScript has run.
+    // A menu that opens and at once closes again is a different failure, and
+    // not this one: see "a sliver of panel on the first frame" below.
     await page.locator("next-route-announcer").waitFor({ state: "attached" });
     await trigger(page).click();
     await expect(drawer(page)).toBeVisible();
@@ -413,6 +410,74 @@ test.describe("home page navigation drawer", () => {
     });
 
     await expect(drawer(page)).toBeHidden();
+  });
+
+  /**
+   * The observer's first reading of an opening drawer can be a sliver.
+   *
+   * The opening scroll's first frame may move the panel only a few pixels, and
+   * the observer reports it, because isIntersecting has just turned true, with
+   * a ratio under the "gone" threshold. Read as the panel leaving, that closed
+   * the drawer as it opened: Playwright's WebKit on Linux did it on about one
+   * open in thirty, which is the flake these tests showed in CI.
+   *
+   * Frame timing cannot be forced from outside, so the panel's observer is
+   * taken over and handed the readings directly: a sliver on the way in must
+   * not close the drawer, and the same sliver on the way out must.
+   */
+  test("a sliver of panel on the first frame does not close it", async ({ page }) => {
+    type Held = {
+      callback: IntersectionObserverCallback;
+      observer: IntersectionObserver;
+      target: Element;
+    };
+
+    await page.addInitScript(() => {
+      const Native = window.IntersectionObserver;
+      // Every other observer on the page keeps working; only the one watching
+      // the panel is held back from the browser.
+      window.IntersectionObserver = class extends Native {
+        private readonly held: IntersectionObserverCallback;
+        constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+          super(callback, options);
+          this.held = callback;
+        }
+        observe(target: Element) {
+          if (!target.classList.contains("nav-drawer-sheet")) return super.observe(target);
+          (window as unknown as { __panel: Held }).__panel = {
+            callback: this.held,
+            observer: this,
+            target,
+          };
+        }
+      };
+    });
+
+    const report = (ratio: number) =>
+      page.evaluate((ratio) => {
+        const panel = (window as unknown as { __panel?: Held }).__panel;
+        if (!panel) throw new Error("the panel's observer was never created");
+        const entry = { target: panel.target, intersectionRatio: ratio, isIntersecting: true };
+        panel.callback([entry as unknown as IntersectionObserverEntry], panel.observer);
+      }, ratio);
+
+    await page.goto("/ro");
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
+    await trigger(page).click();
+    await expect(trigger(page)).toHaveAttribute("aria-expanded", "true");
+
+    // Two and a half pixels of a 300-pixel panel, then the rest of it.
+    await report(0.008);
+    await report(1);
+    await expect(drawer(page), "a sliver on the way in closed the drawer").toBeVisible();
+    await expect(trigger(page)).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("#main-content")).toHaveAttribute("inert", "");
+
+    // The same reading while the panel is leaving is a close.
+    await report(0.5);
+    await report(0.008);
+    await expect(drawer(page)).toBeHidden();
+    await expect(page.locator("#main-content")).not.toHaveAttribute("inert");
   });
 
   /**

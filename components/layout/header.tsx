@@ -363,11 +363,24 @@ export function Header({ siteName }: { siteName: string }) {
     const GONE = 0.01;
     const ARRIVED = 0.99;
 
+    /*
+     * Only a falling ratio means the panel has left.
+     *
+     * The opening scroll's first frame can move the panel by a few pixels, and
+     * the observer reports that sliver — isIntersecting has just turned true —
+     * with a ratio under GONE. Without its direction, that reading is the same
+     * as the panel leaving, and the drawer shuts as it opens.
+     * tests/public-home.spec.ts replays that reading.
+     */
+    let lastRatio = 0;
+
     const observer = new IntersectionObserver(
       (entries) => {
         /* A programmatic scroll can deliver several positions in one batch;
            only the last one is where the panel ended up. */
         const ratio = entries[entries.length - 1].intersectionRatio;
+        const falling = ratio < lastRatio;
+        lastRatio = ratio;
 
         if (ratio > ARRIVED) {
           setPageInert(true);
@@ -377,7 +390,7 @@ export function Header({ siteName }: { siteName: string }) {
           if (!sheet.contains(document.activeElement)) {
             sheet.focus({ preventScroll: true });
           }
-        } else if (ratio < GONE && openRef.current) {
+        } else if (ratio < GONE && falling && openRef.current) {
           finishClose();
         }
       },

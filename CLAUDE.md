@@ -316,3 +316,11 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   16. A test that asserts on that property fails against a browser engine that
   the audience never runs. Check `CSS.supports` in the engine before believing
   a Playwright-WebKit result about CSS support.
+- **A WebKit flake that only CI sees may need Linux to reproduce.** Playwright
+  ships a different WebKit port on Windows and on Linux, with different frame
+  timing. The navigation drawer that closed itself as it opened did so on about
+  one open in thirty on Linux and never in 180 on Windows, and for ten days it
+  was blamed on hydration. Serve the test build on :3100 and run the spec from
+  the `mcr.microsoft.com/playwright:v<version>-noble` image with
+  `baseURL: "http://host.docker.internal:3100"`. Log what the page actually did
+  before trusting a theory about why it failed.
