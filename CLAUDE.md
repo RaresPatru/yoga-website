@@ -331,3 +331,9 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   the `mcr.microsoft.com/playwright:v<version>-noble` image with
   `baseURL: "http://host.docker.internal:3100"`. Log what the page actually did
   before trusting a theory about why it failed.
+- **Escape never leaves the TipTap editor.** ProseMirror cancels every Escape
+  pressed inside it (`captureKeyDown` in prosemirror-view), and a cancelled
+  Escape is not a close request, so a popover opened while the caret stays in
+  the editor ignores it. The blog editor's shortcut list gets Escape through a
+  keymap in `lib/blog-editor.ts`; anything new that opens over the editor needs
+  the same.

@@ -1,27 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useId, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getAuthToken } from "@/lib/get-auth-token";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, Trash2, EyeOff, ChevronDown, Loader2 } from "lucide-react";
-import {
-  Bold, Italic, List, ListOrdered, TextQuote, Code2,
-  ImageIcon, PlaySquare, Link2, Undo2, Redo2, Minus, Pilcrow,
-  Heading1, Heading2, Heading3,
-  Languages, Info, X,
-  type LucideIcon,
-} from "lucide-react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import ImageExtension from "@tiptap/extension-image";
-import LinkExtension from "@tiptap/extension-link";
-import { MediaLibrary, VideoUrlDialog } from "@/components/admin/media-library";
-import { LinkDialog } from "@/components/admin/link-dialog";
-import { Iframe } from "@/lib/tiptap-iframe";
+import { Plus, Edit2, Trash2, EyeOff, Loader2 } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import {
+  RichTextEditor,
+  useBlogEditor,
+  type SpellcheckLang,
+} from "@/components/admin/rich-text-editor";
+import { toEditorContent } from "@/lib/blog-editor";
+import { translateDocument } from "@/lib/translate-document";
 
 interface BlogPost {
   id: string;
@@ -35,108 +28,15 @@ interface BlogPost {
   created_at: string;
 }
 
-type SpellcheckLang = "ro" | "en" | "off";
-
-/**
- * The heading levels a blog post may contain: 1, 2 and 3.
- *
- * Deeper levels are left out on purpose. At body size an H4 reads as a bold
- * paragraph, and H5 and H6 add nothing a two-level outline under the title
- * needs. The limit is on TipTap's schema, not only the menu, so a heading
- * pasted in at level 4 to 6 arrives as a paragraph rather than as a level the
- * toolbar cannot name.
- */
-const HEADING_LEVELS = [1, 2, 3] as const;
-
-/**
- * Every format the editor can be *in*, in document order.
- *
- * This list answers "what is the cursor sitting in", which is what the toolbar
- * button shows. What she may switch to is `offeredFormats` below, and the two
- * are deliberately not the same list.
- */
-const headingLevels = [
-  { level: 0, label: "Paragraph", icon: Pilcrow },
-  { level: 1, label: "Heading 1", icon: Heading1 },
-  { level: 2, label: "Heading 2", icon: Heading2 },
-  { level: 3, label: "Heading 3", icon: Heading3 },
-] as const;
-
-/**
- * What the Format menu offers — everything above except Heading 1.
- *
- * WHY H1 IS RECOGNISED BUT NOT OFFERED
- *
- * The blog page already prints the post's title as the page's <h1>
- * (app/[locale]/blog/[slug]/page.tsx), so a level-1 heading typed into the body
- * gives the document a second one. A page with two <h1>s gives a screen reader
- * and a crawler two competing answers to "what is this about", and the one they
- * pick is not the title. H2 is the first level a body heading can honestly be.
- *
- * It stays in the list above rather than being deleted, because posts written
- * before this change still contain one — there is an <h1> in production right
- * now. TipTap's schema keeps level 1 (see `HEADING_LEVELS`), so that heading
- * loads, survives a save, and reads here as "Heading 1" instead of being
- * mislabelled a paragraph. Dropping level 1 from the schema as well would have
- * quietly flattened it to a paragraph the first time the post was opened.
- *
- * So the only thing she can do with an existing H1 is turn it into something
- * else, which is the outcome we want anyway.
- */
-const offeredFormats = headingLevels.filter((format) => format.level !== 1);
-
-function ToolbarButton({
-  onClick,
-  active,
-  children,
-  title,
-}: {
-  onClick: () => void;
-  active?: boolean;
-  children: React.ReactNode;
-  title?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={title}
-      data-tooltip={title}
-      className={`flex items-center justify-center rounded-lg p-2 text-sm transition-all duration-150 ${
-        active
-          ? "bg-rose/15 text-rose-deep shadow-sm"
-          : "text-charcoal-light hover:scale-105 hover:bg-rose/5 hover:text-charcoal active:scale-95"
-      }`}
-    >
-      {children}
-    </button>
-  );
+/** Why a translation failed, when it is something she can act on. */
+class TranslationFailed extends Error {
+  constructor(readonly reason: "too_long" | "failed") {
+    super(`Translation failed: ${reason}`);
+  }
 }
 
-function DropdownItem({
-  label,
-  icon: Icon,
-  onClick,
-  active,
-}: {
-  label: string;
-  icon: LucideIcon;
-  onClick: () => void;
-  active?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
-        active
-          ? "bg-rose/10 text-rose-deep"
-          : "text-charcoal-light hover:bg-rose/5 hover:text-charcoal"
-      }`}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
-  );
-}
+const TRANSLATE_BUTTON =
+  "flex items-center gap-1.5 border border-sage/30 bg-white/60 text-xs font-medium text-charcoal-light transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50";
 
 function BlogEditor({
   post,
@@ -153,54 +53,33 @@ function BlogEditor({
   const [published, setPublished] = useState(post?.published || false);
   const [hidden, setHidden] = useState(post?.hidden || false);
   const [saving, setSaving] = useState(false);
-  const [mediaOpen, setMediaOpen] = useState(false);
-  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-  const [headingOpen, setHeadingOpen] = useState(false);
   const [spell, setSpell] = useState<SpellcheckLang>("ro");
   const [titleEn, setTitleEn] = useState(post?.title_en || "");
-  const [contentEn, setContentEn] = useState(post?.content_en || "");
   const [translatingTitle, setTranslatingTitle] = useState(false);
   const [translatingContent, setTranslatingContent] = useState(false);
-  const [showSpellTooltip, setShowSpellTooltip] = useState(false);
-  const headingRef = useRef<HTMLDivElement>(null);
-  const spellTooltipRef = useRef<HTMLDivElement>(null);
+  const roLabelId = useId();
+  const enLabelId = useId();
+  const englishRef = useRef<HTMLDivElement>(null);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ link: false, heading: { levels: [...HEADING_LEVELS] } }),
-      ImageExtension,
-      LinkExtension.configure({ openOnClick: false }),
-      Iframe,
-    ],
+  const roEditor = useBlogEditor({
     content: post?.content_ro || "",
-    editorProps: {
-      attributes: {
-        class: "prose prose-sm max-w-none focus:outline-none min-h-[280px] px-4 py-3 cursor-text",
-        spellcheck: spell !== "off" ? "true" : "false",
-        lang: spell !== "off" ? spell : "ro",
-      },
-    },
-    immediatelyRender: true,
-    shouldRerenderOnTransaction: true,
+    lang: spell === "en" ? "en" : "ro-RO",
+    spellcheck: spell !== "off",
+    labelId: roLabelId,
   });
 
-  useEffect(() => {
-    editor?.view?.dom?.setAttribute("spellcheck", spell !== "off" ? "true" : "false");
-    const langVal = spell === "ro" ? "ro-RO" : spell === "en" ? "en" : "ro";
-    editor?.view?.dom?.setAttribute("lang", langVal);
-  }, [spell, editor]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (headingRef.current && !headingRef.current.contains(e.target as Node)) {
-        setHeadingOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  /*
+   * The English body is an editor too, with the same toolbar — the formatting
+   * the translation carries over would otherwise arrive somewhere she could
+   * not change it. Its spellcheck is always English: before, the English box
+   * inherited the Romanian setting and was checked as Romanian by default.
+   */
+  const enEditor = useBlogEditor({
+    content: toEditorContent(post?.content_en),
+    lang: "en",
+    spellcheck: spell !== "off",
+    labelId: enLabelId,
+  });
 
   const handleSave = async () => {
     setSaving(true);
@@ -209,62 +88,16 @@ function BlogEditor({
       slug,
       title_ro: titleRo,
       title_en: titleEn || null,
-      content_ro: editor?.getHTML() || null,
-      content_en: contentEn || null,
+      // An empty editor still holds an empty paragraph, and "<p></p>" is not
+      // "no English": the public page shows the Romanian only when the English
+      // is null, so an untouched English editor has to save as null.
+      content_ro: roEditor && !roEditor.isEmpty ? roEditor.getHTML() : null,
+      content_en: enEditor && !enEditor.isEmpty ? enEditor.getHTML() : null,
       published,
       hidden: published ? hidden : false,
     });
     setSaving(false);
   };
-
-  const handleMediaSelect = (url: string, type: string) => {
-    if (!editor) return;
-    if (type === "image") {
-      editor.chain().focus().setImage({ src: url }).run();
-    } else if (type === "audio") {
-      editor.chain().focus().insertContent(`<audio src="${url}" controls></audio>`).run();
-    } else if (type === "video") {
-      editor.chain().focus().insertContent(`<video src="${url}" controls class="w-full rounded-xl"></video>`).run();
-    }
-    setMediaOpen(false);
-  };
-
-  const handleVideoHtml = (html: string) => {
-    if (!editor) return;
-    const srcMatch = html.match(/src="([^"]+)"/);
-    if (srcMatch) {
-      // The dialog decides the shape (portrait for reels and Shorts, landscape
-      // for normal video) and passes it through as data-aspect.
-      const aspect = html.match(/data-aspect="([^"]+)"/)?.[1];
-      editor.chain().focus().setIframe({ src: srcMatch[1], ...(aspect ? { aspect } : {}) }).run();
-    }
-  };
-
-  const handleLinkApply = (url: string) => {
-    if (!editor) return;
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-    } else {
-      editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-    }
-  };
-
-  const openLinkDialog = () => {
-    if (!editor) return;
-    const previousUrl = editor.getAttributes("link").href;
-    setLinkUrl(previousUrl || "");
-    setLinkDialogOpen(true);
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (spellTooltipRef.current && !spellTooltipRef.current.contains(e.target as Node)) {
-        setShowSpellTooltip(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const translateText = async (text: string): Promise<string> => {
     const token = await getAuthToken();
@@ -276,6 +109,19 @@ function BlogEditor({
     if (!res.ok) throw new Error("Translation failed");
     const data = await res.json();
     return data.translatedText;
+  };
+
+  /** One request for every paragraph of the post; see lib/translate-document.ts. */
+  const translateBlocks = async (texts: string[]): Promise<string[]> => {
+    const token = await getAuthToken();
+    const res = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ texts, from: "ro", to: "en" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new TranslationFailed(data.code === "too_long" ? "too_long" : "failed");
+    return data.translations;
   };
 
   const handleTranslateTitle = async () => {
@@ -291,42 +137,47 @@ function BlogEditor({
     }
   };
 
+  /**
+   * Fills the English editor with a translation of the Romanian one, keeping
+   * its formatting.
+   *
+   * Replacing English she may have corrected by hand is asked about first.
+   * The replacement is also one step in the English editor's history, so
+   * Desfă (undo) there brings her version back — the question says so. Undo
+   * is "Desfă" rather than "Anulează" because the page's Cancel button is
+   * already "Anulează", and it throws the whole post away.
+   */
   const handleTranslateContent = async () => {
-    if (!editor) return;
-    const plainText = editor.getText().trim();
-    if (!plainText) return;
+    if (!roEditor || !enEditor || !roEditor.getText().trim()) return;
+    if (!enEditor.isEmpty && !confirm(t("admin.editor.translate_replace"))) return;
+
     setTranslatingContent(true);
+    // Typing into the English editor now would be overwritten in a moment.
+    enEditor.setEditable(false);
     try {
-      const translated = await translateText(plainText);
-      setContentEn(translated);
-    } catch {
-      alert(t("admin.translate_error"));
+      const translated = await translateDocument(roEditor, translateBlocks);
+      // She may have left the editor while the request was out.
+      if (enEditor.isDestroyed) return;
+      enEditor.commands.setContent(translated);
+      // The result lands below the fold more often than not; bring it into
+      // view without dragging the page if it is already visible.
+      const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      englishRef.current?.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
+    } catch (err) {
+      alert(
+        err instanceof TranslationFailed && err.reason === "too_long"
+          ? t("admin.editor.translate_too_long")
+          : t("admin.translate_error")
+      );
     } finally {
+      if (!enEditor.isDestroyed) enEditor.setEditable(true);
       setTranslatingContent(false);
     }
   };
 
   const toggleSpellcheck = () => {
     setSpell((prev) => (prev === "ro" ? "en" : prev === "en" ? "off" : "ro"));
-    setShowSpellTooltip(false);
   };
-
-  const cycleHeading = (level: number) => {
-    if (!editor) return;
-    if (level === 0) {
-      editor.chain().focus().setParagraph().run();
-    } else {
-      editor.chain().focus().toggleHeading({ level: level as 2 | 3 }).run();
-    }
-    setHeadingOpen(false);
-  };
-
-  const currentHeading = headingLevels.find((h) => {
-    if (h.level === 0) return !editor?.isActive("heading");
-    return editor?.isActive("heading", { level: h.level });
-  }) || headingLevels[0];
-
-  const spellLabel = spell === "ro" ? "RO" : spell === "en" ? "EN" : "ABC";
 
   return (
     <div className="space-y-6">
@@ -348,216 +199,46 @@ function BlogEditor({
             <Input label={t("admin.title_ro")} value={titleRo} onChange={(e) => setTitleRo(e.target.value)} />
           </div>
           <button
+            type="button"
             onClick={handleTranslateTitle}
             disabled={translatingTitle || !titleRo.trim()}
             data-tooltip={t("admin.translate_to_en")}
-            className="mb-1.5 flex h-10 items-center gap-1.5 rounded-xl border border-sage/30 bg-white/60 px-3 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
+            className={`mb-1.5 h-10 rounded-xl px-3 ${TRANSLATE_BUTTON}`}
           >
             {translatingTitle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {translatingTitle ? t("admin.translating") : "→ EN"}
           </button>
         </div>
-        <Input label={t("admin.title_en")} value={titleEn} onChange={(e) => setTitleEn(e.target.value)} spellCheck={spell !== "off"} lang={spell === "ro" ? "ro-RO" : "en"} />
+        <Input label={t("admin.title_en")} value={titleEn} onChange={(e) => setTitleEn(e.target.value)} spellCheck={spell !== "off"} lang="en" />
       </div>
 
       <Input label={t("admin.slug")} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="nume-articol" />
 
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-1.5 flex items-center justify-between">
-          <label className="block text-sm font-medium text-charcoal-light">{t("admin.content_ro")}</label>
+      <RichTextEditor
+        editor={roEditor}
+        label={t("admin.content_ro")}
+        labelId={roLabelId}
+        spellcheck={{ value: spell, onToggle: toggleSpellcheck }}
+        labelAction={
           <button
+            type="button"
             onClick={handleTranslateContent}
-            disabled={translatingContent || !editor || !editor.getText().trim()}
+            disabled={translatingContent || !roEditor || !roEditor.getText().trim()}
             data-tooltip={t("admin.translate_to_en")}
-            className="flex items-center gap-1.5 rounded-lg border border-sage/30 bg-white/60 px-2.5 py-1 text-xs font-medium text-charcoal-light backdrop-blur-sm transition-all hover:border-rose/30 hover:text-rose-deep disabled:cursor-not-allowed disabled:opacity-50"
+            className={`rounded-lg px-2.5 py-1 ${TRANSLATE_BUTTON}`}
           >
             {translatingContent ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
             {translatingContent ? t("admin.translating") : "→ EN"}
           </button>
-        </div>
-        {/*
-          The focus outline goes on this box rather than on the editable area
-          inside it. The global rule in globals.css only covers links, buttons
-          and form controls, and TipTap's editing surface is a contenteditable
-          <div> — so without this the only sign the editor had focus was the
-          caret. `focus-within` lights the whole editor, toolbar included, which
-          is what a text field would do.
-        */}
-        <div className="rounded-xl border border-sage/30 bg-white/60 backdrop-blur-sm overflow-hidden focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-rose-deep">
-          {editor && (
-            <div className="flex flex-wrap items-center gap-0.5 border-b border-sage/20 p-1.5">
-              <div className="relative" ref={headingRef}>
-                <ToolbarButton
-                  onClick={() => setHeadingOpen(!headingOpen)}
-                  title="Format"
-                >
-                  <currentHeading.icon className="h-4 w-4" />
-                  <ChevronDown className="h-3 w-3 ml-0.5" />
-                </ToolbarButton>
-                {headingOpen && (
-                  <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-xl border border-sage/20 bg-white/90 p-1 shadow-xl backdrop-blur-xl">
-                    {offeredFormats.map((h) => (
-                      <DropdownItem
-                        key={h.level}
-                        label={h.label}
-                        icon={h.icon}
-                        active={currentHeading.level === h.level}
-                        onClick={() => cycleHeading(h.level)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+        }
+      />
 
-              <span className="mx-0.5 h-6 w-px bg-sage/15" />
-
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                active={editor.isActive("bold")}
-                title="Bold (Ctrl+B)"
-              >
-                <Bold className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                active={editor.isActive("italic")}
-                title="Italic (Ctrl+I)"
-              >
-                <Italic className="h-4 w-4" />
-              </ToolbarButton>
-
-              <span className="mx-0.5 h-6 w-px bg-sage/15" />
-
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleBulletList().run()}
-                active={editor.isActive("bulletList")}
-                title="Bullet List"
-              >
-                <List className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                active={editor.isActive("orderedList")}
-                title="Ordered List"
-              >
-                <ListOrdered className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                active={editor.isActive("blockquote")}
-                title="Blockquote"
-              >
-                <TextQuote className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                active={editor.isActive("codeBlock")}
-                title="Code Block"
-              >
-                <Code2 className="h-4 w-4" />
-              </ToolbarButton>
-
-              <span className="mx-0.5 h-6 w-px bg-sage/15" />
-
-              <ToolbarButton
-                onClick={() => setMediaOpen(true)}
-                title="Insert Image / Audio"
-              >
-                <ImageIcon className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => setVideoDialogOpen(true)}
-                title="Insert Video (YouTube/Vimeo)"
-              >
-                <PlaySquare className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={openLinkDialog}
-                active={editor.isActive("link")}
-                title="Insert Link (Ctrl+K)"
-              >
-                <Link2 className="h-4 w-4" />
-              </ToolbarButton>
-
-              <span className="mx-0.5 h-6 w-px bg-sage/15" />
-
-              <ToolbarButton
-                onClick={() => editor.chain().focus().undo().run()}
-                title="Undo (Ctrl+Z)"
-              >
-                <Undo2 className="h-4 w-4" />
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => editor.chain().focus().redo().run()}
-                title="Redo (Ctrl+Shift+Z)"
-              >
-                <Redo2 className="h-4 w-4" />
-              </ToolbarButton>
-
-              <span className="mx-0.5 h-6 w-px bg-sage/15" />
-
-              <ToolbarButton
-                onClick={() => editor.chain().focus().setHorizontalRule().run()}
-                title="Horizontal Rule"
-              >
-                <Minus className="h-4 w-4" />
-              </ToolbarButton>
-
-              <div className="relative ml-auto">
-                <ToolbarButton
-                  onClick={toggleSpellcheck}
-                  title={`Spellcheck: ${spell === "ro" ? "Romanian" : spell === "en" ? "English" : "Off"}`}
-                >
-                  <Languages className="h-4 w-4" />
-                  <span className="ml-1 text-[10px] font-medium">{spellLabel}</span>
-                </ToolbarButton>
-                {spell === "ro" && (
-                  <>
-                    <button
-                      onMouseEnter={() => setShowSpellTooltip(true)}
-                      onMouseLeave={() => setShowSpellTooltip(false)}
-                      className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning/20 text-warning hover:bg-warning/30"
-                    >
-                      <Info className="h-3 w-3" />
-                    </button>
-                    {showSpellTooltip && (
-                      <div
-                        ref={spellTooltipRef}
-                        className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-sage/20 bg-white/95 p-3 shadow-xl backdrop-blur-xl"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs leading-relaxed text-charcoal-light">
-                            Dacă sublinierile roșii nu apar pentru limba română, adaugă dicționarul românesc în
-                            Chrome Settings → Languages → Spell check.
-                          </p>
-                          <button
-                            onClick={() => setShowSpellTooltip(false)}
-                            aria-label={t("admin.close")}
-                            className="shrink-0 rounded-full p-0.5 hover:bg-sage/10"
-                          >
-                            <X className="h-3 w-3 text-charcoal-light" aria-hidden="true" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          <EditorContent editor={editor} />
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-4xl">
-        <label className="mb-1.5 block text-sm font-medium text-charcoal-light">{t("admin.content_en")}</label>
-        <textarea
-          value={contentEn}
-          onChange={(e) => setContentEn(e.target.value)}
-          rows={6}
-          spellCheck={spell !== "off"}
-          lang={spell === "ro" ? "ro-RO" : "en"}
-          className="w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 font-sans text-sm text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm"
+      <div ref={englishRef}>
+        <RichTextEditor
+          editor={enEditor}
+          label={t("admin.content_en")}
+          labelId={enLabelId}
+          busy={translatingContent}
         />
       </div>
 
@@ -586,25 +267,6 @@ function BlogEditor({
           </label>
         )}
       </div>
-
-      <MediaLibrary
-        open={mediaOpen}
-        onClose={() => setMediaOpen(false)}
-        onSelect={handleMediaSelect}
-      />
-
-      <VideoUrlDialog
-        open={videoDialogOpen}
-        onClose={() => setVideoDialogOpen(false)}
-        onInsert={handleVideoHtml}
-      />
-
-      <LinkDialog
-        open={linkDialogOpen}
-        onClose={() => setLinkDialogOpen(false)}
-        onApply={handleLinkApply}
-        initialUrl={linkUrl}
-      />
     </div>
   );
 }

@@ -79,6 +79,15 @@ because it is admin-only, optional, and needs no API key — the failure mode is
 translate button that stops working, not a broken site. DeepL's free tier is the
 fallback if it does break.
 
+Blog posts go to it paragraph by paragraph, not as one document
+(`lib/translate-document.ts`). Each paragraph or heading is sent with only its
+inline markup — bold, italics, links, line breaks — which the endpoint returns
+intact, and everything structural is copied rather than translated: heading
+levels, lists, alignment, images, embeds. Asking a translator to preserve a whole
+document is asking for attributes and embed URLs to come back reworded. One
+request still carries the whole post: 60 blocks and 66,531 characters in under a
+second, measured on 23 September 2026.
+
 ---
 
 ## Database

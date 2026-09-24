@@ -28,7 +28,7 @@ test.describe("admin blog CRUD", () => {
     await page.getByLabel("Titlu (RO)").fill(title);
     await page.getByLabel("Titlu (EN)").fill(`Admin Post ${slug}`);
     await page.getByLabel("Slug").fill(slug);
-    await page.locator(".ProseMirror").click();
+    await page.getByRole("textbox", { name: "Conținut (RO)", exact: true }).click();
     await page.keyboard.type("Conținut articol de test E2E.");
     await page.getByText("Publicat", { exact: true }).click();
     await page.getByRole("button", { name: "Salvează" }).click();
@@ -84,15 +84,17 @@ test.describe("blog editor heading levels", () => {
       .getByRole("button")
       .first()
       .click();
-    await expect(page.locator(".ProseMirror")).toBeVisible();
+    const editor = page.getByRole("textbox", { name: "Conținut (RO)", exact: true });
+    await expect(editor).toBeVisible();
 
-    const format = page.getByRole("button", { name: "Format" });
+    // The Romanian editor's; the English one below has its own.
+    const format = page.getByRole("button", { name: "Format" }).first();
     await format.click();
     const menu = page.locator("div.absolute.left-0.top-full");
     await expect(menu.getByRole("button")).toHaveText([
-      "Paragraph",
-      "Heading 2",
-      "Heading 3",
+      "Text normal",
+      "Titlu 2",
+      "Titlu 3",
     ]);
     await format.click();
 
@@ -108,9 +110,9 @@ test.describe("blog editor heading levels", () => {
      * read catches the icon from before the caret moved.
      */
     const triggerIcon = format.locator("svg").first();
-    await page.locator(".ProseMirror p").first().click();
+    await editor.locator("p").first().click();
     await expect(triggerIcon).toHaveClass(/pilcrow/);
-    await page.locator(".ProseMirror h1").first().click();
+    await editor.locator("h1").first().click();
     await expect(triggerIcon, "an existing H1 is reported as a paragraph").toHaveClass(
       /heading-?1/
     );
@@ -119,7 +121,7 @@ test.describe("blog editor heading levels", () => {
     // the list, so the URL cannot say the save finished; the editor closing
     // can, because the page only leaves it once the update has returned.
     await page.getByRole("button", { name: "Salvează" }).click();
-    await expect(page.locator(".ProseMirror")).toHaveCount(0);
+    await expect(editor).toHaveCount(0);
 
     await page.goto(`/ro/blog/${slug}`);
     await expect(page.locator(".blog-content h1")).toHaveText(legacy);

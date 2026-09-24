@@ -59,7 +59,16 @@ export default async function LocaleLayout({
 
   if (!routing.locales.includes(locale as (typeof routing.locales)[number])) notFound();
 
-  const messages = await getMessages();
+  /*
+   * Every namespace except the admin panel's. Its copy lives in the same files
+   * but is read by components/admin/locale-provider.tsx, never through this
+   * provider — and whatever is handed to the provider is shipped to every
+   * visitor's browser. That was 3.4 KB gzipped on 23 September 2026, on every
+   * page, to people mostly on phones.
+   */
+  const messages = Object.fromEntries(
+    Object.entries(await getMessages()).filter(([namespace]) => namespace !== "admin")
+  );
   const t = await getTranslations("common");
   /* One read, shared by the structured data below and by the header. The header
      is a client component and cannot reach the database itself, so the name has

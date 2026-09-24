@@ -195,18 +195,29 @@ Starea plății:
 **Meniu: Articole** → **Articol Nou**
 
 Editorul funcționează ca un document normal: selectezi text și apeși pe butoane
-pentru **bold**, titluri, liste, citate.
+pentru **îngroșat**, titluri, liste, citate și aliniere (stânga, centru, dreapta).
 
+- **Scurtături:** butonul cu tastatură, ultimul din bară (sau Ctrl+/, ⌘/ pe Mac),
+  arată tot ce poți face fără mouse, cu rezultatul lângă fiecare. Multe merg și
+  doar scriind, inclusiv pe telefon: `## ` la început de rând face un titlu,
+  `- ` o listă, `**cuvânt**` îl îngroașă. Dacă nu voiai formatarea, apasă
+  Backspace imediat după și rămâne exact ce ai scris.
 - **Imagini, audio, video:** butonul cu imagine deschide Biblioteca Media.
 - **Video de pe YouTube / Vimeo / Instagram:** butonul cu ▶ — lipești linkul
   paginii, nu ai nevoie de cod. Reels-urile și Shorts-urile apar în format
   vertical, ca pe telefon.
-- **Corectură ortografică:** butonul RO/EN/off. Pentru română, Chrome are nevoie
-  de dicționarul românesc instalat (Setări → Limbi → adaugă Română).
+- **Corectură ortografică:** butonul RO/EN/off, în editorul în română; cel în
+  engleză verifică mereu în engleză. Pentru română, Chrome are nevoie de
+  dicționarul românesc instalat (Setări → Limbi → adaugă Română).
 - **Ascuns:** articolul rămâne salvat dar dispare de pe site.
 
-Butonul **→ EN** traduce automat titlul sau conținutul. E o traducere
-automată — merită citită înainte de publicare.
+Butonul **→ EN** de lângă titlu traduce titlul. Cel de lângă **Conținut (RO)**
+traduce tot articolul în editorul **Conținut (EN)**, cu formatare cu tot:
+titlurile, listele, textul îngroșat, linkurile, alinierea, imaginile și
+videourile rămân la locul lor. Dacă ai deja un text în engleză, te întreabă
+înainte să-l înlocuiască, iar dacă te răzgândești, **Desfă** din bara
+editorului în engleză îl aduce înapoi. E o traducere automată — merită citită
+înainte de publicare.
 
 ---
 
