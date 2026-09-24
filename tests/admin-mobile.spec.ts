@@ -39,6 +39,19 @@ test.describe("the admin panel on a phone", () => {
     await expect(drawer).toBeHidden();
   });
 
+  test("site content picks its section from a dropdown, and fits the screen", async ({ page }) => {
+    await page.goto("/admin/content/identity");
+    await expect(page.getByRole("button", { name: "Salvează modificările" })).toBeVisible();
+    await page.getByLabel("Secțiune").selectOption("home");
+    await expect(page).toHaveURL(/\/admin\/content\/home$/);
+    await expect(page.getByRole("heading", { level: 2, name: "Pagina de start" })).toBeVisible();
+    await expect(page.getByText("Totul e salvat")).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow, "nothing should scroll sideways").toBeLessThanOrEqual(0);
+  });
+
   test("the close button, Escape and a tap outside all close the drawer", async ({ page }) => {
     const open = page.getByRole("button", { name: "Deschide meniul" });
     const drawer = page.getByRole("dialog", { name: "Meniu" });

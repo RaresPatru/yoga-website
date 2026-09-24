@@ -8,7 +8,7 @@ import { siteContentValue } from "./helpers";
  * admin-mobile.spec.ts, which runs on iPhone WebKit.
  */
 
-const SECTIONS = [
+const SECTIONS: Array<{ label: string; path: string; title?: string }> = [
   { label: "Panou de control", path: "/admin" },
   { label: "Evenimente", path: "/admin/events" },
   { label: "Înscrieri", path: "/admin/registrations" },
@@ -16,7 +16,8 @@ const SECTIONS = [
   { label: "Testimoniale", path: "/admin/testimonials" },
   { label: "Articole", path: "/admin/blog" },
   { label: "Email-uri", path: "/admin/emails" },
-  { label: "Conținut site", path: "/admin/content" },
+  // "Conținut site" opens on its first section, and the tab names the section too.
+  { label: "Conținut site", path: "/admin/content/identity", title: "Identitate · Conținut site" },
 ];
 
 const sidebar = (page: Page) => page.getByRole("navigation", { name: "Secțiuni admin" });
@@ -41,8 +42,10 @@ test.describe("the admin sidebar", () => {
 
   test("stays in view at the bottom of a long page", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 600 });
-    await page.goto("/admin/content");
+    await page.goto("/admin/content/home");
     await expect(page.getByRole("heading", { level: 1, name: "Conținut site" })).toBeVisible();
+    // The section's fields load after the page, and only then is it long.
+    await expect(page.getByText("Totul e salvat")).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
 
@@ -111,11 +114,11 @@ test.describe("the admin sidebar", () => {
 
   test("every section has its own heading and tab title", async ({ page }) => {
     const siteName = await siteContentValue("general.site_name");
-    for (const { label, path } of SECTIONS) {
+    for (const { label, path, title } of SECTIONS) {
       await sidebar(page).getByRole("link", { name: label, exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${path.replace(/\//g, "\\/")}$`));
       await expect(page.getByRole("heading", { level: 1, name: label, exact: true })).toBeVisible();
-      await expect(page).toHaveTitle(`${label} · ${siteName} Admin`);
+      await expect(page).toHaveTitle(`${title ?? label} · ${siteName} Admin`);
     }
   });
 

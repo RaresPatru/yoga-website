@@ -166,8 +166,21 @@ const NAV_LINK_REST =
 const NAV_LINK_CURRENT =
   "bg-rose/35 font-medium text-rose-deeper hover:bg-rose/45";
 
-export function Header({ siteName }: { siteName: string }) {
+/** What the wordmark shows, set in "Conținut site" → "Identitate". */
+export interface Brand {
+  name: string;
+  logoUrl: string | null;
+  display: "name" | "logo" | "both";
+}
+
+/** The section names, in the visitor's language, from "Conținut site" → "Meniu". */
+export type NavLabels = Record<(typeof NAV_LINKS)[number]["key"], string>;
+
+export function Header({ brand, labels }: { brand: Brand; labels: NavLabels }) {
   const t = useTranslations("nav");
+  // Without a logo there is nothing to show but the name.
+  const showLogo = Boolean(brand.logoUrl) && brand.display !== "name";
+  const showName = !showLogo || brand.display === "both";
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -560,46 +573,53 @@ export function Header({ siteName }: { siteName: string }) {
               — and a transparent underline that only gains a colour means
               nothing moves when it appears.
 
-              IT SCROLLS TO THE TOP; IT DOES NOT GO HOME
+              IT GOES HOME, AND ON THE HOME PAGE IT GOES TO THE TOP
 
-              A wordmark linking to "/" is close to universal, and it was that
-              until now. It was also redundant here: "Acasă" sits four pixels to
-              the right of it and does exactly that job, so the most prominent
-              thing in the bar was the second control for a destination already
-              covered. Taking the page back to its own top is the job nothing
-              else in the bar does — and it is worth more now that the bar spends
-              most of its time off-screen.
+              Tapping the name to go home is one of the web's strongest habits.
+              For a while this scrolled the current page to its top instead,
+              which left someone who arrived from Instagram on an event page
+              with no obvious way to the rest of the site (audit I20; Rares chose
+              "home" on 24 September 2026). On the home page itself, going home
+              and going to the top are the same place, so the click scrolls
+              there smoothly instead of reloading.
 
-              The cost, stated plainly: a deep page no longer has a one-click
-              route home from the wordmark. The nav link and the drawer both
-              still carry it.
+              What it shows is her choice in "Conținut site" → "Identitate": the
+              name, the logo, or both. Without a logo it is the name.
 
-              A <button>, not a link with its default prevented. A link whose
-              href says "/" and whose click does something else lies to the
-              status bar, to middle-click and to anyone reading the markup.
-
-              The accessible name is the brand plus the action, so the visible
-              word is contained in it — what WCAG 2.5.3 asks — while a screen
-              reader still hears what pressing it does rather than just a name.
+              The accessible name is the site's name, which is also the visible
+              word, or the logo's text alternative.
             */}
-            <button
-              type="button"
-              onClick={backToTop}
-              data-tooltip={t("back_to_top")}
-              aria-label={`${siteName} — ${t("back_to_top")}`}
-              className="min-w-0 rounded-sm font-serif text-xl font-semibold text-sage-dark underline decoration-transparent decoration-2 underline-offset-[6px] transition-[color,text-decoration-color,font-size] duration-200 ease-out hover:decoration-sage group-data-[compact]:text-lg"
+            <Link
+              href="/"
+              onClick={(event) => {
+                if (pathname !== "/") return;
+                event.preventDefault();
+                backToTop();
+              }}
+              data-tooltip={pathname === "/" ? t("back_to_top") : t("go_home")}
+              aria-label={brand.name}
+              className="flex min-w-0 items-center gap-3 rounded-sm font-serif text-xl font-semibold text-sage-dark underline decoration-transparent decoration-2 underline-offset-[6px] transition-[color,text-decoration-color,font-size] duration-200 ease-out hover:decoration-sage group-data-[compact]:text-lg"
             >
+              {showLogo && (
+                // A plain <img>: the logo is small, its size is set here, and
+                // it may be an SVG, which next/image does not optimise anyway.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={brand.logoUrl!}
+                  alt=""
+                  className="h-9 w-auto max-w-[10rem] shrink-0 object-contain group-data-[compact]:h-8"
+                />
+              )}
               {/*
-                The truncation is on this span rather than on the button, and
+                The truncation is on this span rather than on the link, and
                 that is not cosmetic. `truncate` is `overflow: hidden`, and an
                 element with hidden overflow clips its own `::after` — which is
-                where the tooltip lives. With it on the button the tooltip
+                where the tooltip lives. With it on the trigger the tooltip
                 computed as fully opaque and painted nothing at all, which is a
-                failure no computed-style check catches. The button is still the
-                thing that shrinks (`min-w-0`); this just does the cutting.
+                failure no computed-style check catches.
               */}
-              <span className="block truncate">{siteName}</span>
-            </button>
+              {showName && <span className="block truncate">{brand.name}</span>}
+            </Link>
 
             {/*
               `lg`, not `md`. The Romanian labels need 840px to sit on one line —
@@ -627,7 +647,7 @@ export function Header({ siteName }: { siteName: string }) {
                       current ? NAV_LINK_CURRENT : NAV_LINK_REST
                     )}
                   >
-                    {t(key)}
+                    {labels[key]}
                   </Link>
                 );
               })}
@@ -716,7 +736,7 @@ export function Header({ siteName }: { siteName: string }) {
                         : "text-charcoal hover:bg-sage/35 active:bg-sage/45"
                     )}
                   >
-                    {t(key)}
+                    {labels[key]}
                   </Link>
                 );
               })}

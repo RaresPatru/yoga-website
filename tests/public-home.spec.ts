@@ -82,7 +82,9 @@ test.describe("home page (RO)", () => {
     await expect(page.getByText("Yoga pentru corp, minte și suflet")).toBeVisible();
 
     // Both hero calls to action.
-    await expect(page.getByRole("link", { name: "Explorează" })).toBeVisible();
+    // Neither button has text of its own in the seed, so both show the plain
+    // label they fall back to ("Conținut site" → "Pagina de start").
+    await expect(page.getByRole("link", { name: "Vezi evenimentele", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Despre mine" }).first()).toBeVisible();
 
     // Events come before the blog now. They are the only thing on this site
@@ -110,7 +112,7 @@ test.describe("home page (RO)", () => {
   });
 
   test("hero CTA links to events page", async ({ page }) => {
-    await page.getByRole("link", { name: "Explorează" }).click();
+    await page.getByRole("link", { name: "Vezi evenimentele", exact: true }).click();
     await expect(page).toHaveURL(/\/ro\/events/);
   });
 
@@ -237,7 +239,7 @@ test.describe("home page language switching", () => {
     // title than the fallback in messages/en.json. "Explore" comes from the
     // message bundle, so it proves the locale switched without depending on
     // anything editable.
-    await expect(page.getByRole("link", { name: "Explore", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "See the events", exact: true })).toBeVisible();
     // (No nav-link assertion here: below `md` the links are display:none, and
     // getByRole deliberately ignores anything hidden from the accessibility
     // tree, so it cannot see them at all. The button and the lang attribute
@@ -248,7 +250,7 @@ test.describe("home page language switching", () => {
     // that actually kept timing out.
     await expect(page).toHaveURL(/\/ro$/, { timeout: 25_000 });
     await expect(page.locator("html")).toHaveAttribute("lang", "ro");
-    await expect(page.getByRole("link", { name: "Explorează", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Vezi evenimentele", exact: true })).toBeVisible();
   });
 });
 
@@ -729,16 +731,13 @@ test.describe("home page navigation bar", () => {
      * pressed for with Tab — WebKit's Tab key does not walk links, so a tab loop
      * passes vacuously on the mobile project.
      *
-     * The target is the wordmark BUTTON, deliberately not `header a`. This read
-     * `header a` until the wordmark stopped being a link, at which point the
-     * first anchor in the header became "Acasă" — which is `display: none` below
-     * `lg`, so the focus silently did nothing and the check failed on the phone
-     * project only. Verified in both engines: a button focused this way does
-     * match :focus-visible, so the veto is real and it was the selector that was
-     * wrong.
+     * The target is the wordmark, the first link in the header. It was a
+     * button for a while (it only scrolled to the top); it is a link home again
+     * since audit I20, so it is the first anchor, and it is displayed at every
+     * width, unlike "Acasă", which is hidden below `lg`.
      */
     const focusVisible = await page.evaluate(() => {
-      const wordmark = document.querySelector("header button") as HTMLElement | null;
+      const wordmark = document.querySelector("header a") as HTMLElement | null;
       wordmark?.focus();
       return wordmark?.matches(":focus-visible") ?? false;
     });
@@ -869,7 +868,9 @@ test.describe("home page navigation bar identity and fit", () => {
       const state = await page.evaluate(() => {
         const bar = document.querySelector("header nav")!;
         const burger = document.querySelector('header button[aria-controls="mobile-menu"]');
-        const firstLink = bar.querySelector("a[href]");
+        // The first section link. The wordmark is a link too, and comes
+        // first, but it is shown at every width.
+        const firstLink = bar.querySelectorAll("a[href]")[1];
         return {
           height: Math.round(bar.getBoundingClientRect().height),
           burgerShown: !!burger && burger.getBoundingClientRect().width > 0,
@@ -892,13 +893,18 @@ test.describe("home page navigation bar identity and fit", () => {
   });
 
   /**
-   * The wordmark takes you to the top of the page you are on.
-   *
-   * It linked to "/" until now, which is the usual convention and was also
-   * redundant here — "Acasă" sits beside it and does that. Scrolling the current
-   * page back to its own top is the job nothing else in the bar does, and it is
-   * worth more now that the bar spends most of its time off-screen.
+   * The wordmark goes home (audit I20: tapping the name to go home is one of
+   * the web's strongest habits). On the home page itself, home and the top of
+   * the page are the same place, so there it scrolls up instead of reloading.
    */
+  test("the wordmark goes home from any other page", async ({ page }) => {
+    await page.goto("/ro/contact");
+    await hydrated(page);
+    await page.getByRole("banner").getByRole("link").first().click();
+    await expect(page).toHaveURL(/\/ro$/);
+  });
+
+  /** On the home page, the same link scrolls to the top without reloading. */
   test("the wordmark returns the page to its top without leaving it", async ({ page }) => {
     await page.goto("/ro");
     await hydrated(page);
@@ -910,7 +916,7 @@ test.describe("home page navigation bar identity and fit", () => {
     await expect.poll(async () => page.evaluate(() => Math.round(window.scrollY))).toBe(1140);
 
     const before = page.url();
-    const wordmark = page.getByRole("banner").getByRole("button", { name: /Înapoi sus/ });
+    const wordmark = page.getByRole("banner").getByRole("link").first();
     await wordmark.click();
 
     await expect.poll(async () => page.evaluate(() => Math.round(window.scrollY))).toBe(0);
@@ -942,7 +948,7 @@ test.describe("home page navigation bar identity and fit", () => {
       await hydrated(page);
 
       await expect(
-        page.getByRole("banner").getByRole("button", { name: new RegExp(chosen) })
+        page.getByRole("banner").getByRole("link", { name: chosen })
       ).toContainText(chosen);
       await expect(page).toHaveTitle(new RegExp(chosen));
 
@@ -975,7 +981,7 @@ test.describe("home page navigation bar identity and fit", () => {
       await page.goto("/ro");
       await hydrated(page);
 
-      await expect(page.getByRole("banner").getByRole("button").first()).toContainText(
+      await expect(page.getByRole("banner").getByRole("link").first()).toContainText(
         "Yoga Flow"
       );
       await expect(page).toHaveTitle(/Yoga Flow/);

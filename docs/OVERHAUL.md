@@ -21,7 +21,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 |---|---|---|
 | 0 | Groundwork: error handling, typed database, checkout fix, shared pieces | done, 24 Sep |
 | 1 | Admin shell (sticky collapsible sidebar) and the dashboard | done, 24 Sep |
-| 2 | Site content, one-switch bilingual editing, public copy and legal pages | not started |
+| 2 | Site content, one-switch bilingual editing, public copy and legal pages | done, 25 Sep |
 | 3 | Blog: toolbar, post list, editor, public cards and article | not started |
 | 4 | Events: admin list and editor, per-event numbers, public archive | not started |
 | 5 | Registrations: one list with the waiting list, archive, notes, exports | not started |
@@ -440,88 +440,78 @@ passed on their own afterwards (`admin-events.spec.ts`, 18 of 18).
 
 ### Phase 2: Site content, bilingual editing, public copy, legal pages
 
-- [ ] **The content schema lives in code** (`lib/site-content-schema.ts`):
-  sections, groups, fields, labels, help text, and the placeholder name
-  visitors see. Adding a field is one entry, and the admin creates the row the
-  first time she saves.
-- [ ] **The sections, in menu order:**
+**Built 25 September 2026.** The full suite on a production build: 484 passed,
+11 skipped, 1 failed. The failure was a test reading the header's first link as
+the section links, which the wordmark now is; fixed, `public-home.spec.ts` then
+passed in both engines (87 of 87).
 
-  | Section | What it holds |
-  |---|---|
-  | **Identitate** | site name, logo, and whether to show name / logo / both |
-  | **Rețele sociale** | Instagram, Facebook, TikTok, LinkedIn |
-  | **Meniu** | the six menu labels, in both languages |
-  | **Pagina de start** | every text on the page, top to bottom (below) |
-  | **Despre mine** | every text and photo on the About page |
-  | **Întrebări frecvente** | the FAQ list (below) |
-  | **Blog** | the default author, used by new articles only |
-  | **Subsol** | the footer texts |
-  | **SEO și firmă** | tagline, description, her name as search engines should show it, and the area she serves (optional) |
-  | **Pagini legale** | the business facts and three documents |
+- [x] **The content schema lives in code** (`lib/site-content-schema.ts`):
+  sections, groups, fields, labels, help, and what a visitor sees while a field
+  is empty. Adding a field is one entry; the admin creates its row on the first
+  save.
+- [x] **Ten sections, in menu order:** Identitate, Rețele sociale, Meniu,
+  Pagina de start, Despre mine, Întrebări frecvente, Blog, Subsol, SEO și
+  firmă, Pagini legale. "Pagini legale" also takes the official ANPC SAL
+  pictogram.
+- [x] **The admin screens** at `/admin/content/[section]`: a side menu on a
+  computer and a dropdown on a phone, one RO / EN switch per form with an
+  English counter and "Tradu ce lipsește", unsaved-changes tracking, a leave
+  guard and one Save. Long texts use a compact rich editor (paragraphs, bold,
+  italics, lists, links), which closes **B6** for the home page and About.
+- [x] **FAQs** (**B14**): a new question starts hidden, both languages go
+  through the switch, she reorders by dragging or with the up and down
+  buttons, and publishes each with a switch.
+- [x] **Header, drawer and footer** read the menu labels from site content,
+  falling back to today's. The name, the logo or both, as she chooses. The name
+  goes home; on the home page it scrolls to the top (**I20**).
+- [x] **Footer:** TikTok and LinkedIn (`lib/social.ts` accepts @name, a bare
+  domain or a full address), the legal pages, and the ANPC SAL link or
+  pictogram.
+- [x] **Home and About read every text from site content.** Headings and
+  buttons fall back to plain labels; "Explorează" is now "Vezi evenimentele".
+  The invented headline and tagline are deleted, and her own words show a
+  dashed placeholder named after the part while empty. The arrows stay.
+- [x] **SEO (R6).** Page titles and descriptions come from her fields or are
+  left out. The structured data names no town and no person unless she fills
+  them in. The share card uses her tagline. `INSTRUCTOR_NAME` and
+  `SITE_LOCALITY` are gone.
+- [x] **Legal pages** at `/[locale]/privacy`, `/terms` and `/cookies`,
+  drafted in both languages. `{{business_name}}` and the other facts fill in
+  from her business details, and anything missing is a visible marker. Each
+  page shows when it last changed. They are in the sitemap.
+- [x] **[PRIVACY.md](PRIVACY.md):** the plain-language guide, what she must
+  fill in, the defaults she must confirm, and what a lawyer should check.
 
-  - **Pagina de start** covers, in page order:
-    - the first section: title, subtitle, photo and its description, two
-      buttons
-    - events: titles, empty-state text, card link text, button
-    - Cine sunt
-    - testimonials
-    - FAQ
-    - blog
-  - **Întrebări frecvente** works like this:
-    - A new question starts hidden (B14).
-    - Both languages go through the switch.
-    - She reorders by dragging, or with up/down buttons.
-    - She publishes each question with a switch.
-- [ ] **The admin screens** live at `/admin/content/[section]`.
-  - Each section has the RO / EN switch, unsaved-changes tracking, a leave
-    guard and a Save.
-  - Long texts get the compact rich editor, which closes B6 for the home page
-    and About.
-- [ ] **Header, drawer and footer** read the menu labels from site content,
-  falling back to today's labels.
-  - The logo and name follow her display choice.
-  - The name or logo links home, and on the home page it scrolls to the top
-    (I20).
-- [ ] **Footer additions.**
-  - TikTok and LinkedIn icons. `lib/social.ts` accepts `@name`, a bare domain
-    or a full address for every network.
-  - Links to the legal pages.
-  - The ANPC SAL pictogram.
-- [ ] **Home and About read every text from site content.**
-  - Empty section titles and buttons fall back to today's plain labels.
-  - The previous AI's invented copy is deleted. In its place come dashed
-    placeholders named after the part they stand for, such as "Titlu
-    principal" or "Subtitlu".
-  - The arrow icons stay.
-- [ ] **SEO (R6).**
-  - Page titles and descriptions come from her fields, or are left out.
-  - The structured data drops the invented town and name unless she fills
-    them in.
-  - The share card uses her tagline.
-  - `INSTRUCTOR_NAME` and `SITE_LOCALITY` are removed.
-- [ ] **Legal pages** live at `/[locale]/privacy`, `/[locale]/terms` and
-  `/[locale]/cookies`.
-  - Facts such as `{{business_name}}` are filled in from her business fields,
-    and anything missing shows as a visible placeholder.
-  - Each page shows a "last updated" date.
-  - Drafts in both languages are seeded.
-- [ ] **[PRIVACY.md](PRIVACY.md):** the plain-language guide above, in full,
-  with what she must fill in and what a lawyer should check.
+**New migration**
 
-**New migrations**
-
-- `…_legal_page_drafts.sql`: the drafted documents as site-content rows, and
-  FAQs hidden by default.
+- `20260925000000_faq_hidden_and_legal_drafts.sql`: `faqs.published`
+  defaults to false, and the three legal drafts as site-content rows.
 
 **Tests**
 
-- `admin-content.spec.ts` (new): every section saves and appears on the site;
-  the EN reference and fallback work; a menu label changes the header, drawer
-  and footer together; each name/logo mode renders; TikTok and LinkedIn
-  addresses are normalised; the FAQ create → publish → reorder → English flow
-  works.
-- `public-home.spec.ts` and `seo.spec.ts` are updated.
-- `legal-pages.spec.ts` (new).
+- `admin-content.spec.ts` (new): every section at its own address; one Save
+  and the text on the site; a row created by its first save; the English
+  reference and fallback; paragraphs kept (B6); the leave guard; a menu label
+  in the header, drawer and footer together; each name/logo mode; TikTok and
+  LinkedIn addresses; a new question hidden by default; create → publish →
+  reorder → English.
+- `legal-pages.spec.ts` (new): all three pages in both languages, with their
+  date; missing facts as markers and supplied ones escaped; the VAT sentence;
+  the footer links; the sitemap.
+- `seo.spec.ts`: no town, person or description she did not supply, and hers
+  when she does.
+- `public-home.spec.ts`: the new button labels; the wordmark goes home.
+- `admin-mobile.spec.ts`: the section dropdown on a phone.
+
+**Found along the way**
+
+- **PostHog set cookies.** The cookie policy says statistics run without
+  them, so the one line that makes that true (`persistence: "memory"`) came
+  forward from phase 11.
+- **Embedded videos still load straight away** and may set their own cookies
+  until phase 3 makes them click-to-play. PRIVACY.md says so.
+- **The logo help suggested SVG**, which the uploader rejects on purpose. It
+  now says PNG or WebP.
 
 ### Phase 3: Blog
 

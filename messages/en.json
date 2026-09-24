@@ -1,11 +1,5 @@
 {
   "nav": {
-    "home": "Home",
-    "about": "About",
-    "blog": "Blog",
-    "events": "Events",
-    "testimonials": "Testimonials",
-    "contact": "Contact",
     "admin": "Admin",
     "menu": {
       "open": "Open menu",
@@ -16,7 +10,8 @@
     "landmark": {
       "primary": "Primary",
       "sections": "Site sections"
-    }
+    },
+    "go_home": "Home page"
   },
   "common": {
     "share": "Share",
@@ -25,16 +20,7 @@
     "skip_to_content": "Skip to content"
   },
   "home": {
-    "hero_title": "I guide your journey to balance",
-    "hero_subtitle": "Yoga for body, mind and soul",
-    "cta": "Explore",
-    "blog_title": "From the Blog",
-    "events_title": "Upcoming Events",
-    "free": "Free",
-    "view_all_posts": "View all posts",
-    "view_all_events": "View all events",
-    "view_all_testimonials": "View all testimonials",
-    "testimonials_title": "What Participants Say"
+    "free": "Free"
   },
   "blog": {
     "title": "Blog",
@@ -100,8 +86,11 @@
     "error": "An error occurred. Please try again."
   },
   "footer": {
-    "rights": "All rights reserved.",
-    "follow": "Follow me"
+    "legal": "Legal information",
+    "privacy": "Privacy",
+    "terms": "Terms and conditions",
+    "cookies": "Cookies",
+    "sal": "ANPC: Alternative dispute resolution"
   },
   "language": {
     "ro": "Română",
@@ -365,6 +354,52 @@
       "waiting": "On the waiting list",
       "pending_payments": "Payments pending",
       "view_page": "View the event page"
+    },
+    "content_editor": {
+      "toolbar": "Formatting",
+      "bold": "Bold",
+      "italic": "Italic",
+      "bullets": "Bulleted list",
+      "numbers": "Numbered list",
+      "link": "Link"
+    },
+    "cms": {
+      "sections": "Content sections",
+      "section": "Section",
+      "language": "Language of the texts",
+      "romanian": "Romanian",
+      "same_both": "The same in both languages",
+      "empty_uses_romanian": "Empty: the site shows the Romanian text.",
+      "empty_shows": "Empty: the site shows “{text}”.",
+      "empty_placeholder": "Empty: the site shows a dashed marker, “{name}”.",
+      "empty_hidden": "Empty: nothing shows in its place.",
+      "choose_image": "Choose image",
+      "change_image": "Change image",
+      "remove_image": "Remove",
+      "links_to": "Links to",
+      "translate_missing": "Translate what’s missing",
+      "translated": "Translated {count} texts. Check them, then save.",
+      "unsaved": "Unsaved changes",
+      "all_saved": "Everything is saved",
+      "save": "Save changes",
+      "leave_title": "Leave without saving?",
+      "leave_body": "The changes in this section will be lost.",
+      "leave_confirm": "Leave without saving",
+      "leave_cancel": "Stay here"
+    },
+    "faq": {
+      "add": "Add a question",
+      "none": "No questions yet.",
+      "question": "Question {n}",
+      "answer": "Answer",
+      "published": "Published on the site",
+      "drag": "Drag to reorder",
+      "move_up": "Move question {n} up",
+      "move_down": "Move question {n} down",
+      "delete": "Delete question {n}",
+      "delete_title": "Delete this question?",
+      "untitled": "Question without text",
+      "question_required": "Every question needs its Romanian text."
     }
   }
 }

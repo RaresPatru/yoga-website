@@ -95,6 +95,16 @@ in the public archive.
 **Message state.** `contact_messages` gained `read_at` (NULL means unread),
 `starred`, `archived_at` and `locale` (`20260924000300_message_state.sql`).
 
+**Site content keys are described in code.** Which keys exist, and what each
+is for, lives in `lib/site-content-schema.ts`, not in the table: the admin
+creates a key's row the first time she saves it. The `section`, `label_ro`
+and `field_type` columns are written from the schema on every save and are
+not read by the site. The three legal documents are rows too
+(`legal.privacy`, `legal.terms`, `legal.cookies`), seeded as drafts by
+`20260925000000_faq_hidden_and_legal_drafts.sql`, which also makes
+`faqs.published` default to false: a new question stays hidden until she
+publishes it.
+
 ---
 
 ## Functions and the capacity rule

@@ -39,8 +39,10 @@ const inter = Inter({
 });
 
 /**
- * Root-level defaults only. Every localised page supplies its own title,
- * description and share image via generateMetadata — see lib/metadata.ts.
+ * Root-level defaults only: the site's name as the title, and no description
+ * (a sentence written for her would be an invented one). Every localised page
+ * supplies its own title, description and share image via generateMetadata;
+ * see lib/metadata.ts.
  * `metadataBase` is what lets those pages give relative image paths and still
  * emit the absolute URLs that crawlers require.
  *
@@ -51,7 +53,6 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(siteUrl()),
     title: await getSiteName(),
-    description: "Yoga pentru corp, minte și suflet",
   };
 }
 

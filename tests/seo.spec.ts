@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { seedEvent, deleteEventBySlug } from "./helpers";
+import {
+  seedEvent,
+  deleteEventBySlug,
+  contentSnapshot,
+  putContent,
+  restoreContent,
+} from "./helpers";
 
 /**
  * Guards the things that decide whether anyone finds or clicks a link.
@@ -239,6 +245,68 @@ test.describe("SEO and social sharing", () => {
       expect(sitemap).not.toContain(event.slug);
     } finally {
       await deleteEventBySlug(event.slug);
+    }
+  });
+});
+
+/** Every JSON-LD block in a page's HTML, parsed. */
+function structuredData(html: string): Array<Record<string, unknown>> {
+  return (html.match(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g) ?? []).map(
+    (block) =>
+      JSON.parse(block.replace(/<script type="application\/ld\+json">/, "").replace(/<\/script>/, ""))
+  );
+}
+
+/**
+ * Audit R6: the structured data used to publish a town (Cluj-Napoca) and a
+ * person's name nobody had supplied. It now says only what she has filled in
+ * under "Conținut site" → "SEO și firmă".
+ */
+test.describe("only facts she supplied reach search engines", () => {
+  const KEYS = ["seo.tagline", "seo.description", "seo.area_served", "seo.person_name"] as const;
+
+  test("with nothing filled in, no town, no person and no invented description", async ({ request }) => {
+    const before = await Promise.all(KEYS.map((key) => contentSnapshot(key)));
+    try {
+      await Promise.all(KEYS.map((key) => restoreContent(key, null)));
+      const home = await (await request.get("/ro")).text();
+      expect(home).not.toMatch(/<meta name="description"/);
+      const org = structuredData(home).find((d) => d["@type"] === "Organization")!;
+      expect(org).toBeTruthy();
+      // The seed's invented hero text mentions a town; the structured data must not.
+      expect(JSON.stringify(structuredData(home))).not.toContain("Cluj-Napoca");
+      expect(org.address).toBeUndefined();
+      expect(org.areaServed).toBeUndefined();
+      expect(org.founder).toBeUndefined();
+
+      const about = await (await request.get("/ro/about")).text();
+      expect(structuredData(about).find((d) => d["@type"] === "Person")).toBeUndefined();
+    } finally {
+      await Promise.all(KEYS.map((key, i) => restoreContent(key, before[i])));
+    }
+  });
+
+  test("what she fills in reaches the title, the description and the structured data", async ({
+    request,
+  }) => {
+    const before = await Promise.all(KEYS.map((key) => contentSnapshot(key)));
+    try {
+      await putContent("seo.tagline", "Yoga și drumeții");
+      await putContent("seo.description", "Evenimente de yoga în natură.");
+      await putContent("seo.area_served", "România");
+      await putContent("seo.person_name", "Ana Test");
+
+      const home = await (await request.get("/ro")).text();
+      expect(home).toMatch(/<title>Yoga și drumeții · [^<]+<\/title>/);
+      expect(home).toContain('<meta name="description" content="Evenimente de yoga în natură."');
+      const org = structuredData(home).find((d) => d["@type"] === "Organization")!;
+      expect(org.areaServed).toBe("România");
+      expect((org.founder as { name: string }).name).toBe("Ana Test");
+
+      const about = await (await request.get("/ro/about")).text();
+      expect(structuredData(about).find((d) => d["@type"] === "Person")?.name).toBe("Ana Test");
+    } finally {
+      await Promise.all(KEYS.map((key, i) => restoreContent(key, before[i])));
     }
   });
 });

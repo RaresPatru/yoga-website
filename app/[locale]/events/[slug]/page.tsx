@@ -6,7 +6,7 @@ import { sanitizeHtml } from "@/lib/sanitize";
 import { formatDate, formatEventSchedule, eventStartInstant } from "@/lib/utils";
 import { toCurrency } from "@/lib/money";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
-import { absoluteUrl, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
+import { absoluteUrl } from "@/lib/site-config";
 import { getSiteName } from "@/lib/site-content";
 import { mapTarget } from "@/lib/map-link";
 import { META_LINK } from "@/lib/meta-link";
@@ -179,15 +179,17 @@ export default async function EventDetailPage({
     eventStatus: "https://schema.org/EventScheduled",
     description: toDescription(description, title),
     ...(event.image_url ? { image: [event.image_url] } : {}),
-    location: {
-      "@type": "Place",
-      name: event.location || SITE_LOCALITY,
-      address: {
-        "@type": "PostalAddress",
-        addressLocality: event.location || SITE_LOCALITY,
-        addressCountry: SITE_COUNTRY,
-      },
-    },
+    // Where she says it is, or nothing. It used to fall back to Cluj-Napoca,
+    // a placeholder: her events happen anywhere in Romania (audit R6).
+    ...(event.location
+      ? {
+          location: {
+            "@type": "Place",
+            name: event.location,
+            address: { "@type": "PostalAddress", addressLocality: event.location, addressCountry: "RO" },
+          },
+        }
+      : {}),
     organizer: { "@type": "Organization", name: await getSiteName(locale), url: absoluteUrl("/") },
     offers: {
       "@type": "Offer",

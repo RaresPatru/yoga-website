@@ -92,8 +92,9 @@ wrong.
   events*: yoga, sometimes combined with other activities such as horse riding
   or creative writing. No class timetable, no teacher training, and no fixed
   city — events happen anywhere in Romania. So nothing should hardcode a
-  location: `SITE_LOCALITY = "Cluj-Napoca"` in `lib/site-config.ts` is a wrong
-  placeholder that reaches structured data on every page, not a fact.
+  location. A placeholder `SITE_LOCALITY = "Cluj-Napoca"` once reached the
+  structured data on every page; it was removed on 25 September 2026, and the
+  area she serves is an optional field she fills in herself.
 - **Status, 22 September 2026: pre-launch.** Production is publicly reachable
   but only Rares uses it, to test. There are no real customers and no real
   personal data in it, and Stripe is a test sandbox. Still treat it as live: it

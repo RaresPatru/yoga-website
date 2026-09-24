@@ -6,8 +6,8 @@ import { sanitizeHtml } from "@/lib/sanitize";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ShareButton } from "@/components/ui/share-button";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
-import { absoluteUrl, INSTRUCTOR_NAME } from "@/lib/site-config";
-import { getSiteName } from "@/lib/site-content";
+import { absoluteUrl } from "@/lib/site-config";
+import { getSiteContent, getSiteName } from "@/lib/site-content";
 import { Link } from "@/i18n/navigation";
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
@@ -79,6 +79,9 @@ export default async function BlogPostPage({
   const title = locale === "ro" ? post.title_ro : (post.title_en || post.title_ro);
   const content = locale === "ro" ? post.content_ro : (post.content_en || post.content_ro);
 
+  const siteContent = await getSiteContent(locale);
+  const author = siteContent["blog.default_author"] ?? siteContent["seo.person_name"];
+
   // schema.org Article, so search engines can show this as a proper article
   // result with an author and a date rather than a generic page.
   const articleSchema = {
@@ -87,7 +90,10 @@ export default async function BlogPostPage({
     headline: title,
     datePublished: post.created_at,
     description: toDescription(content, title),
-    author: { "@type": "Person", name: INSTRUCTOR_NAME },
+    // The author only when she has said who that is: the blog's default
+    // author, else her own name ("Conținut site"). A placeholder name here
+    // would be a false statement a search engine repeats (audit R6).
+    ...(author ? { author: { "@type": "Person", name: author } } : {}),
     publisher: { "@type": "Organization", name: await getSiteName(locale) },
     mainEntityOfPage: absoluteUrl(`/${locale}/blog/${post.slug}`),
   };

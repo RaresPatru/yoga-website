@@ -24,45 +24,59 @@ cunoștințe tehnice pentru nimic din ce urmează.
 
 **Meniu: Conținut site**
 
-Aici sunt textele și fotografiile de pe pagina principală și de pe pagina
-„Despre mine".
+Aici sunt toate textele și fotografiile de pe site, împărțite în secțiuni:
+Identitate, Rețele sociale, Meniu, Pagina de start, Despre mine, Întrebări
+frecvente, Blog, Subsol, SEO și firmă, Pagini legale. Alegi secțiunea din
+lista din stânga (pe telefon, din lista de sus).
 
-Fiecare câmp are două casete:
-
-- **prima** este textul în română — cel pe care îl vede aproape toată lumea;
-- **a doua** este traducerea în engleză, opțională. Dacă o lași goală, se
-  afișează automat textul în română. Nu rămâne nimic gol pe site.
-
-Apeși **Salvează** sub fiecare câmp. Apare un „Salvat" verde pentru câteva
-secunde.
+- **RO / EN** schimbă toate câmpurile secțiunii între română și engleză. În
+  engleză, deasupra fiecărui câmp vezi textul în română. Un câmp englezesc gol
+  folosește automat textul în română. Cifrele de lângă EN arată câte texte au
+  deja traducere.
+- **Tradu ce lipsește** (în modul EN) traduce toate câmpurile englezești goale.
+  Citește traducerea, apoi salvează.
+- Sub fiecare câmp scrie ce apare pe site cât timp e gol.
+- **Salvează modificările**, sus, salvează toată secțiunea deodată. Dacă pleci
+  din secțiune fără să salvezi, site-ul te întreabă înainte.
+- Textele lungi (prezentarea, povestea ta, paginile legale) au o mică bară de
+  formatare: aldin, cursiv, liste și linkuri. Enter face un paragraf nou.
 
 ### Ce e important să completezi
 
-Câmpurile necompletate apar pe site cu un chenar punctat și un mesaj de tipul
-„Fotografia ta principală — adaugă din panoul de administrare". Sunt vizibile
+Câmpurile necompletate apar pe site cu un chenar punctat și numele părții pe
+care o țin, de exemplu „Titlu principal" sau „Portret". Sunt vizibile
 intenționat, ca să știi ce mai ai de făcut. Lista completă, în ordinea
 priorității, e în `docs/CONTENT-NEEDED.md`.
 
 Cele trei care contează cel mai mult:
 
-1. **Fotografia ta principală** (pagina de start)
-2. **Scurtă prezentare** — 2–3 fraze despre tine
-3. **Povestea ta** (pagina „Despre mine")
+1. **Fotografia principală** (Pagina de start)
+2. **Scurtă prezentare**: 2–3 fraze despre tine (Pagina de start → Cine sunt)
+3. **Povestea ta** (Despre mine)
 
 Motivul e simplu: oamenii aleg un **om**, nu un site. Fotografia ta și povestea
 ta conving mai mult decât orice altceva de pe site.
 
 ### Întrebări frecvente
 
-Tot pe pagina „Conținut site", jos. Apeși **Adaugă**, scrii întrebarea și
-răspunsul, apoi **Salvează**.
+În secțiunea **Întrebări frecvente**. Apeși **Adaugă o întrebare**, scrii
+întrebarea și răspunsul, apoi **Salvează modificările**. O întrebare nouă e
+**ascunsă** până bifezi **Publicată pe site**. Schimbi ordinea trăgând de
+mânerul din stânga sau cu săgețile sus și jos.
 
 Merită efortul: întrebările practice („ce aduc cu mine?", „sunt începătoare, pot
 să vin?") sunt exact lucrurile care opresc pe cineva să se înscrie. Sunt și
 lucrurile pe care oamenii le caută pe Google, deci aduc vizitatori care nu te
 cunosc încă.
 
-Debifezi **Vizibil pe site** dacă vrei să ascunzi temporar o întrebare.
+### Paginile legale
+
+În secțiunea **Pagini legale** completezi datele firmei (denumirea, CUI-ul,
+sediul, emailul pentru date personale, TVA). Ele apar singure în politica de
+confidențialitate, în termeni și în politica de cookie-uri, care sunt deja
+scrise ca ciorne. Tot acolo încarci pictograma ANPC SAL. Un avocat ar trebui să
+citească documentele o dată înainte de lansare; ce anume, e în
+`docs/PRIVACY.md`.
 
 ---
 

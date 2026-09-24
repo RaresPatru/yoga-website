@@ -1384,6 +1384,41 @@ third form returns after each hundred. `Intl.PluralRules` knows the rule, and
 a test pins it down. Rows for things waiting on her turn rose, and at zero they
 say "Totul la zi", so the eye goes only where it is needed.
 
+### Phase 2: her words, in her voice, or visibly missing
+
+**The content screen showed whatever happened to be in the table.** It listed
+every row, grouped by a column in the database, each field with its own Save
+and an English box stacked under it. A field only existed if a migration had
+inserted its row, which is how a section called "general" ended up on screen.
+Now every field is described once, in code: its section, its label, what it is
+for, whether it has an English version, and what the site shows while it is
+empty. The admin draws its ten sections from that description, the public
+pages read their fallbacks from it, and a field's row is created the first time
+she saves it.
+
+**One switch instead of two boxes.** Rares chose a single RO / EN switch per
+form. In English each field shows the Romanian text above it, and under every
+field a line says what a visitor would see if it stayed empty: the Romanian
+text, a plain label, a dashed marker, or nothing. That answers the question she
+would otherwise have to answer by opening the site in another tab.
+
+**Deleting the words nobody wrote.** The home page used to fall back to a
+headline and a tagline invented by the previous AI, and they had spread into
+page titles, the share card and the root description. They are gone. Headings
+and buttons still fall back to plain labels, which point somewhere and claim
+nothing. Her own words show a dashed marker named after the part. The same rule
+reached the structured data: no town and no person's name unless she supplies
+them, where there used to be "Cluj-Napoca" and a placeholder name.
+
+**Legal pages that are true on the day they appear.** The drafts describe what
+the site actually does, which meant checking it. The cookie policy says the
+statistics run without cookies, and at the time they did not: PostHog kept an
+identifier in the browser. One line from phase 11 came forward so the sentence
+became true. What only she knows (her legal name, her registration number, her
+address) is a `{{token}}` that shows as a dashed marker until she fills it
+in. The ANPC pictogram is official artwork, so she uploads ANPC's own file
+rather than the site drawing an imitation.
+
 ---
 
 ## Decisions worth defending

@@ -23,12 +23,6 @@
  */
 export const SITE_NAME = "Yoga Flow";
 
-/** PLACEHOLDER — replace with her actual name once confirmed. */
-export const INSTRUCTOR_NAME = "Yoga Flow";
-
-/** Where events usually take place; used for local-business structured data. */
-export const SITE_LOCALITY = "Cluj-Napoca";
-export const SITE_COUNTRY = "RO";
 
 /**
  * The site's public origin, with no trailing slash.

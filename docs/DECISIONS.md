@@ -132,10 +132,15 @@ bookings both see 14 of 15 and both succeed. Doing both inside one function, wit
 
 ### Key/value for site content, a table for FAQs
 
-`site_content` is one row per field so adding an editable field is an insert, not
-a migration and a deploy. The trade-off — no compile-time safety, a typo returns
-nothing — is mitigated by declaring the keys in `lib/site-content.ts` and seeding
-every expected key.
+`site_content` is one row per field, so adding an editable field needs no
+migration. Since 25 September 2026 every field is described once, in code, in
+`lib/site-content-schema.ts`: its section, label, help, whether it has an
+English version, and what the site shows while it is empty. The admin screens
+are drawn from that file and the public pages read their fallbacks from it, so
+the two cannot disagree. The keys are typed from it, which buys back most of the
+compile-time safety a key/value table gives up. A field's row does not have to
+exist in advance: the admin creates it on the first save (an upsert), with the
+section, label and type taken from the schema.
 
 FAQs are a proper table because they are a variable-length ordered list, which
 key/value handles badly.
@@ -1291,3 +1296,67 @@ and her own drafts are facts rather than tasks, so they stay neutral either way
 and say "Niciun eveniment activ" or "Nicio ciornă" at zero. The counts come from
 two admin-only `security_invoker` views, and a pending payment is defined once,
 per event, in `admin_event_overview`; the dashboard's total is its sum.
+
+### Site content is edited one section at a time, with one Save
+
+"Conținut site" used to be one long page of every row in the table, each with
+its own Save button, and English boxes stacked under the Romanian ones. It is
+now ten sections at `/admin/content/<section>` (chosen with Rares on
+24 September 2026), each a single form: one RO / EN switch flips every field,
+the English side shows the Romanian text above each field, and one Save writes
+only what changed. A section with unsaved changes asks before she leaves it,
+through the admin's own dialog for links and the browser's prompt for closing
+the tab (`lib/admin/use-leave-guard.ts`). The back button is not guarded: the
+App Router offers no way to hold a history navigation.
+
+### Headings fall back to plain labels; her own words fall back to a placeholder
+
+An empty field falls back in one of two ways, decided per field in the schema.
+Headings and buttons have a plain, factual label to fall back to ("Evenimente
+viitoare", "Vezi toate evenimentele"), because a missing heading helps nobody
+and those labels claim nothing. Her own words (the main heading, the
+introduction, her story, her photographs) have no honest substitute, so they
+show a dashed marker named after the part. The previous fallbacks were
+sentences written for her, "Îți ghidez călătoria către echilibru" and "Yoga
+pentru corp, minte și suflet", which also reached page titles and share cards.
+They are deleted. Search-facing text follows the same rule: without her tagline
+the home page's title is just the site name, and without her description there
+is no description tag, which lets a search engine pick an excerpt.
+
+### Legal documents are site content, with the business facts as tokens
+
+The privacy policy, terms and cookie policy are rich-text fields she edits
+like any other, seeded with drafts that describe what the site really does.
+Facts only she can supply are written as `{{business_name}}`, `{{address}}`
+and so on, and filled in from her business details (`lib/legal.ts`). A
+missing fact renders as a dashed marker rather than the raw token or a guess.
+Values are escaped: a company name is text, not markup. Each page shows the
+row's `updated_at` as its "last updated" date, which the database keeps
+current by itself. docs/PRIVACY.md lists what she must fill in and what a
+lawyer should check.
+
+### The ANPC pictogram is uploaded, not drawn
+
+Romanian consumer law requires the SAL pictogram in the footer, at 250×50 px,
+linking to reclamatiisal.anpc.ro. It is official artwork published by ANPC,
+so the site does not recreate it: she uploads the official file in "Pagini
+legale", and until she does, the footer carries the same link as text.
+
+### Visitor statistics keep nothing in the browser
+
+PostHog runs with `persistence: "memory"`: no cookie and no localStorage, so
+each page load is a fresh anonymous visitor. That is what lets the cookie
+policy say the statistics run without cookies, and the site go without a
+consent banner. It was planned for phase 11 and brought forward to phase 2,
+because the cookie policy written in phase 2 had to be true on the day it
+appeared.
+
+### The wordmark goes home again
+
+For a while the name in the header scrolled the current page to its top
+instead of going home, on the reasoning that "Acasă" sat beside it. A visitor
+arriving from Instagram on an event page then had no obvious route to the rest
+of the site on a phone, where "Acasă" is inside the menu (audit I20). On
+24 September 2026 Rares chose "home": the wordmark links to the home page, and
+on the home page itself the same click scrolls to the top. A back-to-top button
+for long pages comes in phase 9.

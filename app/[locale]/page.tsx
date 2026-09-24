@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { getTranslations } from "next-intl/server";
 import { ArrowRight, Quote } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { buttonClasses } from "@/lib/button-styles";
@@ -13,7 +12,8 @@ import {
 import { TextPlaceholder, ImagePlaceholder } from "@/components/ui/content-placeholder";
 import { FaqList } from "@/components/faq-list";
 import { createPublicClient } from "@/lib/supabase/public";
-import { getSiteContent, getFaqs } from "@/lib/site-content";
+import { contentText, getSiteContent, getFaqs, placeholderName } from "@/lib/site-content";
+import type { SiteContentKey } from "@/lib/site-content-schema";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { formatDate, eventStartInstant } from "@/lib/utils";
 import { eventAvailability } from "@/lib/event-availability";
@@ -95,7 +95,6 @@ export default async function HomePage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const t = await getTranslations("home");
   const supabase = createPublicClient();
   // One reading of the clock, used for both the query's date floor and the
   // time-of-day cutoff below. Taking it twice would let a render that straddles
@@ -104,6 +103,16 @@ export default async function HomePage({
   const today = renderedAt.toISOString().split("T")[0];
 
   const [content, faqs] = await Promise.all([getSiteContent(locale), getFaqs(locale)]);
+  /**
+   * Every word on this page is hers, from "Conținut site" → "Pagina de start".
+   * `text` is what she wrote, or the plain label a heading or button falls
+   * back to ("Vezi toate evenimentele"). Her own words with no plain
+   * equivalent (the main heading, the introduction) show a dashed placeholder
+   * named after the part instead, so an unfinished page looks unfinished
+   * rather than borrowing sentences she never wrote.
+   */
+  const text = (key: SiteContentKey) => contentText(content, key, locale) ?? "";
+  const placeholder = (key: SiteContentKey) => placeholderName(key, locale);
 
   const [{ data: upcoming }, { data: testimonials }, { data: posts }] = await Promise.all([
     supabase
@@ -207,19 +216,17 @@ export default async function HomePage({
   /**
    * The events section's own strings.
    *
-   * Inline rather than in `messages/`, matching the other section headings on
-   * this page ("Cine sunt", "Vezi detalii și rezervă"). The carousel is a client
-   * component, so its labels have to be handed to it as plain props anyway —
-   * a `t` function cannot cross that boundary.
+   * The heading is hers (site content); the carousel's controls are
+   * interface words and stay here. The carousel is a client component, so its
+   * labels have to be handed to it as plain props anyway: a `t` function
+   * cannot cross that boundary.
    */
   const ro = locale === "ro";
   const eventStrings = {
     // Singular while there is one event, because "upcoming events" over a lone
     // card reads as a section that failed to load. Plural the moment the
     // carousel can actually move.
-    heading: events.length > 1
-      ? ro ? "Evenimente viitoare" : "Upcoming events"
-      : ro ? "Următorul eveniment" : "Next event",
+    heading: events.length > 1 ? text("home.events_title") : text("home.events_title_one"),
     list: ro ? "Evenimente viitoare" : "Upcoming events",
     previous: ro ? "Evenimentul anterior" : "Previous event",
     next: ro ? "Evenimentul următor" : "Next event",
@@ -249,7 +256,7 @@ export default async function HomePage({
               <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-xl md:aspect-[3/4]">
                 <Image
                   src={content["home.hero_image"]}
-                  alt={content["home.hero_title"] ?? ""}
+                  alt={content["home.hero_image_alt"] ?? ""}
                   fill
                   sizes="(max-width: 768px) 90vw, 45vw"
                   className="object-cover"
@@ -261,7 +268,7 @@ export default async function HomePage({
               </div>
             ) : (
               <ImagePlaceholder
-                label="Fotografia ta principală — adaugă din panoul de administrare"
+                label={placeholder("home.hero_image")}
                 aspect="aspect-[4/5] md:aspect-[3/4]"
               />
             )}
@@ -269,14 +276,14 @@ export default async function HomePage({
 
           <div className="order-1 text-center md:order-2 md:text-left">
             <h1 className="font-serif text-4xl leading-tight text-charcoal md:text-6xl">
-              {content["home.hero_title"] ?? t("hero_title")}
+              {content["home.hero_title"] ?? <TextPlaceholder label={placeholder("home.hero_title")} />}
             </h1>
             <p className="mt-5 text-lg text-charcoal-light md:text-xl">
-              {content["home.hero_subtitle"] ?? t("hero_subtitle")}
+              {content["home.hero_subtitle"] ?? <TextPlaceholder label={placeholder("home.hero_subtitle")} />}
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center md:justify-start">
-              <Link href="/events" className={buttonClasses({ size: "lg" })}>{t("cta")}</Link>
-              <Link href="/about" className={buttonClasses({ variant: "secondary", size: "lg" })}>{locale === "ro" ? "Despre mine" : "About me"}</Link>
+              <Link href="/events" className={buttonClasses({ size: "lg" })}>{text("home.hero_button_primary")}</Link>
+              <Link href="/about" className={buttonClasses({ variant: "secondary", size: "lg" })}>{text("home.hero_button_secondary")}</Link>
             </div>
           </div>
         </div>
@@ -322,6 +329,7 @@ export default async function HomePage({
                   <EventFeatureCard
                     event={event}
                     locale={locale}
+                    linkText={text("home.event_card_link")}
                     availability={availability.get(event.id)}
                   />
                 </li>
@@ -330,7 +338,7 @@ export default async function HomePage({
 
             <div className="mt-8 text-center">
               <Link href="/events" className={buttonClasses({ variant: "secondary" })}>
-                {t("view_all_events")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                {text("home.events_button")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
           </div>
@@ -339,13 +347,9 @@ export default async function HomePage({
         <section id="events" className="py-16">
           <div className="mx-auto max-w-6xl px-4 text-center">
             <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
-              {t("events_title")}
+              {text("home.events_title")}
             </h2>
-            <p className="mt-3 text-charcoal-light">
-              {locale === "ro"
-                ? "Momentan nu sunt evenimente programate. Revino curând."
-                : "No events scheduled right now. Check back soon."}
-            </p>
+            <p className="mt-3 text-charcoal-light">{text("home.events_empty")}</p>
           </div>
         </section>
       )}
@@ -357,7 +361,7 @@ export default async function HomePage({
       <section className="py-16">
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
-            {locale === "ro" ? "Cine sunt" : "Who I am"}
+            {text("home.intro_title")}
           </h2>
           {content["home.intro"] ? (
             <div
@@ -366,12 +370,12 @@ export default async function HomePage({
             />
           ) : (
             <div className="mt-5">
-              <TextPlaceholder label="Scurtă prezentare (2–3 fraze) — adaugă din panoul de administrare" />
+              <TextPlaceholder label={placeholder("home.intro")} />
             </div>
           )}
           <div className="mt-8">
             <Link href="/about" className={buttonClasses({ variant: "secondary" })}>
-                {locale === "ro" ? "Citește povestea mea" : "Read my story"}
+                {text("home.intro_button")}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Link>
           </div>
@@ -385,7 +389,7 @@ export default async function HomePage({
         <section className="py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {t("testimonials_title")}
+              {text("home.testimonials_title")}
             </h2>
             <div className="mt-8 grid gap-5 md:grid-cols-3">
               {/* Not a link, so it does not lift — see the note on the same
@@ -410,7 +414,7 @@ export default async function HomePage({
             </div>
             <div className="mt-8 text-center">
               <Link href="/testimonials" className={buttonClasses({ variant: "secondary" })}>
-                  {t("view_all_testimonials")}
+                  {text("home.testimonials_button")}
                   <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>
             </div>
@@ -425,7 +429,7 @@ export default async function HomePage({
         <section className="py-16">
           <div className="mx-auto max-w-3xl px-4">
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {locale === "ro" ? "Întrebări frecvente" : "Frequently asked questions"}
+              {text("home.faq_title")}
             </h2>
             <div className="mt-8">
               <FaqList faqs={faqs} />
@@ -441,7 +445,7 @@ export default async function HomePage({
         <section className="py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {t("blog_title")}
+              {text("home.blog_title")}
             </h2>
             <div className="mt-8 grid gap-5 sm:grid-cols-3">
               {posts.map((post) => (
@@ -461,7 +465,7 @@ export default async function HomePage({
             </div>
             <div className="mt-8 text-center">
               <Link href="/blog" className={buttonClasses({ variant: "secondary" })}>
-                  {t("view_all_posts")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                  {text("home.blog_button")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>
             </div>
           </div>

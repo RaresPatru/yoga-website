@@ -1,7 +1,7 @@
 /**
  * Turns whatever she typed into a link that opens her account.
  *
- * The Instagram and Facebook fields in the admin panel are free text, and the
+ * The social fields in the admin panel are free text, and the
  * person filling them in is not thinking about URLs. The realistic inputs are
  * all of these, and they all have to work:
  *
@@ -20,17 +20,26 @@
  * icon out altogether rather than rendering one that goes nowhere.
  */
 
-export type SocialNetwork = "instagram" | "facebook";
+export type SocialNetwork = "instagram" | "facebook" | "tiktok" | "linkedin";
 
+/**
+ * Where a bare name leads. TikTok keeps the @ in its addresses, and a bare name
+ * on LinkedIn is read as a personal profile (/in/); a company page has to be
+ * pasted as an address.
+ */
 const PROFILE_BASE: Record<SocialNetwork, string> = {
   instagram: "https://www.instagram.com/",
   facebook: "https://www.facebook.com/",
+  tiktok: "https://www.tiktok.com/@",
+  linkedin: "https://www.linkedin.com/in/",
 };
 
 /** Addresses that are already the real thing and only want a scheme in front. */
 const NETWORK_HOST: Record<SocialNetwork, RegExp> = {
   instagram: /^(?:\/\/)?(?:www\.)?instagram\.com\/.+/i,
   facebook: /^(?:\/\/)?(?:www\.|m\.)?(?:facebook\.com|fb\.com|fb\.me)\/.+/i,
+  tiktok: /^(?:\/\/)?(?:www\.|m\.)?tiktok\.com\/.+/i,
+  linkedin: /^(?:\/\/)?(?:[a-z]{2,3}\.|www\.)?linkedin\.com\/.+/i,
 };
 
 export function socialUrl(

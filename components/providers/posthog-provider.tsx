@@ -47,6 +47,11 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
         api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://app.posthog.com",
         capture_pageview: false,
+        // Nothing is stored in the visitor's browser: no cookie, no
+        // localStorage. Each page load counts as a fresh anonymous visitor.
+        // The cookie policy (legal.cookies) says the statistics run without
+        // cookies, which is what lets the site go without a consent banner.
+        persistence: "memory",
       });
     }
   }, []);

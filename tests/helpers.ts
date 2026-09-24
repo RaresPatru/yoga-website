@@ -592,3 +592,49 @@ export function bucharestDate(days: number): string {
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
+
+/** A site_content row as it stands, or null when it has never been saved. */
+export type ContentSnapshot = { value_ro: string; value_en: string | null } | null;
+
+export async function contentSnapshot(key: string): Promise<ContentSnapshot> {
+  const { data, error } = await (await adminScoped())
+    .from("site_content")
+    .select("value_ro, value_en")
+    .eq("key", key)
+    .maybeSingle();
+  if (error) throw new Error(`contentSnapshot(${key}) failed: ${error.message}`);
+  return data as ContentSnapshot;
+}
+
+/** Writes a field, creating its row if needed, as the admin's Save does. */
+export async function putContent(key: string, valueRo: string, valueEn: string | null = null) {
+  const section = key.split(".")[0];
+  const { error } = await (await adminScoped())
+    .from("site_content")
+    .upsert({ key, section, value_ro: valueRo, value_en: valueEn }, { onConflict: "key" });
+  if (error) throw new Error(`putContent(${key}) failed: ${error.message}`);
+}
+
+/** Puts a field back as contentSnapshot found it, removing a row the test created. */
+export async function restoreContent(key: string, snapshot: ContentSnapshot) {
+  if (snapshot) return putContent(key, snapshot.value_ro, snapshot.value_en);
+  const { error } = await (await adminScoped()).from("site_content").delete().eq("key", key);
+  if (error) throw new Error(`restoreContent(${key}) failed: ${error.message}`);
+}
+
+/** Removes the FAQs a test created, found by their Romanian question. */
+export async function deleteFaqsByQuestion(questionRo: string) {
+  const { error } = await (await adminScoped()).from("faqs").delete().eq("question_ro", questionRo);
+  if (error) throw new Error(`deleteFaqsByQuestion failed: ${error.message}`);
+}
+
+/** Inserts a FAQ the way a bare insert would, to check the table's defaults. */
+export async function insertBareFaq(questionRo: string): Promise<{ published: boolean }> {
+  const { data, error } = await (await adminScoped())
+    .from("faqs")
+    .insert({ question_ro: questionRo, answer_ro: "" })
+    .select("published")
+    .single();
+  if (error) throw new Error(`insertBareFaq failed: ${error.message}`);
+  return data as { published: boolean };
+}

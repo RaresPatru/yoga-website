@@ -1,11 +1,5 @@
 {
   "nav": {
-    "home": "Acasă",
-    "about": "Despre mine",
-    "blog": "Blog",
-    "events": "Evenimente",
-    "testimonials": "Testimoniale",
-    "contact": "Contact",
     "admin": "Admin",
     "menu": {
       "open": "Deschide meniul",
@@ -16,7 +10,8 @@
     "landmark": {
       "primary": "Principal",
       "sections": "Secțiunile site-ului"
-    }
+    },
+    "go_home": "Pagina de start"
   },
   "common": {
     "share": "Distribuie",
@@ -25,16 +20,7 @@
     "skip_to_content": "Sari la conținut"
   },
   "home": {
-    "hero_title": "Îți ghidez călătoria către echilibru",
-    "hero_subtitle": "Yoga pentru corp, minte și suflet",
-    "cta": "Explorează",
-    "blog_title": "Din Blog",
-    "events_title": "Evenimente Viitoare",
-    "free": "Gratuit",
-    "view_all_posts": "Vezi toate articolele",
-    "view_all_events": "Vezi toate evenimentele",
-    "view_all_testimonials": "Vezi toate testimonialele",
-    "testimonials_title": "Ce Spun Participanții"
+    "free": "Gratuit"
   },
   "blog": {
     "title": "Blog",
@@ -100,8 +86,11 @@
     "error": "A apărut o eroare. Încearcă din nou."
   },
   "footer": {
-    "rights": "Toate drepturile rezervate.",
-    "follow": "Urmărește-mă"
+    "legal": "Informații legale",
+    "privacy": "Confidențialitate",
+    "terms": "Termeni și condiții",
+    "cookies": "Cookie-uri",
+    "sal": "ANPC: Soluționarea alternativă a litigiilor"
   },
   "language": {
     "ro": "Română",
@@ -370,6 +359,52 @@
       "waiting": "Pe lista de așteptare",
       "pending_payments": "Plăți în așteptare",
       "view_page": "Vezi pagina evenimentului"
+    },
+    "content_editor": {
+      "toolbar": "Formatare",
+      "bold": "Aldin",
+      "italic": "Cursiv",
+      "bullets": "Listă cu buline",
+      "numbers": "Listă numerotată",
+      "link": "Link"
+    },
+    "cms": {
+      "sections": "Secțiunile conținutului",
+      "section": "Secțiune",
+      "language": "Limba textelor",
+      "romanian": "Română",
+      "same_both": "Același în ambele limbi",
+      "empty_uses_romanian": "Gol: pe site apare textul în română.",
+      "empty_shows": "Gol: pe site apare „{text}”.",
+      "empty_placeholder": "Gol: pe site apare un marcaj punctat, „{name}”.",
+      "empty_hidden": "Gol: pe site nu apare nimic în locul lui.",
+      "choose_image": "Alege imagine",
+      "change_image": "Schimbă imaginea",
+      "remove_image": "Elimină",
+      "links_to": "Duce la",
+      "translate_missing": "Tradu ce lipsește",
+      "translated": "Am tradus {count} texte. Verifică-le, apoi salvează.",
+      "unsaved": "Modificări nesalvate",
+      "all_saved": "Totul e salvat",
+      "save": "Salvează modificările",
+      "leave_title": "Pleci fără să salvezi?",
+      "leave_body": "Modificările din secțiunea aceasta se pierd.",
+      "leave_confirm": "Pleacă fără să salvez",
+      "leave_cancel": "Rămân aici"
+    },
+    "faq": {
+      "add": "Adaugă o întrebare",
+      "none": "Nicio întrebare încă.",
+      "question": "Întrebarea {n}",
+      "answer": "Răspuns",
+      "published": "Publicată pe site",
+      "drag": "Trage ca să schimbi ordinea",
+      "move_up": "Mută întrebarea {n} mai sus",
+      "move_down": "Mută întrebarea {n} mai jos",
+      "delete": "Șterge întrebarea {n}",
+      "delete_title": "Ștergi această întrebare?",
+      "untitled": "Întrebare fără text",
+      "question_required": "Fiecare întrebare are nevoie de text în română."
     }
   }
 }

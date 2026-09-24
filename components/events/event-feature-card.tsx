@@ -57,10 +57,13 @@ export async function EventFeatureCard({
   event,
   locale,
   availability,
+  linkText,
 }: {
   event: FeaturedEvent;
   locale: string;
   availability?: Availability;
+  /** The call to action at the bottom of the card, from the home page's site content. */
+  linkText: string;
 }) {
   const t = await getTranslations("home");
   const title = locale === "ro" ? event.title_ro : event.title_en || event.title_ro;
@@ -231,7 +234,7 @@ export async function EventFeatureCard({
             </div>
 
             <p className="mt-6 inline-flex items-center gap-2 font-medium text-rose-deep">
-              {locale === "ro" ? "Vezi detalii și rezervă" : "See details and book"}
+              {linkText}
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </p>
           </div>
