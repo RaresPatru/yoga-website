@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { registerForEvent } from "@/lib/register-for-event";
 import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
@@ -61,7 +62,7 @@ export async function POST(req: Request) {
 
     const paymentStatus = eventRow.price > 0 ? "pending" : "free";
 
-    const { data: rpcResult, error: rpcError } = await supabase.rpc("register_for_event", {
+    const booking = await registerForEvent(supabase, {
       p_event_id: eventId,
       p_full_name: fullName,
       p_email: email,
@@ -69,16 +70,9 @@ export async function POST(req: Request) {
       p_payment_status: paymentStatus,
     });
 
-    if (rpcError) throw rpcError;
-
-    if (rpcResult?.error) {
-      return NextResponse.json(
-        { error: rpcResult.error },
-        { status: 409 }
-      );
+    if (!booking.ok) {
+      return NextResponse.json({ error: booking.reason }, { status: 409 });
     }
-
-    const registration = rpcResult;
 
     // Only free events are confirmed here. For a paid event the registration is
     // still 'pending' at this point — the visitor is about to be sent to Stripe
@@ -93,7 +87,7 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ success: true, id: registration.id });
+    return NextResponse.json({ success: true, id: booking.id });
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(

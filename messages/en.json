@@ -301,8 +301,27 @@
       "spellcheck_off": "Spellcheck: off",
       "spellcheck_help": "Why are there no underlines?",
       "spellcheck_hint": "If red underlines don't appear for Romanian, add the Romanian dictionary in Chrome: Settings → Languages → Spell check.",
-      "translate_replace": "The English text will be replaced by a new translation of the Romanian. You can go back with Undo in the English editor's toolbar. Continue?",
-      "translate_too_long": "A paragraph is over 5,000 characters, too long to translate. Split it in two and try again."
+      "translate_replace": "The English text will be replaced by a new translation of the Romanian. You can go back with Undo in the English editor’s toolbar.",
+      "translate_too_long": "A paragraph is over 5,000 characters, too long to translate. Split it in two and try again.",
+      "translate_replace_title": "Replace the English text?",
+      "translate_replace_confirm": "Replace"
+    },
+    "errors": {
+      "duplicate": "Something with the same value already exists. Change it and save again.",
+      "duplicate_slug": "That address (slug) is already used by another page. Pick a different one and save again.",
+      "missing": "A required field is empty. Fill it in and save again.",
+      "invalid": "A value isn’t accepted, such as a negative price or a wrong date. Check it and save again.",
+      "session": "Your session has expired. Sign in again in a new tab, then come back here and save again; your text stays on screen.",
+      "permission": "This account isn’t allowed to make that change. Sign in with the administrator account.",
+      "network": "Couldn’t reach the database. Check your internet connection and try again.",
+      "unknown": "That didn’t work. Try again."
+    },
+    "toast": {
+      "region": "Notifications",
+      "close": "Close notification",
+      "saved": "Saved",
+      "deleted": "Deleted",
+      "approved": "Approved"
     }
   }
 }

@@ -369,6 +369,21 @@ export async function seedPost(overrides: Record<string, unknown> = {}): Promise
   return data as SeededPost;
 }
 
+/** Updates a post as the admin would, and returns its timestamps afterwards. */
+export async function updatePost(
+  slug: string,
+  patch: Record<string, unknown>
+): Promise<{ created_at: string; updated_at: string }> {
+  const { data, error } = await (await adminScoped())
+    .from("blog_posts")
+    .update(patch)
+    .eq("slug", slug)
+    .select("created_at, updated_at")
+    .single();
+  if (error) throw new Error(`updatePost failed: ${error.message}`);
+  return data as { created_at: string; updated_at: string };
+}
+
 export async function deletePostBySlug(slug: string) {
   const { error } = await (await adminScoped()).from("blog_posts").delete().eq("slug", slug);
   if (error) throw new Error(`deletePostBySlug failed: ${error.message}`);

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
-import { getStripe } from "@/lib/stripe";
+import { createCheckoutSession, type CheckoutLocale } from "@/lib/stripe-checkout";
+import { registerForEvent } from "@/lib/register-for-event";
 
 /**
  * Claims a seat that opened up on a full event.
@@ -36,6 +37,10 @@ export async function POST(
     }
 
     const { token } = await params;
+    // The page the link opened on says which language Stripe's pages and the
+    // return address should use. Anything unexpected falls back to Romanian.
+    const body = await req.json().catch(() => ({}));
+    const locale: CheckoutLocale = body?.locale === "en" ? "en" : "ro";
     const supabase = createAdminClient();
 
     // Written as one string literal rather than concatenated pieces: Supabase
@@ -43,7 +48,7 @@ export async function POST(
     // defeats that, leaving every field typed as an error object.
     const { data: entry, error: findError } = await supabase
       .from("waiting_list")
-      .select("id, event_id, full_name, email, phone, notified_at, claim_expires_at, events!inner(id, slug, title_ro, price, published)")
+      .select("id, event_id, full_name, email, phone, notified_at, claim_expires_at, events!inner(id, slug, title_ro, title_en, price, currency, published)")
       .eq("id", token)
       .is("claimed_at", null)
       .maybeSingle();
@@ -90,25 +95,20 @@ export async function POST(
     // registration and a trip to Stripe — the old code created a 'free'
     // registration regardless of price, so anyone on the waiting list for a
     // paid event got in without paying.
-    const { data: rpcResult, error: rpcError } = await supabase.rpc(
-      "register_for_event",
-      {
-        p_event_id: entry.event_id,
-        p_full_name: entry.full_name,
-        p_email: entry.email,
-        p_phone: entry.phone,
-        p_payment_status: isPaid ? "pending" : "free",
-      }
-    );
-
-    if (rpcError) throw rpcError;
+    const booking = await registerForEvent(supabase, {
+      p_event_id: entry.event_id,
+      p_full_name: entry.full_name,
+      p_email: entry.email,
+      p_phone: entry.phone,
+      p_payment_status: isPaid ? "pending" : "free",
+    });
 
     // Someone else took the seat first.
-    if (rpcResult?.error) {
-      return NextResponse.json({ error: rpcResult.error }, { status: 409 });
+    if (!booking.ok) {
+      return NextResponse.json({ error: booking.reason }, { status: 409 });
     }
 
-    const registration = rpcResult;
+    const registration = { id: booking.id };
 
     /**
      * Marks the waiting-list entry as used. Deliberately NOT called until the
@@ -147,47 +147,14 @@ export async function POST(
     // Paid: hand back a Stripe Checkout URL for the page to redirect to. The
     // seat is held by the 'pending' registration in the meantime, and released
     // by the checkout.session.expired webhook if they never pay.
-    const origin =
-      req.headers.get("origin")?.trim() || process.env.NEXT_PUBLIC_SITE_URL || "";
-    let base: string;
+    let checkoutUrl: string;
     try {
-      base = origin ? new URL(origin).origin : "";
-    } catch {
-      base = "";
-    }
-    if (!base) {
-      await releaseSeat();
-      return NextResponse.json({ error: "Missing origin" }, { status: 400 });
-    }
-
-    let checkoutUrl: string | null;
-    try {
-      const session = await getStripe().checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: "ron",
-              product_data: { name: event.title_ro },
-              // Price comes from the database row, never from the request.
-              unit_amount: event.price * 100,
-            },
-            quantity: 1,
-          },
-        ],
-      // Expires in 30 minutes (Stripe's minimum). A short window matters
-      // here: a pending registration holds a seat, and the seat only comes
-      // back when Stripe reports the session expired. The database also stops
-      // counting pending rows after an hour, so the two bound each other.
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
-
-        mode: "payment",
-        customer_email: entry.email,
-        success_url: `${base}/ro/events/${event.slug}?success=1`,
-        cancel_url: `${base}/ro/events/${event.slug}?canceled=1`,
-        metadata: { eventId: entry.event_id, registrationId: registration.id },
+      checkoutUrl = await createCheckoutSession({
+        event,
+        registrationId: registration.id,
+        email: entry.email,
+        locale,
       });
-      checkoutUrl = session.url;
     } catch (stripeError) {
       // Stripe is down or misconfigured. Give the seat back and leave the claim
       // link unspent so they can try again, rather than stranding a pending
@@ -195,7 +162,12 @@ export async function POST(
       console.error("Stripe session creation failed during claim:", stripeError);
       await releaseSeat();
       return NextResponse.json(
-        { error: "Nu am putut initia plata. Incearca din nou." },
+        {
+          error:
+            locale === "en"
+              ? "We couldn't start the payment. Please try again."
+              : "Nu am putut iniția plata. Încearcă din nou.",
+        },
         { status: 502 }
       );
     }

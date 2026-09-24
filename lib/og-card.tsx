@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { BRAND } from "@/lib/brand-colors";
 
 /**
  * The layout for the generated share images.
@@ -21,12 +22,12 @@ export const OG_SIZE = { width: 1200, height: 630 };
 
 // The brand palette, with the deeper rose used wherever text sits on a light
 // background — the pastel #E8A0B4 fails contrast checks badly at 2.07:1.
-const CREAM = "#FFF8F0";
-const SAGE = "#9CAF88";
-const SAGE_DARK = "#5F7049";
-const ROSE_DEEP = "#B0576F";
-const CHARCOAL = "#2D2D2D";
-const CHARCOAL_SOFT = "#4A4A4A";
+const CREAM = BRAND.cream;
+const SAGE = BRAND.sage;
+const SAGE_DARK = BRAND.sageDeep;
+const ROSE_DEEP = BRAND.roseDeep;
+const CHARCOAL = BRAND.charcoal;
+const CHARCOAL_SOFT = BRAND.charcoalLight;
 
 interface CardContent {
   /** Small line above the title: a date, or a section name. */

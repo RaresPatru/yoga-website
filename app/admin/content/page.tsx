@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
+import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useToast } from "@/components/admin/ui/toaster";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -62,39 +66,31 @@ export default function AdminContentPage() {
   const { t, locale } = useAdminLocale();
   const ro = locale === "ro";
 
-  const [rows, setRows] = useState<ContentRow[]>([]);
-  const [faqs, setFaqs] = useState<FaqRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [mediaForKey, setMediaForKey] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const { data, setData, loading, error: loadError } = useAdminData(async () => {
     const supabase = createClient();
-    const [{ data: content }, { data: faqRows }] = await Promise.all([
+    const [content, faqRows] = await Promise.all([
       supabase.from("site_content").select("*").order("section").order("sort_order"),
       supabase.from("faqs").select("*").order("sort_order"),
     ]);
-    setRows((content ?? []) as ContentRow[]);
-    setFaqs((faqRows ?? []) as FaqRow[]);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const supabase = createClient();
-    Promise.all([
-      supabase.from("site_content").select("*").order("section").order("sort_order"),
-      supabase.from("faqs").select("*").order("sort_order"),
-    ]).then(([{ data: content }, { data: faqRows }]) => {
-      if (cancelled) return;
-      setRows((content ?? []) as ContentRow[]);
-      setFaqs((faqRows ?? []) as FaqRow[]);
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
+    return {
+      rows: (must(content) ?? []) as ContentRow[],
+      faqs: (must(faqRows) ?? []) as FaqRow[],
     };
-  }, []);
+  });
+  const rows = data?.rows ?? [];
+  const faqs = data?.faqs ?? [];
+  const setRows = (update: (prev: ContentRow[]) => ContentRow[]) =>
+    setData((prev) => prev && { ...prev, rows: update(prev.rows) });
+  const setFaqs = (update: (prev: FaqRow[]) => FaqRow[]) =>
+    setData((prev) => prev && { ...prev, faqs: update(prev.faqs) });
+
+  /** Shows a failed write's reason; every write below goes through this. */
+  const reportError = (error: unknown) => toast.error(t(adminErrorKey(toAdminError(error))));
 
   const updateLocal = (key: string, patch: Partial<ContentRow>) =>
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -111,24 +107,27 @@ export default function AdminContentPage() {
       .eq("key", row.key);
 
     if (error) {
-      alert(error.message);
+      reportError(error);
       return;
     }
-    // Brief confirmation rather than a toast system: this screen is used by one
-    // person, occasionally.
     setSavedKey(row.key);
     window.setTimeout(() => setSavedKey((k) => (k === row.key ? null : k)), 2000);
   };
 
   const addFaq = async () => {
     const supabase = createClient();
-    const { error } = await supabase.from("faqs").insert({
-      question_ro: ro ? "Întrebare nouă" : "New question",
-      answer_ro: "",
-      sort_order: faqs.length * 10,
-    });
-    if (error) return alert(error.message);
-    await load();
+    const { data: created, error } = await supabase
+      .from("faqs")
+      .insert({
+        question_ro: ro ? "Întrebare nouă" : "New question",
+        answer_ro: "",
+        sort_order: faqs.length * 10,
+      })
+      .select("*")
+      .single();
+    if (error || !created) return reportError(error);
+    // Appended rather than reloaded: a reload would wipe unsaved edits above.
+    setFaqs((prev) => [...prev, created as FaqRow]);
   };
 
   const saveFaq = async (faq: FaqRow) => {
@@ -143,21 +142,31 @@ export default function AdminContentPage() {
         published: faq.published,
       })
       .eq("id", faq.id);
-    if (error) return alert(error.message);
+    if (error) return reportError(error);
     setSavedKey(faq.id);
     window.setTimeout(() => setSavedKey((k) => (k === faq.id ? null : k)), 2000);
   };
 
-  const deleteFaq = async (id: string) => {
-    if (!confirm(ro ? "Ștergi această întrebare?" : "Delete this question?")) return;
+  const deleteFaq = async (faq: FaqRow) => {
+    const { confirmed } = await confirm({
+      title: ro ? "Ștergi această întrebare?" : "Delete this question?",
+      body: faq.question_ro,
+      confirmLabel: t("admin.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const supabase = createClient();
-    const { error } = await supabase.from("faqs").delete().eq("id", id);
-    if (error) return alert(error.message);
-    setFaqs((prev) => prev.filter((f) => f.id !== id));
+    const { error } = await supabase.from("faqs").delete().eq("id", faq.id);
+    if (error) return reportError(error);
+    setFaqs((prev) => prev.filter((f) => f.id !== faq.id));
   };
 
   if (loading) {
     return <p className="text-charcoal-light">{t("admin.loading")}</p>;
+  }
+
+  if (loadError) {
+    return <p role="alert" className="text-error">{t(adminErrorKey(loadError))}</p>;
   }
 
   const sections = [...new Set(rows.map((r) => r.section))];
@@ -360,7 +369,12 @@ export default function AdminContentPage() {
                   />
                   {ro ? "Vizibil pe site" : "Visible on the site"}
                 </label>
-                <Button variant="ghost" size="sm" onClick={() => deleteFaq(faq.id)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${t("admin.delete")}: ${faq.question_ro}`}
+                  onClick={() => deleteFaq(faq)}
+                >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
                 {savedKey === faq.id && (

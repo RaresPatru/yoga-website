@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+import { EMAIL_RE } from "@/lib/validate-attendee";
 
 export async function POST(req: Request) {
   try {

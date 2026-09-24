@@ -80,6 +80,20 @@ and `testimonials.user_id` have foreign keys into it.
 | `is_admin()` | definer, `search_path` pinned | `anon`, `authenticated` |
 | `pending_hold_interval()` | immutable, returns `1 hour` | `anon`, `authenticated`, `service_role` |
 | `register_for_event(...)` | definer, `search_path` pinned | **`service_role` only** |
+| `set_updated_at()` | trigger function, `search_path` pinned | nobody; only its triggers run it |
+
+`set_updated_at()` runs before every UPDATE on `events`, `blog_posts`,
+`site_content` and `email_templates`, and stamps `updated_at` with the current
+time (`20260924000000_updated_at_triggers.sql`). No screen has to remember to
+set the column, which is how the sitemap's dates stayed frozen at creation.
+
+**Flags and timestamps are `NOT NULL`** since
+`20260924000100_required_flags_and_timestamps.sql`: `published`, `hidden`,
+`approved`, `payment_status`, and the `created_at`/`updated_at` columns that had
+defaults but still allowed NULL. The TypeScript types in
+`lib/database.types.ts` are generated from this schema
+(`npx supabase gen types typescript --local > lib/database.types.ts`, after
+every migration), so what the database promises is what the code can rely on.
 
 > **Every function in `public` is an HTTP endpoint.** PostgREST exposes it at
 > `/rest/v1/rpc/<name>` to any role holding EXECUTE, so the function ACL is part
@@ -166,8 +180,13 @@ Do not edit the baseline. Write a new dated migration.
 npx supabase migration new descriptive_name
 # edit supabase/migrations/<timestamp>_descriptive_name.sql
 npx supabase db reset      # replays everything from scratch
+npx supabase gen types typescript --local > lib/database.types.ts
 npm run test:e2e
 ```
+
+The third line regenerates the TypeScript types every Supabase client uses. Skip
+it and the code keeps compiling against the old schema: a renamed column still
+type-checks, then fails at run time.
 
 Checklist for a new table — the third item is the one people forget:
 

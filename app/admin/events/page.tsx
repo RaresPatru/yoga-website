@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/database.types";
+import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
+import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useToast } from "@/components/admin/ui/toaster";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { getAuthToken } from "@/lib/get-auth-token";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
@@ -13,30 +18,15 @@ import { CURRENCIES, CURRENCY_SYMBOLS, DEFAULT_CURRENCY, formatPrice } from "@/l
 
 type SpellcheckLang = "ro" | "en" | "off";
 
-interface Event {
-  id: string;
-  slug: string;
-  title_ro: string;
-  title_en: string | null;
-  description_ro: string | null;
-  description_en: string | null;
-  date: string;
-  /** NULL means she has not announced an hour yet. See the migration. */
-  time: string | null;
-  /** NULL means it ends on the day it starts. */
-  end_date: string | null;
-  /** NULL means she has not said when it ends. */
-  end_time: string | null;
-  location: string | null;
-  /** A pasted map URL or a "lat, lng" pair. See lib/map-link.ts. */
-  map_link: string | null;
-  price: number;
-  currency: string | null;
-  max_participants: number | null;
-  image_url: string | null;
-  whatsapp_group_link: string | null;
-  published: boolean;
-}
+/**
+ * One event row. The date/time columns are wall-clock times in
+ * Europe/Bucharest; a NULL time means she has not announced it yet, and a NULL
+ * end date means it ends on the day it starts (see 20260919000000_event_end.sql).
+ */
+type Event = Database["public"]["Tables"]["events"]["Row"];
+
+/** What the form hands back to be saved: the editable columns, plus the id when the event exists. */
+type EventDraft = Omit<Event, "id" | "created_at" | "updated_at"> & { id?: string };
 
 interface WaitingEntry {
   id: string;
@@ -146,10 +136,11 @@ function EventForm({
   onCancel,
 }: {
   event?: Event | null;
-  onSave: (data: Partial<Event>) => Promise<void>;
+  onSave: (data: EventDraft) => Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useAdminLocale();
+  const toast = useToast();
   const [form, setForm] = useState({
     slug: event?.slug || "",
     title_ro: event?.title_ro || "",
@@ -210,7 +201,7 @@ function EventForm({
       const translated = await translateText(form.title_ro);
       setForm({ ...form, title_en: translated });
     } catch {
-      alert(t("admin.translate_error"));
+      toast.error(t("admin.translate_error"));
     } finally {
       setTranslatingTitle(false);
     }
@@ -223,7 +214,7 @@ function EventForm({
       const translated = await translateText(form.description_ro);
       setForm({ ...form, description_en: translated });
     } catch {
-      alert(t("admin.translate_error"));
+      toast.error(t("admin.translate_error"));
     } finally {
       setTranslatingDesc(false);
     }
@@ -310,9 +301,25 @@ function EventForm({
     }
     setEndError(null);
 
-    await onSave({
+    if (!form.title_ro.trim() || !form.slug.trim() || !form.date) {
+      toast.error(t("admin.errors.missing"));
+      setSaving(false);
+      return;
+    }
+
+    // A failed save throws from the page and leaves the form open with what
+    // she typed (audit B5); only a successful save closes it.
+    try {
+      await onSave({
       id: event?.id,
       ...form,
+      slug: form.slug.trim(),
+      title_en: form.title_en || null,
+      description_ro: form.description_ro || null,
+      description_en: form.description_en || null,
+      location: form.location || null,
+      image_url: form.image_url || null,
+      whatsapp_group_link: form.whatsapp_group_link || null,
       price,
       max_participants: capacity,
       // Blank is NULL, not "": the columns mean "not announced yet", and an
@@ -326,8 +333,12 @@ function EventForm({
       // one, and an empty string renders identically while making
       // `where map_link is null` stop finding the events that have no pin.
       map_link: form.map_link.trim() || null,
-    });
-    setSaving(false);
+      });
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -577,11 +588,10 @@ function EventForm({
 
 export default function AdminEventsPage() {
   const { t, locale } = useAdminLocale();
-  const [events, setEvents] = useState<Event[]>([]);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<Event | null>(null);
   const [creating, setCreating] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [counts, setCounts] = useState<Record<string, { registrations: number; waiting: number }>>({});
   const [waitingFor, setWaitingFor] = useState<Event | null>(null);
   /*
    * How many claim links the last save sent, when it sent any.
@@ -593,110 +603,47 @@ export default function AdminEventsPage() {
    */
   const [notified, setNotified] = useState<number | null>(null);
 
-  const loadEvents = useCallback(async () => {
+  /** Every event, newest first, with how many registrations and waiting-list entries each has. */
+  const { data, loading, error: loadError, reload } = useAdminData(async () => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("events")
-      .select("*")
-      .order("date", { ascending: false });
-    if (data) {
-      setEvents(data);
+    const events = must(
+      await supabase.from("events").select("*").order("date", { ascending: false })
+    ) ?? [];
+    const ids = events.map((e) => e.id);
 
-      const ids = data.map((e) => e.id);
+    const [registrations, waiting] = await Promise.all([
+      supabase.from("registrations").select("event_id").in("event_id", ids),
+      supabase.from("waiting_list").select("event_id").in("event_id", ids),
+    ]);
 
-      const { data: regCounts } = await supabase
-        .from("registrations")
-        .select("event_id")
-        .in("event_id", ids);
+    const counts: Record<string, { registrations: number; waiting: number }> = {};
+    for (const id of ids) counts[id] = { registrations: 0, waiting: 0 };
+    for (const r of must(registrations) ?? []) counts[r.event_id].registrations++;
+    for (const w of must(waiting) ?? []) counts[w.event_id].waiting++;
 
-      const { data: waitCounts } = await supabase
-        .from("waiting_list")
-        .select("event_id")
-        .in("event_id", ids);
+    return { events, counts };
+  });
+  const events = data?.events ?? [];
+  const counts = data?.counts ?? {};
 
-      const regMap: Record<string, number> = {};
-      const waitMap: Record<string, number> = {};
-      for (const r of regCounts || []) {
-        regMap[r.event_id] = (regMap[r.event_id] || 0) + 1;
-      }
-      for (const w of waitCounts || []) {
-        waitMap[w.event_id] = (waitMap[w.event_id] || 0) + 1;
-      }
-
-      const merged: Record<string, { registrations: number; waiting: number }> = {};
-      for (const id of ids) {
-        merged[id] = {
-          registrations: regMap[id] || 0,
-          waiting: waitMap[id] || 0,
-        };
-      }
-      setCounts(merged);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
+  /** Saves the event; throws on failure so the form can stay open (B5). */
+  const handleSave = async ({ id, ...fields }: EventDraft) => {
     const supabase = createClient();
-    supabase
-      .from("events")
-      .select("*")
-      .order("date", { ascending: false })
-      .then(async ({ data }) => {
-        if (cancelled) return;
-        if (data) {
-          setEvents(data);
-
-          const ids = data.map((e) => e.id);
-
-          const [{ data: regCounts }, { data: waitCounts }] = await Promise.all([
-            supabase.from("registrations").select("event_id").in("event_id", ids),
-            supabase.from("waiting_list").select("event_id").in("event_id", ids),
-          ]);
-
-          if (cancelled) return;
-
-          const regMap: Record<string, number> = {};
-          const waitMap: Record<string, number> = {};
-          for (const r of regCounts || []) {
-            regMap[r.event_id] = (regMap[r.event_id] || 0) + 1;
-          }
-          for (const w of waitCounts || []) {
-            waitMap[w.event_id] = (waitMap[w.event_id] || 0) + 1;
-          }
-
-          const merged: Record<string, { registrations: number; waiting: number }> = {};
-          for (const id of ids) {
-            merged[id] = {
-              registrations: regMap[id] || 0,
-              waiting: waitMap[id] || 0,
-            };
-          }
-          setCounts(merged);
-        }
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  const handleSave = async (data: Partial<Event>) => {
-    const supabase = createClient();
-    let eventId = data.id;
-    if (data.id) {
-      await supabase.from("events").update(data).eq("id", data.id);
+    let eventId = id;
+    if (id) {
+      must(await supabase.from("events").update(fields).eq("id", id));
     } else {
       // The id comes back from the insert because the next step needs it, and
       // asking the database which event we just wrote is worse than being told.
-      const { data: created } = await supabase
-        .from("events")
-        .insert(data)
-        .select("id")
-        .single();
+      const created = must(
+        await supabase.from("events").insert(fields).select("id").single()
+      );
       eventId = created?.id;
     }
+    toast.success(t("admin.toast.saved"));
     setEditing(null);
     setCreating(false);
-    loadEvents();
+    void reload();
 
     /*
      * Let the waiting list know, if there is anything to tell it.
@@ -730,11 +677,22 @@ export default function AdminEventsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(t("admin.confirm_delete_event"))) return;
-    const supabase = createClient();
-    await supabase.from("events").delete().eq("id", id);
-    loadEvents();
+  const handleDelete = async (event: Event) => {
+    const { confirmed } = await confirm({
+      title: t("admin.confirm_delete_event"),
+      body: event.title_ro,
+      confirmLabel: t("admin.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    try {
+      const supabase = createClient();
+      must(await supabase.from("events").delete().eq("id", event.id));
+      toast.success(t("admin.toast.deleted"));
+      void reload();
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    }
   };
 
   if (creating || editing) {
@@ -778,6 +736,8 @@ export default function AdminEventsPage() {
         <div className="mt-8 flex justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
+      ) : loadError ? (
+        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
       ) : events.length === 0 ? (
         <p className="mt-8 text-charcoal-light">{t("admin.no_events")}</p>
       ) : (
@@ -840,7 +800,7 @@ export default function AdminEventsPage() {
                     variant="ghost"
                     size="sm"
                     aria-label={`${t("admin.delete")}: ${event.title_ro}`}
-                    onClick={() => handleDelete(event.id)}
+                    onClick={() => handleDelete(event)}
                   >
                     <Trash2 className="h-4 w-4 text-error" aria-hidden="true" />
                   </Button>

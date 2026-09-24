@@ -23,8 +23,11 @@ test.describe("admin testimonials", () => {
       await expect(cardRow.getByText("Aprobat")).toBeVisible();
       await expect(cardRow.getByText("Neaprobat")).toHaveCount(0);
 
-      page.on("dialog", (d) => d.accept());
       await cardRow.getByRole("button", { name: "Șterge testimonialul" }).click();
+      await page
+        .getByRole("dialog", { name: "Sigur dorești să ștergi acest testimonial?" })
+        .getByRole("button", { name: "Șterge" })
+        .click();
       await expect(card).toHaveCount(0);
     } finally {
       await deleteTestimonial(seeded);

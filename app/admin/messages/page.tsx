@@ -1,56 +1,48 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/database.types";
+import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
+import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useToast } from "@/components/admin/ui/toaster";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 
-interface Message {
-  id: string;
-  name: string;
-  email: string;
-  subject: string | null;
-  message: string;
-  created_at: string;
-}
+type Message = Database["public"]["Tables"]["contact_messages"]["Row"];
 
 export default function AdminContactMessagesPage() {
   const { t } = useAdminLocale();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const toast = useToast();
+  const confirm = useConfirm();
 
-  const load = useCallback(async () => {
+  const { data: messages = [], loading, error: loadError, reload } = useAdminData(async () => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("contact_messages")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) setMessages(data);
-    setLoading(false);
-  }, []);
+    return (
+      must(
+        await supabase.from("contact_messages").select("*").order("created_at", { ascending: false })
+      ) ?? []
+    );
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    const supabase = createClient();
-    supabase
-      .from("contact_messages")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (cancelled) return;
-        if (data) setMessages(data);
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  const handleDelete = async (id: string) => {
-    if (!confirm(t("admin.confirm_delete_message"))) return;
-    const supabase = createClient();
-    await supabase.from("contact_messages").delete().eq("id", id);
-    load();
+  const handleDelete = async (message: Message) => {
+    const { confirmed } = await confirm({
+      title: t("admin.confirm_delete_message"),
+      body: message.name,
+      confirmLabel: t("admin.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    try {
+      const supabase = createClient();
+      must(await supabase.from("contact_messages").delete().eq("id", message.id));
+      toast.success(t("admin.toast.deleted"));
+      void reload();
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    }
   };
 
   return (
@@ -61,6 +53,8 @@ export default function AdminContactMessagesPage() {
         <div className="mt-8 flex justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
+      ) : loadError ? (
+        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
       ) : messages.length === 0 ? (
         <p className="mt-6 text-charcoal-light">{t("admin.no_messages")}</p>
       ) : (
@@ -74,8 +68,13 @@ export default function AdminContactMessagesPage() {
                   {m.subject && <p className="mt-1 text-sm font-medium text-charcoal">{m.subject}</p>}
                   <p className="mt-2 text-charcoal">{m.message}</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => handleDelete(m.id)}>
-                  <Trash2 className="h-4 w-4 text-error" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`${t("admin.delete")}: ${m.name}`}
+                  onClick={() => handleDelete(m)}
+                >
+                  <Trash2 className="h-4 w-4 text-error" aria-hidden="true" />
                 </Button>
               </div>
             </GlassCard>

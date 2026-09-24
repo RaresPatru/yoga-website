@@ -1,36 +1,48 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/database.types";
+import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
+import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useToast } from "@/components/admin/ui/toaster";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, X } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 
-interface Testimonial {
-  id: string;
-  type: string;
-  content: string;
-  approved: boolean;
-  created_at: string;
-  user_id: string | null;
-  event_id: string;
-  /** Optional 1-5. NULL means unrated, and no stars are drawn. */
-  rating: number | null;
-  author_name: string | null;
-  video_url: string | null;
-}
+/** One testimonial. `rating` is an optional 1-5; NULL means unrated, and no stars are drawn. */
+type Testimonial = Database["public"]["Tables"]["testimonials"]["Row"];
 
 export default function AdminTestimonialsPage() {
   const { t, locale } = useAdminLocale();
   const ro = locale === "ro";
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [loading, setLoading] = useState(true);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [savedId, setSavedId] = useState<string | null>(null);
 
+  const {
+    data: testimonials = [],
+    setData: setTestimonials,
+    loading,
+    error: loadError,
+    reload,
+  } = useAdminData(async () => {
+    const supabase = createClient();
+    return (
+      must(
+        await supabase.from("testimonials").select("*").order("created_at", { ascending: false })
+      ) ?? []
+    );
+  });
+
   const updateLocal = (id: string, patch: Partial<Testimonial>) =>
-    setTestimonials((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setTestimonials((prev) => prev?.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+  /** Shows a failed write's reason; every write below goes through this. */
+  const reportError = (error: unknown) => toast.error(t(adminErrorKey(toAdminError(error))));
 
   const saveDetails = async (item: Testimonial) => {
     const supabase = createClient();
@@ -44,49 +56,40 @@ export default function AdminTestimonialsPage() {
       .eq("id", item.id);
 
     if (error) {
-      alert(error.message);
+      reportError(error);
       return;
     }
     setSavedId(item.id);
     window.setTimeout(() => setSavedId((id) => (id === item.id ? null : id)), 2000);
   };
 
-  const load = useCallback(async () => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("testimonials")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) setTestimonials(data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const supabase = createClient();
-    supabase
-      .from("testimonials")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (cancelled) return;
-        if (data) setTestimonials(data);
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
   const handleApprove = async (id: string, approved: boolean) => {
-    const supabase = createClient();
-    await supabase.from("testimonials").update({ approved }).eq("id", id);
-    load();
+    try {
+      const supabase = createClient();
+      must(await supabase.from("testimonials").update({ approved }).eq("id", id));
+      toast.success(t("admin.toast.approved"));
+      void reload();
+    } catch (error) {
+      reportError(error);
+    }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(t("admin.confirm_delete_testimonial"))) return;
-    const supabase = createClient();
-    await supabase.from("testimonials").delete().eq("id", id);
-    load();
+  const handleDelete = async (testimonial: Testimonial) => {
+    const { confirmed } = await confirm({
+      title: t("admin.confirm_delete_testimonial"),
+      body: testimonial.author_name ?? undefined,
+      confirmLabel: t("admin.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    try {
+      const supabase = createClient();
+      must(await supabase.from("testimonials").delete().eq("id", testimonial.id));
+      toast.success(t("admin.toast.deleted"));
+      void reload();
+    } catch (error) {
+      reportError(error);
+    }
   };
 
   return (
@@ -97,6 +100,8 @@ export default function AdminTestimonialsPage() {
         <div className="mt-8 flex justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
+      ) : loadError ? (
+        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
       ) : testimonials.length === 0 ? (
         <p className="mt-6 text-charcoal-light">{t("admin.no_testimonials")}</p>
       ) : (
@@ -202,7 +207,7 @@ export default function AdminTestimonialsPage() {
                     variant="ghost"
                     size="sm"
                     aria-label={ro ? "Șterge testimonialul" : "Delete testimonial"}
-                    onClick={() => handleDelete(testimonial.id)}
+                    onClick={() => handleDelete(testimonial)}
                   >
                     <X className="h-4 w-4 text-error" aria-hidden="true" />
                   </Button>

@@ -1,4 +1,5 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
 
 /**
  * A Supabase client with no session attached, for reading public data on the
@@ -36,7 +37,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  * amount of stale cookie state in a visitor's browser can affect it.
  */
 export function createPublicClient() {
-  return createSupabaseClient(
+  return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     { auth: { persistSession: false, autoRefreshToken: false } }

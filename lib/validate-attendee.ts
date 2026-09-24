@@ -21,7 +21,7 @@
 // allow, and rejecting a valid-but-unusual address is worse than accepting a
 // malformed one — the confirmation email simply bounces. This checks the shape
 // only: something, an @, something, a dot, a couple more characters.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export interface AttendeeInput {
   eventId?: unknown;

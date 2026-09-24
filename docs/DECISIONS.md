@@ -1168,3 +1168,44 @@ The migration is a no-op against production by construction — every statement
 revokes something production had already lost. It runs there anyway, because the
 value is in the migration history: a rebuild from this repository now produces
 production's permissions rather than a looser set that happens to work.
+
+---
+
+## Admin panel
+
+### A failed save keeps the editor open and says why
+
+Supabase returns `{ error }` instead of throwing, so an unchecked write looks
+exactly like a successful one. The admin editors used to close either way, and
+a duplicate slug cost her a whole post. Every admin read and write now goes
+through `must()` in `lib/admin/db.ts`. It throws an `AdminError` whose kind
+(duplicate, missing, invalid, session, permission, network) maps to one sentence
+in `messages/*.json`, and the editor catches it and stays open. The raw database
+message never reaches her: it is English, technical, and says nothing about what
+to do next.
+
+### Toasts in the top layer, confirmations in the admin's own dialog
+
+`alert()` and `confirm()` blocked the page, looked like a browser fault, and
+could not name the thing about to be deleted. The replacements:
+
+- **Toasts** (`components/admin/ui/toaster.tsx`) are a `popover="manual"` list,
+  so they sit in the browser's top layer above an open dialog, such as a failed
+  upload inside the media library. Success disappears after five seconds;
+  errors stay until closed. Screen readers hear them through two live regions
+  that are always in the page, because a live region added at the same moment as
+  its text is often not announced.
+- **Confirmations** (`components/admin/ui/confirm-dialog.tsx`) are a native
+  `<dialog>` opened with `showModal()`, which traps focus and makes the page
+  behind it inert without any code of ours. A destructive question focuses
+  Cancel first, so an accidental Enter never deletes anything. It can carry a
+  text box, for the reason given when a participant is removed.
+
+### Bilingual fields: one switch per form, with a fallback design on file
+
+Chosen with Rares on 24 September 2026, and built in overhaul phase 2: a RO / EN
+switch at the top of each form flips every text field to the other language, and
+in EN mode each field shows the Romanian text as reference. If it proves awkward
+in use, the agreed fallback is **RO / EN tabs on each field's label**, where each
+field remembers its own tab. It has not been built. See
+[OVERHAUL.md](OVERHAUL.md#decisions) for the reasoning.

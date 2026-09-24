@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { createPublicClient } from "@/lib/supabase/public";
 import { LandscapeCard, OG_SIZE } from "@/lib/og-card";
 import { getSiteName } from "@/lib/site-content";
-import { formatDate } from "@/lib/utils";
+import { formatEventSchedule } from "@/lib/utils";
 import { formatPrice } from "@/lib/money";
 
 /**
@@ -31,7 +31,7 @@ export async function GET(
   const supabase = createPublicClient();
   const { data: event } = await supabase
     .from("events")
-    .select("title_ro, title_en, date, time, location, price, currency")
+    .select("title_ro, title_en, date, time, end_date, end_time, location, price, currency")
     .eq("slug", slug)
     .eq("published", true)
     .maybeSingle();
@@ -47,11 +47,15 @@ export async function GET(
 
   const title = locale === "ro" ? event.title_ro : event.title_en || event.title_ro;
   const free = locale === "ro" ? "Gratuit" : "Free";
+  // The start time is optional, so the eyebrow is the date alone when there is
+  // none (a missing time used to crash the whole card).
+  const schedule = formatEventSchedule(event, locale);
+  const eyebrow = schedule.time ? `${schedule.date} · ${schedule.time}` : schedule.date;
 
   return new ImageResponse(
     (
       <LandscapeCard
-        eyebrow={`${formatDate(event.date, locale)} · ${event.time.slice(0, 5)}`}
+        eyebrow={eyebrow}
         title={title}
         subtitle={event.location ?? undefined}
         badge={event.price === 0 ? free : formatPrice(event.price, event.currency, locale)}

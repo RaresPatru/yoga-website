@@ -1274,6 +1274,71 @@ staying put.
 
 ---
 
+## Part 12 — The overhaul, and the groundwork under it
+
+On 24 September 2026 Rares asked for a complete overhaul of the admin panel and
+a long list of public-site changes. His brief was specific about who uses what:
+the instructor works in the admin from a computer 60–70% of the time, but has to
+manage from her phone when she's away from one, and visitors mostly arrive on
+phones from Instagram. He asked for a plan before any code, with every choice
+offered as options and a recommendation.
+
+So the first deliverable was a conversation, not a commit. Thirteen decisions
+were settled with him in three rounds of questions: one RO/EN switch per form
+instead of stacked English boxes, site content split into sections with a side
+menu, archives as a tab inside each section, reviews verified by an emailed
+link rather than an email-and-phone check, and so on. Where I made a call
+myself, the plan says so and why. The result is
+[OVERHAUL.md](OVERHAUL.md): twelve phases, each ending with the full test suite
+and a commit he approves.
+
+### Phase 0: making failures visible before building on them
+
+**Typing the database found a crash the audit had predicted.** The Supabase
+clients had no type information, so every row was `any`. Generating types from
+the schema (`lib/database.types.ts`) produced 30 errors. One was the share-image
+route slicing an event's start time, which can be empty since end dates arrived.
+That was a real 500 on every event announced without a time (B8). Most of the
+rest were columns such as `published` and `created_at` that had defaults but
+still allowed NULL, a third state nothing was designed for. A migration now fills
+any gaps and forbids NULL, so the types describe the data as it really is.
+
+**Saves that failed looked exactly like saves that worked.** Supabase returns
+errors rather than throwing them. The admin editors never looked at them, so
+they closed after a duplicate slug or an expired session, and her work was gone
+(B5). Every admin write now goes through `must()`, which turns the error into a
+plain sentence ("that address is already used by another page"). The editor
+stays open with everything she typed. `alert()` and `confirm()` gave way to
+toasts and a confirmation dialog in the admin's own style. The dialog focuses
+Cancel first when the action destroys something.
+
+**The error was more cautious than the test.** The first version of the "which
+field failed" logic read the column name from the error's `details`, and it
+worked with the service key. In the browser, signed in as the admin, `details`
+was null. Postgres deliberately blanks the key of a unique violation for users
+under row-level security, because it could reveal a row they may not read. The
+constraint's name (`blog_posts_slug_key`) still carries the column, so that is
+what the code reads now. It is also a reminder that a test with more privileges
+than the real user can pass for reasons the real user never gets.
+
+**A waiting-list payment charged the wrong currency.** Checkout had been fixed
+to use each event's currency, but the waiting-list claim route was an older copy
+of the same code and still charged lei (B1). Both now call one
+`createCheckoutSession()`, and the Stripe session's parameters come from a pure
+function a test can check without a Stripe account. The same function builds the
+return addresses from the site's configured URL. Before, it used whatever
+`Origin` a caller sent, which let anyone choose where Stripe redirected after
+payment (S4).
+
+**Duplicates that had already drifted.** Seven admin pages kept two copies of
+each query. On the events page the two had diverged, one sequential and one
+parallel. They became one hook (`useAdminData`). Also merged: the email check,
+the `.env` parser (written twice, with different handling of quotes; both now use
+Node's own), and the share images' colours, which had kept a rose the site had
+stopped using. A test now compares that palette with the CSS.
+
+---
+
 ## Decisions worth defending
 
 **Keeping the tech stack.** Next.js + Supabase + Stripe was the right call and

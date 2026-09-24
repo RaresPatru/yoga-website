@@ -301,8 +301,27 @@
       "spellcheck_off": "Corector: oprit",
       "spellcheck_help": "De ce nu apar sublinierile?",
       "spellcheck_hint": "Dacă sublinierile roșii nu apar pentru limba română, adaugă dicționarul românesc în Chrome: Setări → Limbi → Verificare ortografică.",
-      "translate_replace": "Textul în engleză va fi înlocuit cu o traducere nouă a celui în română. Poți reveni la el cu Desfă, în bara editorului în engleză. Continui?",
-      "translate_too_long": "Un paragraf are peste 5.000 de caractere, prea mult pentru traducere. Împarte-l în două și încearcă din nou."
+      "translate_replace": "Textul în engleză va fi înlocuit cu o traducere nouă a celui în română. Poți reveni la el cu Desfă, în bara editorului în engleză.",
+      "translate_too_long": "Un paragraf are peste 5.000 de caractere, prea mult pentru traducere. Împarte-l în două și încearcă din nou.",
+      "translate_replace_title": "Înlocuiești textul în engleză?",
+      "translate_replace_confirm": "Înlocuiește"
+    },
+    "errors": {
+      "duplicate": "Există deja o înregistrare cu aceeași valoare. Schimb-o și salvează din nou.",
+      "duplicate_slug": "Adresa (slug-ul) e folosită deja de altă pagină. Alege alta și salvează din nou.",
+      "missing": "Lipsește un câmp obligatoriu. Completează-l și salvează din nou.",
+      "invalid": "O valoare nu este acceptată, de exemplu un preț negativ sau o dată greșită. Verifică și salvează din nou.",
+      "session": "Sesiunea a expirat. Autentifică-te într-un tab nou, apoi revino aici și salvează din nou; textul tău rămâne pe ecran.",
+      "permission": "Contul acesta nu are voie să facă modificarea. Autentifică-te cu contul de administrator.",
+      "network": "Nu m-am putut conecta la baza de date. Verifică internetul și încearcă din nou.",
+      "unknown": "Operația nu a reușit. Încearcă din nou."
+    },
+    "toast": {
+      "region": "Notificări",
+      "close": "Închide notificarea",
+      "saved": "Salvat",
+      "deleted": "Șters",
+      "approved": "Aprobat"
     }
   }
 }

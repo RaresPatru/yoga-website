@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Image, Music, Video, Upload, Trash2, X, Search, FileType, PlaySquare } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useToast } from "@/components/admin/ui/toaster";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
+import { adminErrorKey, toAdminError } from "@/lib/admin/db";
+import { getAuthToken } from "@/lib/get-auth-token";
 import NextImage from "next/image";
 
 interface MediaFile {
@@ -60,11 +64,21 @@ function getPublicUrl(bucket: string, path: string) {
   return storageClient.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
+/** The signed-in admin's token for the upload API, which checks it is an admin. */
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const supabase = createClient();
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = await getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** The newest 200 files in the bucket's top folder. */
+async function listFiles(bucket: string): Promise<MediaFile[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.storage.from(bucket).list("", {
+    limit: 200,
+    sortBy: { column: "created_at", order: "desc" },
+  });
+  if (error) throw toAdminError(error);
+  return (data ?? []) as MediaFile[];
 }
 
 interface MediaLibraryProps {
@@ -76,6 +90,8 @@ interface MediaLibraryProps {
 
 export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: MediaLibraryProps) {
   const { t } = useAdminLocale();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -100,15 +116,14 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
   }, [onClose]);
 
   const loadFiles = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase.storage.from(bucket).list("", {
-      limit: 200,
-      sortBy: { column: "created_at", order: "desc" },
-    });
-    if (data) setFiles(data as MediaFile[]);
-    if (error) console.error("Storage list error:", error);
-    setLoading(false);
-  }, []);
+    try {
+      setFiles(await listFiles(bucket));
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    } finally {
+      setLoading(false);
+    }
+  }, [t, toast]);
 
   // Reset the loading flag whenever the dialog opens, not just the first time.
   //
@@ -129,16 +144,16 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    const supabase = createClient();
-    supabase.storage.from(bucket).list("", {
-      limit: 200,
-      sortBy: { column: "created_at", order: "desc" },
-    }).then(({ data, error }) => {
-      if (cancelled) return;
-      if (data) setFiles(data as MediaFile[]);
-      if (error) console.error("Storage list error:", error);
-      setLoading(false);
-    });
+    listFiles(bucket)
+      .then((list) => {
+        if (!cancelled) setFiles(list);
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Storage list error:", error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [open, bucket]);
 
@@ -147,7 +162,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
     if (!file) return;
 
     if (file.size > 50 * 1024 * 1024) {
-      alert(t("admin.media_size_error"));
+      toast.error(t("admin.media_size_error"));
       return;
     }
 
@@ -194,7 +209,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
       await loadFiles();
     } catch (err) {
       console.error("Upload error:", err);
-      alert(err instanceof Error ? err.message : t("admin.media_upload_error"));
+      toast.error(t("admin.media_upload_error"));
     }
 
     setUploading(false);
@@ -202,7 +217,13 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
   };
 
   const handleDelete = async (fileName: string) => {
-    if (!confirm(t("admin.media_confirm_delete"))) return;
+    const { confirmed } = await confirm({
+      title: t("admin.media_confirm_delete"),
+      body: fileName,
+      confirmLabel: t("admin.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const headers = await getAuthHeaders();
     const res = await fetch("/api/upload", {
       method: "DELETE",
@@ -214,7 +235,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
     } else {
       const text = await res.text().catch(() => "");
       console.error("Delete error:", text || `HTTP ${res.status}`);
-      alert(text || t("admin.media_upload_error"));
+      toast.error(t("admin.media_upload_error"));
     }
   };
 

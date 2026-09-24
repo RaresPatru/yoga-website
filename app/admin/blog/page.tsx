@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useId, useRef } from "react";
+import { useState, useId, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/database.types";
+import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
+import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useToast } from "@/components/admin/ui/toaster";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { getAuthToken } from "@/lib/get-auth-token";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
@@ -16,17 +21,13 @@ import {
 import { toEditorContent } from "@/lib/blog-editor";
 import { translateDocument } from "@/lib/translate-document";
 
-interface BlogPost {
-  id: string;
-  slug: string;
-  title_ro: string;
-  title_en: string | null;
-  content_ro: string | null;
-  content_en: string | null;
-  published: boolean;
-  hidden: boolean;
-  created_at: string;
-}
+type BlogPost = Database["public"]["Tables"]["blog_posts"]["Row"];
+
+/** What the editor hands back to be saved: every editable column, and the id when the post already exists. */
+type BlogPostDraft = Pick<
+  BlogPost,
+  "slug" | "title_ro" | "title_en" | "content_ro" | "content_en" | "published" | "hidden"
+> & { id?: string };
 
 /** Why a translation failed, when it is something she can act on. */
 class TranslationFailed extends Error {
@@ -44,10 +45,12 @@ function BlogEditor({
   onCancel,
 }: {
   post?: BlogPost | null;
-  onSave: (data: Partial<BlogPost>) => Promise<void>;
+  onSave: (data: BlogPostDraft) => Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useAdminLocale();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [titleRo, setTitleRo] = useState(post?.title_ro || "");
   const [slug, setSlug] = useState(post?.slug || "");
   const [published, setPublished] = useState(post?.published || false);
@@ -81,11 +84,21 @@ function BlogEditor({
     labelId: enLabelId,
   });
 
+  /**
+   * Hands the post to the page to save. If saving fails, the page throws, and
+   * the editor stays open with everything she typed, showing what went wrong
+   * (audit B5). Only a successful save closes it.
+   */
   const handleSave = async () => {
+    if (!titleRo.trim() || !slug.trim()) {
+      toast.error(t("admin.errors.missing"));
+      return;
+    }
     setSaving(true);
-    await onSave({
+    try {
+      await onSave({
       id: post?.id,
-      slug,
+      slug: slug.trim(),
       title_ro: titleRo,
       title_en: titleEn || null,
       // An empty editor still holds an empty paragraph, and "<p></p>" is not
@@ -95,8 +108,12 @@ function BlogEditor({
       content_en: enEditor && !enEditor.isEmpty ? enEditor.getHTML() : null,
       published,
       hidden: published ? hidden : false,
-    });
-    setSaving(false);
+      });
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const translateText = async (text: string): Promise<string> => {
@@ -131,7 +148,7 @@ function BlogEditor({
       const translated = await translateText(titleRo);
       setTitleEn(translated);
     } catch {
-      alert(t("admin.translate_error"));
+      toast.error(t("admin.translate_error"));
     } finally {
       setTranslatingTitle(false);
     }
@@ -149,7 +166,14 @@ function BlogEditor({
    */
   const handleTranslateContent = async () => {
     if (!roEditor || !enEditor || !roEditor.getText().trim()) return;
-    if (!enEditor.isEmpty && !confirm(t("admin.editor.translate_replace"))) return;
+    if (!enEditor.isEmpty) {
+      const { confirmed } = await confirm({
+        title: t("admin.editor.translate_replace_title"),
+        body: t("admin.editor.translate_replace"),
+        confirmLabel: t("admin.editor.translate_replace_confirm"),
+      });
+      if (!confirmed) return;
+    }
 
     setTranslatingContent(true);
     // Typing into the English editor now would be overwritten in a moment.
@@ -164,7 +188,7 @@ function BlogEditor({
       const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       englishRef.current?.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
     } catch (err) {
-      alert(
+      toast.error(
         err instanceof TranslationFailed && err.reason === "too_long"
           ? t("admin.editor.translate_too_long")
           : t("admin.translate_error")
@@ -273,53 +297,54 @@ function BlogEditor({
 
 export default function AdminBlogPage() {
   const { t } = useAdminLocale();
-  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<BlogPost | null>(null);
   const [creating, setCreating] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  const loadPosts = useCallback(async () => {
+  const {
+    data: posts = [],
+    loading,
+    error: loadError,
+    reload,
+  } = useAdminData(async () => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("blog_posts")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) setPosts(data);
-    setLoading(false);
-  }, []);
+    const rows = must(
+      await supabase.from("blog_posts").select("*").order("created_at", { ascending: false })
+    );
+    return rows ?? [];
+  });
 
-  useEffect(() => {
-    let cancelled = false;
+  /** Saves the post; throws on failure so the editor can stay open (B5). */
+  const handleSave = async ({ id, ...fields }: BlogPostDraft) => {
     const supabase = createClient();
-    supabase
-      .from("blog_posts")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (cancelled) return;
-        if (data) setPosts(data);
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  const handleSave = async (data: Partial<BlogPost>) => {
-    const supabase = createClient();
-    if (data.id) {
-      await supabase.from("blog_posts").update(data).eq("id", data.id);
+    if (id) {
+      must(await supabase.from("blog_posts").update(fields).eq("id", id));
     } else {
-      await supabase.from("blog_posts").insert(data);
+      must(await supabase.from("blog_posts").insert(fields));
     }
+    toast.success(t("admin.toast.saved"));
     setEditing(null);
     setCreating(false);
-    loadPosts();
+    void reload();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(t("admin.confirm_delete_post"))) return;
-    const supabase = createClient();
-    await supabase.from("blog_posts").delete().eq("id", id);
-    loadPosts();
+  const handleDelete = async (post: BlogPost) => {
+    const { confirmed } = await confirm({
+      title: t("admin.confirm_delete_post"),
+      body: post.title_ro,
+      confirmLabel: t("admin.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    try {
+      const supabase = createClient();
+      must(await supabase.from("blog_posts").delete().eq("id", post.id));
+      toast.success(t("admin.toast.deleted"));
+      void reload();
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    }
   };
 
   if (creating || editing) {
@@ -343,6 +368,8 @@ export default function AdminBlogPage() {
         <div className="mt-8 flex justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
+      ) : loadError ? (
+        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
       ) : posts.length === 0 ? (
         <p className="mt-8 text-charcoal-light">{t("admin.no_posts")}</p>
       ) : (
@@ -381,7 +408,7 @@ export default function AdminBlogPage() {
                   variant="ghost"
                   size="sm"
                   aria-label={`${t("admin.delete")}: ${post.title_ro}`}
-                  onClick={() => handleDelete(post.id)}
+                  onClick={() => handleDelete(post)}
                 >
                   <Trash2 className="h-4 w-4 text-error" aria-hidden="true" />
                 </Button>

@@ -145,7 +145,21 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   `const { error } = await supabase.from("events").update(…)` — ignore `error`
   and a failed save looks exactly like a successful one, which is how the admin
   editors silently lost edits. Resend's `emails.send()` returns `{ error }` too,
-  and logs it only outside production. Check `error` on every call.
+  and logs it only outside production. Check `error` on every call. In the
+  admin panel, wrap the result in `must()` from `lib/admin/db.ts`: it throws
+  an `AdminError` whose kind maps to a translated sentence
+  (`adminErrorKey()`), and the editor stays open on failure.
+- **Under row-level security, Postgres blanks a unique violation's details.**
+  As the admin, a duplicate slug comes back with `details: null` instead of
+  `Key (slug)=(…) already exists.`, because the key's value could reveal a row
+  the user may not read; the service role gets the full text. Read the
+  constraint name from `message` (`blog_posts_slug_key`) instead, as
+  `lib/admin/db.ts` does. A test run with the service key will never show you
+  this.
+- **Regenerate `lib/database.types.ts` after every migration**
+  (`npx supabase gen types typescript --local > lib/database.types.ts`). All
+  four Supabase clients are typed from it, so a stale file type-checks code
+  against a schema that no longer exists.
 - Playwright's `isVisible()` does not auto-wait. Branch on viewport width, not
   on a visibility probe.
 - **A Suspense boundary high in the tree costs you HTTP status codes.** Wrapping

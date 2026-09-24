@@ -42,8 +42,11 @@ test.describe("admin blog CRUD", () => {
     await page.getByRole("button", { name: "Salvează" }).click();
     await expect(cardRow(titleEdited)).toBeVisible();
 
-    page.on("dialog", (d) => d.accept());
     await cardRow(titleEdited).getByRole("button").nth(1).click();
+    // The admin's own confirmation dialog, not the browser's.
+    const question = page.getByRole("dialog", { name: "Sigur dorești să ștergi acest articol?" });
+    await expect(question).toContainText(titleEdited);
+    await question.getByRole("button", { name: "Șterge" }).click();
     await expect(cardRow(titleEdited)).toHaveCount(0);
   });
 });

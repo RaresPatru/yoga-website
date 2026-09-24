@@ -312,16 +312,17 @@ test.describe("blog editor translation", () => {
     await expect(en).toHaveText("My own English");
     const translate = page.getByRole("button", { name: "→ EN" }).nth(1);
 
-    page.once("dialog", (dialog) => dialog.dismiss());
+    const question = page.getByRole("dialog", { name: "Înlocuiești textul în engleză?" });
+
     await translate.click();
+    await question.getByRole("button", { name: "Anulează" }).click();
+    await expect(question).toBeHidden();
     await expect(en).toHaveText("My own English");
     expect(requests).toHaveLength(0);
 
-    page.once("dialog", (dialog) => {
-      expect(dialog.message()).toContain("Desfă");
-      return dialog.accept();
-    });
     await translate.click();
+    await expect(question).toContainText("Desfă");
+    await question.getByRole("button", { name: "Înlocuiește" }).click();
     await expect(en).toHaveText("EN Bună");
 
     // The English editor's own Desfă: the second one on the page.

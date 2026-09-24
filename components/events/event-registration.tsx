@@ -130,7 +130,11 @@ export function EventRegistration({
     const claimToken = searchParams.get("claim");
     if (!claimToken) return;
 
-    fetch(`/api/register/claim-spot/${claimToken}`, { method: "POST" })
+    fetch(`/api/register/claim-spot/${claimToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale }),
+    })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
 
@@ -160,7 +164,7 @@ export function EventRegistration({
       })
       .catch(() => setError(t("Link invalid sau expirat", "Invalid or expired link")))
       .finally(() => setSubmitting(false));
-  }, [searchParams, t]);
+  }, [searchParams, t, locale]);
 
   const handleFreeRegistration = async () => {
     setSubmitting(true);

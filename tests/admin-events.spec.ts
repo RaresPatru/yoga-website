@@ -61,8 +61,11 @@ test.describe("admin events CRUD", () => {
     await page.getByRole("button", { name: "Salvează" }).click();
     await expect(cardRow(titleEdited)).toBeVisible();
 
-    page.on("dialog", (d) => d.accept());
     await page.getByRole("button", { name: `Șterge: ${titleEdited}` }).click();
+    await page
+      .getByRole("dialog", { name: "Sigur dorești să ștergi acest eveniment?" })
+      .getByRole("button", { name: "Șterge" })
+      .click();
     await expect(cardRow(titleEdited)).toHaveCount(0);
   });
 

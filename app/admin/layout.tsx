@@ -8,6 +8,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AdminLocaleProvider, useAdminLocale } from "@/components/admin/locale-provider";
 import { Flag } from "@/components/ui/flag";
+import { ToastProvider } from "@/components/admin/ui/toaster";
+import { ConfirmProvider } from "@/components/admin/ui/confirm-dialog";
 import {
   LayoutDashboard,
   FileText,
@@ -151,7 +153,11 @@ function AdminLayoutInner({ children }: { children: React.ReactNode }) {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <AdminLocaleProvider>
-      <AdminLayoutInner>{children}</AdminLayoutInner>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AdminLayoutInner>{children}</AdminLayoutInner>
+        </ConfirmProvider>
+      </ToastProvider>
     </AdminLocaleProvider>
   );
 }

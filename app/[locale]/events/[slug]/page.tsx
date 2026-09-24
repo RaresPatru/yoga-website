@@ -91,9 +91,7 @@ export async function generateMetadata({
     title,
     description: toDescription(
       description,
-      locale === "ro"
-        ? `${formatDate(event.date, locale)} · ${event.location ?? ""}`
-        : `${formatDate(event.date, locale)} · ${event.location ?? ""}`
+      `${formatDate(event.date, locale)} · ${event.location ?? ""}`
     ),
     path: `/events/${event.slug}`,
     locale,

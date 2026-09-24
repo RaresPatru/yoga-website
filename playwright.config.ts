@@ -1,23 +1,23 @@
 import { defineConfig, devices } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
 import { ADMIN_STATE } from "./tests/auth-state";
 
 /**
- * Minimal .env reader — Playwright's config runs before Next.js loads, so the
- * app's own env handling is not available here.
+ * Loads a .env file into process.env. Playwright's config runs before Next.js,
+ * so the app's own env handling is not available here; Node's parseEnv reads
+ * the file (quotes and comments included), the same parser
+ * scripts/with-env.mjs uses.
  *
- * Order matters: the first file to define a variable wins, because of the
- * `!(match[1] in process.env)` check. `.env.test` is read first so it overrides
- * the development values in `.env.local` / `.env`. That is what keeps the suite
- * pointed at the local database instead of production.
+ * Order matters: the first file to define a variable wins, because a variable
+ * that is already set is never overwritten. `.env.test` is read first so it
+ * overrides the development values in `.env.local` / `.env`. That is what keeps
+ * the suite pointed at the local database instead of production.
  */
 function loadEnvFile(path: string) {
   if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (match && !(match[1] in process.env)) {
-      process.env[match[1]] = match[2];
-    }
+  for (const [key, value] of Object.entries(parseEnv(readFileSync(path, "utf8")))) {
+    if (!(key in process.env)) process.env[key] = value;
   }
 }
 
@@ -172,7 +172,15 @@ export default defineConfig({
       // so running those specs here would test a screen nobody administers
       // from. The sanitizer runs on the server, so no engine changes what it
       // does; the chromium project covers it once.
-      testIgnore: [/auth\.setup\.ts/, /admin-.*\.spec\.ts/, /sanitize\.spec\.ts/],
+      testIgnore: [
+        /auth\.setup\.ts/,
+        /admin-.*\.spec\.ts/,
+        /sanitize\.spec\.ts/,
+        // Reads files, not pages; one engine is enough.
+        /brand-colors\.spec\.ts/,
+        /checkout-params\.spec\.ts/,
+        /updated-at\.spec\.ts/,
+      ],
     },
   ],
 });

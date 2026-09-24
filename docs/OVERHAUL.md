@@ -19,7 +19,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 
 | Phase | What it delivers | State |
 |---|---|---|
-| 0 | Groundwork: admin building blocks, error handling, bilingual fields, autosave | not started |
+| 0 | Groundwork: error handling, typed database, checkout fix, shared pieces | done, 24 Sep |
 | 1 | Admin shell (sticky collapsible sidebar) and the dashboard | not started |
 | 2 | Site content, one-switch bilingual editing, public copy and legal pages | not started |
 | 3 | Blog: toolbar, post list, editor, public cards and article | not started |
@@ -260,72 +260,67 @@ Sources:
 ### Phase 0: Groundwork
 
 Building blocks every later phase uses, plus the fixes Rares named for now.
+**Done 24 September 2026.** The full suite passed on a production build (425
+passed, 11 skipped). Its two failures were an event someone had unpublished in
+the local database. After `db reset` rebuilt it from the seed, both passed.
 
-- [ ] **The 23 September editor work gets its own commit first** (Rares approves).
-- [ ] **Typed database (W3).**
-  - `lib/database.types.ts` is generated from the local schema.
-  - Every Supabase client uses it.
-  - The type errors it surfaces are fixed.
-- [ ] **Admin errors never lose her work (B5).**
-  - `lib/admin/db.ts` turns every `{ error }` into a plain message, such as
-    "this address is already used by another post" or "your session expired,
-    sign in again".
-  - Every save and delete shows the message and leaves the editor open.
-  - Until the pages are rebuilt, the fix is fitted into the current ones.
-- [ ] **One data hook** replaces the duplicated load + effect pairs on seven
-  admin pages (R4).
-- [ ] **Admin building blocks** in `components/admin/ui/`:
-  - page header with the tab title
-  - fields and text areas that grow with their text
-  - select, switch and segmented control
-  - tabs with counts, kept in the address
-  - search and sort
-  - status badges with readable contrast
-  - empty states
-  - confirmation dialog (replaces `window.confirm`)
-  - toasts announced to screen readers
-  - a bulk-selection bar
-  - pagination
-  - a menu
-- [ ] **The bilingual kit.**
-  - A RO / EN switch per form.
-  - Fields that show the Romanian text as reference and, when empty, "uses the
-    Romanian text".
-  - Translate buttons, per field and for the whole form.
-  - A completeness counter.
-- [ ] **`useAutosave`.**
-  - Timing: 1.5 seconds after typing stops, at most every 10 seconds while
-    typing, and again when she leaves the page.
-  - A status indicator.
-  - Retry with back-off.
-  - A browser copy kept until the server confirms.
-- [ ] **B1 and the checkout half of R4.**
-  - One `createCheckoutSession()` serves `/api/stripe/checkout` and the
-    waiting-list claim route.
-  - It uses the event's currency and `toStripeAmount()`, and passes the
-    customer's email and language.
-  - It builds return addresses from `siteUrl()`, which closes S4.
-- [ ] **The rest of R4:**
-  - one `EMAIL_RE`
-  - one `.env` parser (Node's own)
-  - the share-card colours read from one place
-  - the duplicated CI comment
-  - the identical ternary branches
-  - the two identical route lists in `tests/navigation.spec.ts`
-- [ ] **B29.** `updated_at` is kept current by a trigger on every table that
-  has it.
+- [x] **The 23 September editor work got its own commit** (`e60bf5f`).
+- [x] **Typed database (W3).**
+  - `lib/database.types.ts` is generated from the local schema, and all four
+    Supabase clients use it.
+  - The 30 errors it surfaced are fixed:
+    - one was the share-image crash for events without a start time (**B8**, a
+      bonus fix);
+    - most were flags and timestamps that allowed NULL, now `NOT NULL`.
+- [x] **Admin errors never lose her work (B5).**
+  - `must()` in `lib/admin/db.ts` turns every `{ error }` into one sentence.
+  - It is fitted into the current blog, event, email, testimonial, message,
+    content, media and WhatsApp screens.
+  - A failed save leaves the editor open with what she typed.
+  - Tested: `tests/admin-save-errors.spec.ts`.
+- [x] **One data hook** (`useAdminData`) replaces the duplicated load + effect
+  pairs on the seven admin screens that had them (R4).
+- [x] **Confirmation dialog and toasts** (`components/admin/ui/`) replace every
+  `window.confirm` and `alert` in the admin.
+  - The admin's tests now answer the in-page dialog.
+  - The rest of the building blocks arrive with the first screen that uses
+    them, so each is tested on a real page:
+    - page header and switch: phase 1;
+    - fields, text areas and segmented control: phase 2;
+    - tabs, search, sort, badges, bulk selection, pagination and menu:
+      phase 3.
+- [x] **B1 and the checkout half of R4.**
+  - One `createCheckoutSession()` in `lib/stripe-checkout.ts` serves
+    `/api/stripe/checkout` and the waiting-list claim route.
+  - It charges the event's own currency, and passes the email and language.
+  - Return addresses come from the site's URL (or a preview's own), which
+    closes S4.
+  - Tested without Stripe: `tests/checkout-params.spec.ts`.
+- [x] **The rest of R4:**
+  - one `EMAIL_RE`;
+  - one `.env` parser (Node's `parseEnv`, in both places);
+  - the share-image colours from `lib/brand-colors.ts`, checked against the
+    CSS by `tests/brand-colors.spec.ts`;
+  - the CI comment kept once;
+  - the identical ternary gone;
+  - one route list, which now includes `/about`.
+- [x] **B29.** `updated_at` is kept current by a trigger, and the sitemap
+  reports it. Tested: `tests/updated-at.spec.ts`.
+- **Moved to later phases, where they are first used:** the bilingual kit
+  (phase 2) and `useAutosave` (phase 3).
 
 **New migrations**
 
-- `…_updated_at_triggers.sql`: the trigger function (not callable through the
-  API) and the triggers.
+- `20260924000000_updated_at_triggers.sql`: the trigger function (not callable
+  through the API) and its triggers.
+- `20260924000100_required_flags_and_timestamps.sql`: flags and timestamps
+  become `NOT NULL`.
 
-**Tests**
+**Found along the way**
 
-- A duplicate slug keeps the blog and event editors open and shows the message.
-- The sitemap date changes after an edit.
-- The claim checkout uses the event's currency. This is tested on the
-  parameters the shared function builds, so it runs without Stripe.
+Under row-level security, Postgres leaves a unique violation's `details` empty,
+so the admin never sees "Key (slug)=…". The error translator reads the
+constraint's name instead. The gotcha is now in CLAUDE.md.
 
 ### Phase 1: Admin shell and dashboard
 

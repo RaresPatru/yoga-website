@@ -56,7 +56,7 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
   const capacity = availability.capacity;
   if (capacity === null || capacity <= 0) return 0;
 
-  const freeSeats = capacity - availability.taken;
+  const freeSeats = capacity - (availability.taken ?? 0);
   if (freeSeats <= 0) return 0;
 
   /*

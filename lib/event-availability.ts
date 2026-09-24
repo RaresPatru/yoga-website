@@ -50,7 +50,8 @@ export async function eventAvailability(
     .in("event_id", eventIds);
 
   for (const row of rows ?? []) {
-    availability.set(row.event_id, { capacity: row.capacity, taken: row.taken });
+    if (!row.event_id) continue;
+    availability.set(row.event_id, { capacity: row.capacity, taken: row.taken ?? 0 });
   }
 
   return availability;

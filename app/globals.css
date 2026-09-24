@@ -885,6 +885,47 @@ body {
     white-space: pre;
   }
 
+  /*
+   * Admin toasts (components/admin/ui/toaster.tsx): a manual popover, so it
+   * sits in the top layer above open dialogs. The browser's own popover styles
+   * centre it on screen with a border and a background; this pins it to the
+   * bottom corner instead, clear of the phone's home indicator.
+   */
+  .admin-toasts {
+    position: fixed;
+    inset: auto 1rem calc(1rem + env(safe-area-inset-bottom, 0px)) auto;
+    width: min(24rem, calc(100vw - 2rem));
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  @media (max-width: 639px) {
+    .admin-toasts {
+      inset-inline: 1rem;
+      width: auto;
+    }
+  }
+
+  .admin-toast {
+    animation: admin-toast-in 200ms ease-out;
+  }
+
+  @keyframes admin-toast-in {
+    from {
+      opacity: 0;
+      translate: 0 0.5rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-toast {
+      animation: none;
+    }
+  }
+
 }
 
 @layer utilities {

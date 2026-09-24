@@ -1,20 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/database.types";
+import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
+import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useToast } from "@/components/admin/ui/toaster";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 
-interface Template {
-  id: string;
-  type: string;
-  subject_ro: string;
-  subject_en: string | null;
-  body_ro: string;
-  body_en: string | null;
-}
+type Template = Database["public"]["Tables"]["email_templates"]["Row"];
 
 const typeLabelKey: Record<string, string> = {
   registration_confirmation: "admin.registration_confirmation",
@@ -41,39 +38,52 @@ function labelFor(type: string, t: (key: string) => string): string {
 
 export default function AdminEmailsPage() {
   const { t } = useAdminLocale();
-  const [templates, setTemplates] = useState<Template[]>([]);
+  const toast = useToast();
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ subject_ro: "", subject_en: "", body_ro: "", body_en: "" });
-  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const { data: templates = [], loading, error: loadError, reload } = useAdminData(async () => {
     const supabase = createClient();
-    const { data } = await supabase.from("email_templates").select("*").order("type");
-    if (data) setTemplates(data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const supabase = createClient();
-    supabase.from("email_templates").select("*").order("type").then(({ data }) => {
-      if (cancelled) return;
-      if (data) setTemplates(data);
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
+    return must(await supabase.from("email_templates").select("*").order("type")) ?? [];
+  });
 
   const handleEdit = (tpl: Template) => {
     setEditing(tpl.id);
     setForm({ subject_ro: tpl.subject_ro, subject_en: tpl.subject_en || "", body_ro: tpl.body_ro, body_en: tpl.body_en || "" });
   };
 
+  /**
+   * Saves the template. On failure the editor stays open with the text (audit
+   * B5); English left blank is stored as NULL, which means "send the Romanian".
+   */
   const handleSave = async (type: string) => {
-    const supabase = createClient();
-    await supabase.from("email_templates").update(form).eq("type", type);
-    setEditing(null);
-    load();
+    if (!form.subject_ro.trim() || !form.body_ro.trim()) {
+      toast.error(t("admin.errors.missing"));
+      return;
+    }
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      must(
+        await supabase
+          .from("email_templates")
+          .update({
+            subject_ro: form.subject_ro,
+            subject_en: form.subject_en.trim() || null,
+            body_ro: form.body_ro,
+            body_en: form.body_en.trim() || null,
+          })
+          .eq("type", type)
+      );
+      toast.success(t("admin.toast.saved"));
+      setEditing(null);
+      void reload();
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -96,6 +106,8 @@ export default function AdminEmailsPage() {
         <div className="mt-8 flex justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
+      ) : loadError ? (
+        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
       ) : (
         <div className="mt-6 space-y-4">
           {templates.map((tpl) => (
@@ -124,7 +136,9 @@ export default function AdminEmailsPage() {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={() => handleSave(tpl.type)}>{t("admin.save")}</Button>
+                    <Button onClick={() => handleSave(tpl.type)} disabled={saving}>
+                      {saving ? t("admin.saving") : t("admin.save")}
+                    </Button>
                     <Button variant="ghost" onClick={() => setEditing(null)}>{t("admin.cancel")}</Button>
                   </div>
                 </div>
