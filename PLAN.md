@@ -19,6 +19,15 @@ What is left to do. Forward-looking only.
 
 ---
 
+## Now: the September 2026 overhaul
+
+A rebuild of the admin panel and several public pages, in twelve phases, is
+under way. Its plan, its decisions and its progress live in
+[docs/OVERHAUL.md](docs/OVERHAUL.md). Items below that the overhaul covers are
+marked there rather than here.
+
+---
+
 ## Status
 
 | | |
