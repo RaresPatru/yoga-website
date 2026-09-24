@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Input } from "@/components/ui/input";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
+import { PageHeader } from "@/components/admin/ui/page-header";
 
 interface Registration {
   id: string;
@@ -18,6 +20,7 @@ interface Registration {
 
 export default function AdminRegistrationsPage() {
   const { t } = useAdminLocale();
+  useDocumentTitle(t("admin.registrations"));
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -43,7 +46,7 @@ export default function AdminRegistrationsPage() {
   );
 
   const statusColor: Record<string, string> = {
-    free: "bg-sage/10 text-sage",
+    free: "bg-sage/10 text-sage-deep",
     completed: "bg-success/10 text-success",
     pending: "bg-warning/10 text-warning",
     refunded: "bg-error/10 text-error",
@@ -58,12 +61,12 @@ export default function AdminRegistrationsPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-charcoal">{t("admin.registrations")}</h1>
+      <PageHeader title={t("admin.registrations")} />
       <Input
         placeholder={t("admin.search_name_email")}
+        aria-label={t("admin.search_name_email")}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="mt-4"
       />
 
       {loading ? (

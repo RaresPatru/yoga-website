@@ -510,10 +510,11 @@ larger risk than the one it removes.
 ### The three signed-out `/admin` routes are an explicit list
 
 `proxy.ts` keeps `PUBLIC_ADMIN_ROUTES` as an exact set, not a prefix match, and
-`app/admin/layout.tsx` keeps the same three paths so they render without the
-sidebar. Two lists, deliberately: one decides what is *reachable*, the other
-what it *looks like*. A prefix match would have been shorter and would have
-exempted every future `/admin/...` page somebody added under a similar name.
+the same three pages live in the `app/admin/(auth)` route group, which renders
+them without the sidebar. Two lists, deliberately: one decides what is
+*reachable*, the other what it *looks like*. A prefix match would have been
+shorter and would have exempted every future `/admin/...` page somebody added
+under a similar name.
 
 `/admin/reset-password` has to be on that list for a reason that is easy to miss.
 Supabase returns the recovery token in the URL *fragment*
@@ -1209,3 +1210,84 @@ in EN mode each field shows the Romanian text as reference. If it proves awkward
 in use, the agreed fallback is **RO / EN tabs on each field's label**, where each
 field remembers its own tab. It has not been built. See
 [OVERHAUL.md](OVERHAUL.md#decisions) for the reasoning.
+
+### The panel's two halves are route groups, not a path check
+
+`app/admin/(auth)` holds the three sign-in pages and `app/admin/(panel)` holds
+everything else, inside the sidebar and top bar. The groups change no address.
+The shell used to be one client layout that compared the pathname against a list
+to decide whether to draw itself. Now the folder decides, and the panel's layout
+can be a server component, which is what lets it read the sidebar cookie below.
+`app/admin/layout.tsx` sits above both and provides what they share: her site
+name, the admin language, toasts and the confirmation dialog.
+
+### The sidebar pins on a cookie and widens over the page
+
+The toggle pins the sidebar wide (15rem, icons and labels) or narrow (4.5rem,
+icons only), and the choice is a cookie rather than `localStorage` because the
+server has to read it. Read in the browser, the page would draw the sidebar wide
+and then snap it narrow on every load. While it is pinned narrow, resting the
+pointer on it for 120 ms, or tabbing into it, widens its panel *over* the page:
+the panel is positioned inside the grid column rather than being the column, so
+the page does not move and nothing reflows under the pointer. Leaving narrows it
+again after 250 ms, which forgives a pointer slipping off the edge.
+
+The toggle is a toggle button with a name that stays put, "Bară laterală
+îngustă", and `aria-pressed`. A name that changed with the state ("Narrow the
+sidebar", "Widen the sidebar") on top of an expanded/pressed state would say
+the same thing twice. The tooltip says what pressing it will do.
+
+While the sidebar is narrow the labels are transparent, not removed, so every
+link keeps its accessible name. They are clipped by the list, not by the panel,
+so the toggle's tooltip can still reach over the page.
+
+### The phone drawer is a modal `<dialog>`, unlike the public site's
+
+The public site's drawer is a horizontal scroller you can swipe shut, because
+visitors on phones expect to swipe, and it took a long hunt to make reliable (the
+T10 fix in `components/layout/header.tsx`). The admin drawer is a `<dialog>`
+opened with `showModal()`. The browser then keeps focus inside it, closes it on
+Escape and makes the page behind it inert, with no code of ours to get wrong. She
+opens it occasionally and mostly with a tap, so the swipe was not worth a second
+copy of the hardest component on the site.
+
+It slides with `@starting-style` and discrete transitions of `display` and
+`overlay`. WebKit does not support `overlay` yet, so there the dialog leaves the
+top layer the moment it closes and finishes sliding out as an ordinary fixed
+element; a `z-index` keeps it above the page for those 250 ms.
+
+### Tab titles are set in the browser, and set again when Next.js overwrites them
+
+Every admin tab used to read the same title (audit B21). The panel's language
+lives in `localStorage`, so the server cannot title a page in it, and
+`useDocumentTitle()` sets "Evenimente · flow4ward Admin" from the page instead.
+Setting it once was not enough: on a full page load Next.js writes the layout's
+metadata title into `<title>` after the page's effect has run, which put
+"flow4ward Admin" back on every page opened from the address bar. The hook now
+watches the document and restores its title whenever something else changes it.
+`tests/admin-shell.spec.ts` checks the title a second after a full load.
+
+### Start and end instants are generated columns
+
+`events.starts_at` and `events.ends_at` are `generated always as (...) stored`
+from the four wall-clock columns, read in Europe/Bucharest. A trigger would work
+too, but a generated column cannot be written at all, so it can never disagree
+with the columns it comes from, and Postgres fills it in for existing rows when
+the column is added. The cost is that Supabase's generated types still offer the
+columns on insert and update, where Postgres refuses them: the events editor's
+`EventDraft` leaves them out, and any other writer must too. The same migration
+adds `events_ends_after_start`, which catches the one-day event ending before it
+starts that the older pair of checks let through. It is `not valid`, so it
+guards every new write without re-checking old rows, which could have blocked the
+migration on a stray test event in production.
+
+### The dashboard says sentences, not numbers
+
+Each row reads as a sentence with the right plural ("1 plată", "2 plăți",
+"20 de plăți"; `lib/admin/plural.ts`) and links to the list it counted, filtered.
+Rows for things waiting on her turn rose when there are any and say "Totul la
+zi" when there are none, so the eye lands only where she is needed. Live events
+and her own drafts are facts rather than tasks, so they stay neutral either way
+and say "Niciun eveniment activ" or "Nicio ciornă" at zero. The counts come from
+two admin-only `security_invoker` views, and a pending payment is defined once,
+per event, in `admin_event_overview`; the dashboard's total is its sum.

@@ -7,11 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
 
 function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useAdminLocale();
+  useDocumentTitle(t("admin.login_title"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

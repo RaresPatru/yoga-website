@@ -1,163 +1,43 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { AdminLocaleProvider, useAdminLocale } from "@/components/admin/locale-provider";
-import { Flag } from "@/components/ui/flag";
+import type { Metadata } from "next";
+import { getSiteName } from "@/lib/site-content";
+import { adminLabel } from "@/lib/admin/site-label";
+import { AdminLocaleProvider } from "@/components/admin/locale-provider";
 import { ToastProvider } from "@/components/admin/ui/toaster";
 import { ConfirmProvider } from "@/components/admin/ui/confirm-dialog";
-import {
-  LayoutDashboard,
-  FileText,
-  PenLine,
-  Calendar,
-  Users,
-  MessageSquare,
-  Mail,
-  Star,
-  LogOut,
-  Menu,
-  X,
-} from "lucide-react";
+import { AdminSiteProvider } from "@/components/admin/shell/admin-site";
 
-function AdminLayoutInner({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { locale, setLocale, t } = useAdminLocale();
+/**
+ * Everything under /admin, signed in or not.
+ *
+ * It provides what both halves need: her site name (read once here, on the
+ * server), the admin's language, toasts and the confirmation dialog. What each
+ * half looks like is decided one level down, by route group:
+ *
+ *   (auth)   sign in, forgot password, reset password: bare pages, because
+ *            every link in the sidebar leads somewhere proxy.ts would bounce a
+ *            signed-out visitor from.
+ *   (panel)  everything else, inside the sidebar and top bar
+ *            ((panel)/layout.tsx).
+ *
+ * The groups do not change any address. Which pages a signed-out visitor may
+ * reach is still decided by PUBLIC_ADMIN_ROUTES in proxy.ts.
+ */
 
-  const adminLinks = [
-    { href: "/admin", icon: LayoutDashboard, key: "dashboard" },
-    { href: "/admin/content", icon: PenLine, key: "content" },
-    { href: "/admin/blog", icon: FileText, key: "blog" },
-    { href: "/admin/events", icon: Calendar, key: "events" },
-    { href: "/admin/registrations", icon: Users, key: "registrations" },
-    { href: "/admin/testimonials", icon: Star, key: "testimonials" },
-    { href: "/admin/emails", icon: Mail, key: "emails" },
-    { href: "/admin/messages", icon: MessageSquare, key: "messages" },
-  ];
-
-  // Pages for someone who is *not* signed in. They render on their own, without
-  // the sidebar: every link in it leads somewhere proxy.ts would bounce them
-  // from, and a logout button is meaningless to a visitor with no session.
-  // Kept in step with PUBLIC_ADMIN_ROUTES in proxy.ts — that list decides what
-  // is reachable, this one decides what it looks like.
-  const isSignedOutPage = [
-    "/admin/login",
-    "/admin/forgot-password",
-    "/admin/reset-password",
-  ].includes(pathname);
-
-  // There used to be a useEffect here that fetched the session and redirected
-  // to /admin/login if it was missing. That check now lives in proxy.ts, which
-  // runs on the server before any HTML is sent. Doing it in the browser meant
-  // the admin shell was downloaded and rendered first, then torn down — a
-  // visible flash, and a spinner on every single page load. It was never a
-  // security control either: anyone can skip client-side JavaScript. The real
-  // protection is the RLS policies in the database.
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/admin/login");
-  };
-
-  if (isSignedOutPage) {
-    return <>{children}</>;
-  }
-
-  return (
-    <div className="flex min-h-screen bg-cream">
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 transform border-r border-sage/20 bg-white/80 backdrop-blur-xl transition-transform duration-300 lg:relative lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="flex h-16 items-center justify-between border-b border-sage/20 px-6">
-          <Link href="/admin" className="font-serif text-xl text-sage-dark">
-            Yoga Admin
-          </Link>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            aria-label={t("admin.close_menu")}
-            className="rounded-full p-1 text-charcoal-light hover:bg-white/40 lg:hidden"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-        <nav className="flex-1 space-y-1 p-4">
-          {adminLinks.map(({ href, icon: Icon, key }) => (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-colors",
-                pathname === href
-                  ? "bg-rose/10 text-rose-deep font-medium"
-                  : "text-charcoal-light hover:bg-white/40 hover:text-charcoal"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {t(`admin.${key}`)}
-            </Link>
-          ))}
-        </nav>
-        <div className="border-t border-sage/20 p-4">
-          {/*
-            Shows the language the panel is currently in, matching the public
-            switcher. It used to name the *other* language, which reads as a
-            label rather than as an action and left you pressing it to find out
-            which way round it was. The accessible name says what pressing it
-            does; the visible text says where you are.
-          */}
-          <button
-            onClick={() => setLocale(locale === "ro" ? "en" : "ro")}
-            aria-label={locale === "ro" ? "Switch to English" : "Treci la română"}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm text-charcoal-light transition-colors hover:bg-white/40 hover:text-charcoal mb-1"
-          >
-            <Flag code={locale === "ro" ? "RO" : "GB"} />
-            {locale === "ro" ? "Română" : "English"}
-          </button>
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm text-charcoal-light transition-colors hover:bg-white/40 hover:text-error"
-          >
-            <LogOut className="h-4 w-4" />
-            {t("admin.logout")}
-          </button>
-        </div>
-      </aside>
-
-      <div className="flex-1">
-        <header className="flex h-16 items-center gap-4 border-b border-sage/20 bg-white/40 px-6 backdrop-blur-sm">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            aria-label={t("admin.open_menu")}
-            className="rounded-full p-2 text-charcoal-light hover:bg-white/40 lg:hidden"
-          >
-            <Menu className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <h2 className="font-serif text-lg text-charcoal">{t("admin.dashboard")}</h2>
-        </header>
-        <main className="p-6">{children}</main>
-      </div>
-    </div>
-  );
+/** The tab title until a page sets its own ("Evenimente · flow4ward Admin"). */
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: adminLabel(await getSiteName()) };
 }
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const siteName = await getSiteName();
+
   return (
-    <AdminLocaleProvider>
-      <ToastProvider>
-        <ConfirmProvider>
-          <AdminLayoutInner>{children}</AdminLayoutInner>
-        </ConfirmProvider>
-      </ToastProvider>
-    </AdminLocaleProvider>
+    <AdminSiteProvider siteName={siteName}>
+      <AdminLocaleProvider>
+        <ToastProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </ToastProvider>
+      </AdminLocaleProvider>
+    </AdminSiteProvider>
   );
 }

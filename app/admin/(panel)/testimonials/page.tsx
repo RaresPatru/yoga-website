@@ -12,12 +12,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, X } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
+import { PageHeader } from "@/components/admin/ui/page-header";
 
 /** One testimonial. `rating` is an optional 1-5; NULL means unrated, and no stars are drawn. */
 type Testimonial = Database["public"]["Tables"]["testimonials"]["Row"];
 
 export default function AdminTestimonialsPage() {
   const { t, locale } = useAdminLocale();
+  useDocumentTitle(t("admin.testimonials"));
   const ro = locale === "ro";
   const toast = useToast();
   const confirm = useConfirm();
@@ -94,24 +97,24 @@ export default function AdminTestimonialsPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-charcoal">{t("admin.testimonials")}</h1>
+      <PageHeader title={t("admin.testimonials")} />
 
       {loading ? (
-        <div className="mt-8 flex justify-center">
+        <div className="flex justify-center py-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : loadError ? (
-        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
+        <p role="alert" className="text-error">{t(adminErrorKey(loadError))}</p>
       ) : testimonials.length === 0 ? (
-        <p className="mt-6 text-charcoal-light">{t("admin.no_testimonials")}</p>
+        <p className="text-charcoal-light">{t("admin.no_testimonials")}</p>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
           {testimonials.map((testimonial) => (
             <GlassCard key={testimonial.id} hover={false}>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-sage/10 px-2 py-0.5 text-xs text-sage">
+                    <span className="rounded-full bg-sage/10 px-2 py-0.5 text-xs text-sage-deep">
                       {testimonial.type}
                     </span>
                     {testimonial.approved ? (

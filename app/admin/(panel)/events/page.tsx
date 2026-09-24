@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
 import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useNewFromLink } from "@/lib/admin/use-new-from-link";
 import { useToast } from "@/components/admin/ui/toaster";
 import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { getAuthToken } from "@/lib/get-auth-token";
@@ -13,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Edit2, Trash2, Users, X, Loader2, Languages, Info } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
+import { PageHeader } from "@/components/admin/ui/page-header";
 import { WhatsappLinkField } from "@/components/admin/whatsapp-link-field";
 import { CURRENCIES, CURRENCY_SYMBOLS, DEFAULT_CURRENCY, formatPrice } from "@/lib/money";
 
@@ -25,8 +28,17 @@ type SpellcheckLang = "ro" | "en" | "off";
  */
 type Event = Database["public"]["Tables"]["events"]["Row"];
 
-/** What the form hands back to be saved: the editable columns, plus the id when the event exists. */
-type EventDraft = Omit<Event, "id" | "created_at" | "updated_at"> & { id?: string };
+/**
+ * What the form hands back to be saved: the editable columns, plus the id when
+ * the event exists. `starts_at` and `ends_at` are left out because Postgres
+ * computes them and refuses a write to either (20260924000200_event_bounds.sql);
+ * `show_in_archive` because this form has no control for it yet, so a save
+ * leaves it as it was.
+ */
+type EventDraft = Omit<
+  Event,
+  "id" | "created_at" | "updated_at" | "starts_at" | "ends_at" | "show_in_archive"
+> & { id?: string };
 
 interface WaitingEntry {
   id: string;
@@ -269,11 +281,16 @@ function EventForm({
     /*
      * An end before its start is the one combination worth stopping here.
      *
-     * The database refuses it too — see `events_end_not_before_start` — but a
-     * constraint violation surfaces as a failed save with no explanation, and
-     * she would be left guessing which of four fields it meant. `min` on the
-     * input catches most of it, and is advisory because there is no <form> to
-     * run native validation.
+     * The database refuses it too (`events_ends_after_start`, in
+     * 20260924000200_event_bounds.sql), but a constraint violation surfaces as
+     * a failed save with no explanation, and she would be left guessing which
+     * of four fields it meant. `min` on the input catches most of it, and is
+     * advisory because there is no <form> to run native validation.
+     *
+     * The rule is the database's, in the same terms: a blank end date means the
+     * event ends on the day it starts, and a blank start time counts as
+     * midnight. So 18:00 to 10:00 on one day is refused whether or not she
+     * filled in the end date.
      *
      * Everything else about these four is allowed to be blank. Blank is a real
      * answer: she has not announced it yet.
@@ -281,14 +298,11 @@ function EventForm({
     const endDate = form.end_date.trim() || null;
     const endTime = form.end_time.trim() || null;
     const startTime = form.time.trim() || null;
+    const lastDay = endDate ?? form.date;
 
     const endsBeforeStart =
-      (endDate !== null && endDate < form.date) ||
-      (endDate !== null &&
-        endDate === form.date &&
-        startTime !== null &&
-        endTime !== null &&
-        endTime <= startTime);
+      lastDay < form.date ||
+      (lastDay === form.date && endTime !== null && endTime <= (startTime ?? "00:00"));
 
     if (endsBeforeStart) {
       setEndError(t("admin.end_before_start"));
@@ -588,10 +602,13 @@ function EventForm({
 
 export default function AdminEventsPage() {
   const { t, locale } = useAdminLocale();
+  useDocumentTitle(t("admin.events"));
   const toast = useToast();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<Event | null>(null);
-  const [creating, setCreating] = useState(false);
+  // The dashboard's "Eveniment nou" opens this page with the empty form showing.
+  const openedForNew = useNewFromLink();
+  const [creating, setCreating] = useState(openedForNew);
   const [waitingFor, setWaitingFor] = useState<Event | null>(null);
   /*
    * How many claim links the last save sent, when it sent any.
@@ -705,12 +722,14 @@ export default function AdminEventsPage() {
         <WaitingListModal event={waitingFor} onClose={() => setWaitingFor(null)} />
       )}
 
-      <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl text-charcoal">{t("admin.events")}</h1>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="mr-2 h-4 w-4" /> {t("admin.new_event")}
-        </Button>
-      </div>
+      <PageHeader
+        title={t("admin.events")}
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> {t("admin.new_event")}
+          </Button>
+        }
+      />
 
       {notified !== null && (
         // `role="status"` rather than `alert`: this is the outcome of something
@@ -718,7 +737,7 @@ export default function AdminEventsPage() {
         // screen reader is already saying rather than cutting across it.
         <div
           role="status"
-          className="mt-6 flex items-start justify-between gap-4 rounded-xl border border-sage/30 bg-sage/10 px-4 py-3 text-sm text-charcoal"
+          className="mb-6 flex items-start justify-between gap-4 rounded-xl border border-sage/30 bg-sage/10 px-4 py-3 text-sm text-charcoal"
         >
           <span>{t("admin.waiting_list_notified").replace("{count}", String(notified))}</span>
           <button
@@ -733,15 +752,15 @@ export default function AdminEventsPage() {
       )}
 
       {loading ? (
-        <div className="mt-8 flex justify-center">
+        <div className="flex justify-center py-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : loadError ? (
-        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
+        <p role="alert" className="text-error">{t(adminErrorKey(loadError))}</p>
       ) : events.length === 0 ? (
-        <p className="mt-8 text-charcoal-light">{t("admin.no_events")}</p>
+        <p className="text-charcoal-light">{t("admin.no_events")}</p>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
           {events.map((event) => {
             const c = counts[event.id];
             return (

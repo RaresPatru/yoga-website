@@ -20,7 +20,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | Phase | What it delivers | State |
 |---|---|---|
 | 0 | Groundwork: error handling, typed database, checkout fix, shared pieces | done, 24 Sep |
-| 1 | Admin shell (sticky collapsible sidebar) and the dashboard | not started |
+| 1 | Admin shell (sticky collapsible sidebar) and the dashboard | done, 24 Sep |
 | 2 | Site content, one-switch bilingual editing, public copy and legal pages | not started |
 | 3 | Blog: toolbar, post list, editor, public cards and article | not started |
 | 4 | Events: admin list and editor, per-event numbers, public archive | not started |
@@ -89,6 +89,19 @@ Rares can overturn any of these.
 - **Legal pages are editable in the admin.** I draft them in both languages and
   mark every fact only she can supply as a visible placeholder. A lawyer should
   read them once before launch.
+- **The sidebar's order** follows what she reaches for most: Panou de control,
+  Evenimente, Înscrieri, Mesaje, Testimoniale, Articole, Email-uri, Conținut
+  site. It used to put Conținut site second.
+- **"Totul la zi" is for things waiting on her**: payments, messages and
+  testimonials. Live events and her own drafts are facts rather than tasks, so
+  at zero they say "Niciun eveniment activ" and "Nicio ciornă", and they never
+  turn rose.
+- **The admin's phone menu is a modal dialog**, not a copy of the public site's
+  swipeable drawer. The browser handles focus and Escape, and she mostly taps.
+  [DECISIONS.md](DECISIONS.md#the-phone-drawer-is-a-modal-dialog-unlike-the-public-sites)
+  has the reasoning.
+- **English labels are in sentence case**: "Blog posts", "New event",
+  "Log out".
 
 ---
 
@@ -324,50 +337,106 @@ constraint's name instead. The gotcha is now in CLAUDE.md.
 
 ### Phase 1: Admin shell and dashboard
 
-- [ ] **Route groups.** `app/admin/(auth)/…` holds the bare sign-in pages and
-  `app/admin/(panel)/…` holds the shell. The panel layout is a server
-  component. It reads the remembered sidebar state from a cookie, so the page
-  never flashes the wrong width.
-- [ ] **The sidebar on desktop.**
-  - It sticks: full height, and it never scrolls away.
-  - Expanded it is 15 rem wide; the icon rail is 4.5 rem.
-  - The toggle at the top uses Rares' two icons, in place of "Yoga Admin".
-  - When pinned narrow, hovering or keyboard focus opens it over the content
-    after a short pause, and it closes again when the pointer leaves.
-  - Only the toggle pins it.
-  - It marks the current page, handles keyboard use, and animates only for
-    people who haven't turned animations off.
-- [ ] **The top bar** shows "flow4ward Admin" (her site name), a link to the
-  public site in a new tab, and the admin language switch.
-- [ ] **On phones** the top bar has a menu button that opens the same
-  navigation in a modal drawer: focus stays inside, and Escape or a tap
-  outside closes it.
-- [ ] **Every page has its own heading and tab title**, such as
-  "Evenimente · flow4ward Admin" (B21, B32).
-- [ ] **The dashboard** works as a notification area and secondary navigation:
-  - Events: published and not yet ended.
-  - Registrations: payments pending on paid events.
-  - Blog: drafts.
-  - Messages: unread.
-  - Testimonials: awaiting approval.
+**Built 24 September 2026.** The full suite passed on a production build: 448
+passed, 11 skipped, none failed. Four event-timing tests written during that run
+passed on their own afterwards (`admin-events.spec.ts`, 18 of 18).
 
-  Each card opens the list already filtered. Zero reads "Totul la zi", which
-  means all caught up. Below the cards:
-  - a panel for the next event: date, seats, and its pending numbers
-  - quick actions: new event and new post
+- [x] **Route groups.** `app/admin/(auth)/…` holds the three sign-in pages,
+  without the sidebar. `app/admin/(panel)/…` holds everything else inside the
+  shell. The panel layout is a server component that reads the sidebar cookie,
+  so the page never flashes the wrong width. `app/admin/layout.tsx`, above
+  both, reads her site name once and provides the language, toasts and
+  confirmations.
+- [x] **The sidebar on desktop.**
+  - It sticks: full height, and it never scrolls away.
+  - Wide it is 15 rem; the icon rail is 4.5 rem.
+  - The toggle at the top uses Rares' two icons, in place of "Yoga Admin"
+    (B32).
+  - Pinned narrow, it widens over the page when the pointer rests on it
+    (120 ms) or keyboard focus enters it, and narrows 250 ms after the pointer
+    leaves. The page underneath does not move.
+  - Only the toggle pins it, and a cookie remembers the choice for a year.
+  - It marks the current page, starts with a skip link, and animates only for
+    people who haven't turned animations off.
+- [x] **The top bar** shows "flow4ward Admin" from her site name, "Vezi
+  site-ul" opening the public site in a new tab, and the language switch.
+- [x] **On phones** a menu button in the top bar opens the same links in a
+  modal drawer. Focus stays inside; the close button, Escape, a tap outside
+  or following a link closes it.
+- [x] **Every page has its own heading and tab title** (B21), such as
+  "Evenimente · flow4ward Admin". The heading repeats the sidebar's label word
+  for word: "Articole" rather than "Articole Blog", "Email-uri" rather than
+  "Template-uri Email".
+- [x] **The dashboard** works as a notification area and secondary navigation.
+  Each row is a sentence with the right plural form, and each is a link:
+  - Evenimente: published and not yet ended.
+  - Înscrieri: payments pending, still inside the one-hour hold.
+  - Mesaje: unread and not archived.
+  - Testimoniale: awaiting approval.
+  - Articole: drafts.
+
+  Rows for things waiting on her turn rose, and read "Totul la zi" at zero.
+  Below them:
+  - the next event, meaning the soonest that hasn't ended: its date, how soon
+    it is, seats taken, people on the waiting list, payments pending, and a
+    link to its public page
+  - quick actions: "Eveniment nou" and "Articol nou" open the empty forms
+- [ ] **Each row opens its list already filtered.** The links carry their filter
+  now (`?status=pending`, `?filter=unread`, `?tab=pending`,
+  `?tab=drafts`). Each list applies it when its own phase rebuilds it, and
+  those phases list it.
 
 **New migrations**
 
-- `…_event_bounds.sql`: `starts_at`/`ends_at`, computed by Postgres from the
-  date and times (Europe/Bucharest), plus `show_in_archive`.
-- `…_message_state.sql`: `read_at`, `starred`, `archived_at` and `locale`.
+- `20260924000200_event_bounds.sql`:
+  - `starts_at` and `ends_at`, generated by Postgres from the date and times
+    in Europe/Bucharest, which nothing can write directly
+  - `show_in_archive`
+  - `events_ends_after_start` (see below)
+- `20260924000300_message_state.sql`: `read_at`, `starred`, `archived_at`
+  and `locale`.
+- `20260924000400_admin_dashboard.sql`: the admin-only views
+  `admin_event_overview` (per event: people waiting, payments pending) and
+  `admin_dashboard` (the five counts).
 
 **Tests**
 
-- `admin-shell.spec.ts`: the sidebar stays in view on long pages; collapsing
-  survives a reload; hover opens and leaving closes; the phone drawer works.
-- `admin-dashboard.spec.ts` is rewritten to check each count's rule: an ended
-  event isn't counted, a draft is, and so on.
+- `admin-shell.spec.ts` (new):
+  - the sidebar stays in view at the bottom of a long page
+  - pinned narrow survives a reload and keeps its link names
+  - hover and keyboard focus widen it over the page
+  - the current page is marked
+  - every section's heading and tab title, including after a full load
+  - the top bar and the skip link
+- `admin-mobile.spec.ts` (new), in a new `admin-mobile` project on iPhone
+  WebKit: no sidebar and no sideways scroll; the drawer's links; every way of
+  closing it.
+- `admin-dashboard.spec.ts` is rewritten:
+  - each count's rule, as a difference, so other specs' rows don't matter
+  - every plural form, in both languages
+  - the rows' links
+  - the next event and its numbers
+  - the quick actions
+  - visitors can't read either view
+- `plural.spec.ts` (new): Romanian's three forms, including 101 to 119.
+- `admin-login.spec.ts`: the sign-in page's tab title.
+
+**Found along the way**
+
+- **An event could end before it started.** The old checks only compared
+  times when the end date was filled in, so a one-day event from 18:00 to 10:00
+  saved without complaint, and it would have counted as over before it began.
+  `events_ends_after_start` now compares the two instants, and the editor
+  checks the same rule before saving.
+- **Next.js put the generic tab title back.** On a full page load it writes
+  the layout's title after the page has set its own. `useDocumentTitle()`
+  now restores the page's title whenever something changes it.
+- **B30, the rest of it:** the "Gratuit" and "Aprobat" badges were light sage
+  text, about 2:1, and are now the deep sage. The registrations search box had
+  no label, and now has one.
+- **The admin announces its language.** `<html lang>` used to say Romanian
+  even when the panel was in English, so a screen reader read English with
+  Romanian pronunciation. It now follows the panel's language.
 
 ### Phase 2: Site content, bilingual editing, public copy, legal pages
 
@@ -492,7 +561,10 @@ constraint's name instead. The gotcha is now in CLAUDE.md.
   - Compact rows: thumbnail, title and subtitle, status, a marker for
     unpublished changes, and when it was last edited.
   - A readable width, 25 per page, and the whole state kept in the address.
-- [ ] **The editor** at `/admin/blog/new` and `/admin/blog/[id]`:
+  - It opens on the Ciorne tab when the dashboard's link says `?tab=drafts`.
+- [ ] **The editor** at `/admin/blog/new` and `/admin/blog/[id]`. The
+  dashboard's "Articol nou" links there, and the `?new=1` stopgap
+  (`lib/admin/use-new-from-link.ts`) goes.
   - **A sticky bar** with:
     - Back
     - the save status
@@ -576,7 +648,11 @@ constraint's name instead. The gotcha is now in CLAUDE.md.
     refunded.
   - Each number opens Registrations filtered to that event.
   - The waitlist modal is removed.
-- [ ] **The editor** uses the same frame as the blog editor. Its sections:
+  - *Upcoming* is the tab it opens on, which is what the dashboard's Evenimente
+    row counts.
+- [ ] **The editor** uses the same frame as the blog editor, at
+  `/admin/events/new` and `/admin/events/[id]`. The dashboard's "Eveniment
+  nou" and its next-event panel link there. Its sections:
   - basics
   - when
   - where
@@ -595,7 +671,8 @@ constraint's name instead. The gotcha is now in CLAUDE.md.
     hide any event from it.
   - A past event's page says it has ended, shows no booking form, and lists
     that event's testimonials.
-  - The share image no longer fails for events without a start time (B8).
+  - The share image no longer fails for events without a start time (B8):
+    done early, in phase 0.
 
 **New migrations**
 
@@ -620,6 +697,8 @@ constraint's name instead. The gotcha is now in CLAUDE.md.
   - Filters: free, paid, payment pending, refund requested, refunded,
     waitlist, offer sent, removed, and by event.
   - 50 per page.
+  - It opens filtered when the address says so: `?status=pending` from the
+    dashboard, `?event=<id>` from an event's numbers.
   - **Archiving rule.** A participant is archived when removed, or once their
     event has ended with nothing pending. Waiting-list entries archive when
     the event ends.
@@ -675,7 +754,8 @@ constraint's name instead. The gotcha is now in CLAUDE.md.
 ### Phase 6: Testimonials and verified reviews
 
 - [ ] **The admin section.**
-  - Tabs: *To approve*, *Approved*, *Hidden*.
+  - Tabs: *To approve*, *Approved*, *Hidden*, opened on *To approve* by the
+    dashboard's `?tab=pending`.
   - Each card shows:
     - the full name
     - the event and its date
@@ -780,6 +860,7 @@ constraint's name instead. The gotcha is now in CLAUDE.md.
 
 - [ ] **The inbox:**
   - Tabs: *Inbox* · *Starred* · *Archive*, with an Unread filter and search.
+    The dashboard's `?filter=unread` opens the Inbox with the filter on.
   - Select one, many or all, then mark read or unread, star, archive or
     delete (with confirmation).
 - [ ] **The letter view.** On desktop the list and the letter sit side by

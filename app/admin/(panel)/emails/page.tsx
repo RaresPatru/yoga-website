@@ -10,6 +10,8 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
+import { PageHeader } from "@/components/admin/ui/page-header";
 
 type Template = Database["public"]["Tables"]["email_templates"]["Row"];
 
@@ -38,6 +40,7 @@ function labelFor(type: string, t: (key: string) => string): string {
 
 export default function AdminEmailsPage() {
   const { t } = useAdminLocale();
+  useDocumentTitle(t("admin.emails"));
   const toast = useToast();
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ subject_ro: "", subject_en: "", body_ro: "", body_en: "" });
@@ -88,8 +91,8 @@ export default function AdminEmailsPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-charcoal">{t("admin.email_templates")}</h1>
-      <p className="mt-2 text-sm text-charcoal-light">
+      <PageHeader title={t("admin.emails")} />
+      <p className="text-sm text-charcoal-light">
         {t("admin.available_variables")} <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}user_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_name{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_date{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_time{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}event_location{'}'}{'}'}</code>, <code className="rounded bg-white/60 px-1 text-xs">{'{'}{'{'}whatsapp_link{'}'}{'}'}</code>
       </p>
       {/*

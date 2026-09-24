@@ -10,11 +10,14 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
+import { PageHeader } from "@/components/admin/ui/page-header";
 
 type Message = Database["public"]["Tables"]["contact_messages"]["Row"];
 
 export default function AdminContactMessagesPage() {
   const { t } = useAdminLocale();
+  useDocumentTitle(t("admin.messages"));
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -47,18 +50,18 @@ export default function AdminContactMessagesPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-charcoal">{t("admin.messages")}</h1>
+      <PageHeader title={t("admin.messages")} />
 
       {loading ? (
-        <div className="mt-8 flex justify-center">
+        <div className="flex justify-center py-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : loadError ? (
-        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
+        <p role="alert" className="text-error">{t(adminErrorKey(loadError))}</p>
       ) : messages.length === 0 ? (
-        <p className="mt-6 text-charcoal-light">{t("admin.no_messages")}</p>
+        <p className="text-charcoal-light">{t("admin.no_messages")}</p>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
           {messages.map((m) => (
             <GlassCard key={m.id} hover={false}>
               <div className="flex items-start justify-between">

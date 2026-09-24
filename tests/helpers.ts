@@ -317,7 +317,7 @@ export async function tryInsertEvent(
 export async function eventsBySlug(slug: string) {
   const { data } = await (await adminScoped())
     .from("events")
-    .select("id, slug, price, currency, max_participants, time, end_date, end_time")
+    .select("id, slug, price, currency, max_participants, time, end_date, end_time, starts_at, ends_at")
     .eq("slug", slug);
   return data ?? [];
 }
@@ -528,4 +528,67 @@ export async function seedWaitingEntry(
     .single();
   if (error) throw new Error(`seedWaitingEntry failed: ${error.message}`);
   return (data as { id: string }).id;
+}
+
+/** The dashboard's five counts, read as the admin: the view applies her row policies. */
+export interface DashboardCounts {
+  active_events: number;
+  pending_payments: number;
+  draft_posts: number;
+  unread_messages: number;
+  pending_testimonials: number;
+}
+
+export async function dashboardCounts(): Promise<DashboardCounts> {
+  const { data, error } = await (await adminScoped()).from("admin_dashboard").select("*").single();
+  if (error) throw new Error(`dashboardCounts failed: ${error.message}`);
+  return data as DashboardCounts;
+}
+
+/** What is waiting on one event: the admin_event_overview row the dashboard reads. */
+export async function eventOverview(
+  eventId: string
+): Promise<{ waiting: number; pending_payments: number }> {
+  const { data, error } = await (await adminScoped())
+    .from("admin_event_overview")
+    .select("waiting, pending_payments")
+    .eq("event_id", eventId)
+    .single();
+  if (error) throw new Error(`eventOverview failed: ${error.message}`);
+  return data as { waiting: number; pending_payments: number };
+}
+
+/**
+ * A message as the contact form leaves it. Written with the service key, as
+ * app/api/contact/route.ts writes it.
+ */
+export async function seedMessage(overrides: Record<string, unknown> = {}): Promise<string> {
+  const { data, error } = await (await serviceClient())
+    .from("contact_messages")
+    .insert({
+      name: `Vizitator E2E ${unique("n")}`,
+      email: `msg-${unique("m")}@example.com`,
+      subject: "Mesaj E2E",
+      message: "Un mesaj de test, trimis de suita E2E.",
+      ...overrides,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedMessage failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+export async function deleteMessages(ids: string[]) {
+  const { error } = await (await serviceClient()).from("contact_messages").delete().in("id", ids);
+  if (error) throw new Error(`deleteMessages failed: ${error.message}`);
+}
+
+/** A date `days` from today in Bucharest, as YYYY-MM-DD (negative for the past). */
+export function bucharestDate(days: number): string {
+  // en-CA formats as YYYY-MM-DD. Noon keeps the arithmetic clear of the hour
+  // the clocks change.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Bucharest" }).format(new Date());
+  const date = new Date(`${today}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }

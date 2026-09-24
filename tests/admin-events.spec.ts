@@ -173,6 +173,29 @@ test.describe("admin events CRUD", () => {
     expect(await eventsBySlug(slug), "nothing was written").toHaveLength(0);
   });
 
+  /**
+   * The same slip with the end date left blank, which means the event ends on
+   * the day it starts. The older checks compared times only when an end date
+   * was filled in, so this one used to save, and the event counted as over
+   * before it began.
+   */
+  test("an end time before the start time is refused when the end date is blank", async ({ page }) => {
+    slug = unique("eveniment-fara-final");
+    title = `Eveniment Fără Dată De Final ${slug}`;
+
+    await page.goto("/admin/events");
+    await page.getByRole("button", { name: "Eveniment Nou" }).click();
+    await page.getByLabel("Titlu (RO)").fill(title);
+    await page.getByLabel("Slug").fill(slug);
+    await page.getByLabel("Data", { exact: true }).fill("2099-01-15");
+    await page.getByLabel("Ora", { exact: true }).fill("18:00");
+    await page.getByLabel("Ora de final").fill("10:00");
+    await page.getByRole("button", { name: "Salvează" }).click();
+
+    await expect(page.getByText("Finalul nu poate fi înaintea începutului.")).toBeVisible();
+    expect(await eventsBySlug(slug), "nothing was written").toHaveLength(0);
+  });
+
   test("waiting list modal shows seeded entries and closes", async ({ page }) => {
     const event = await seedEvent({ published: false });
     slug = event.slug;
@@ -214,6 +237,49 @@ test.describe("admin events CRUD", () => {
  * refused. Testing the form's `min` attribute would prove only that the
  * attribute is spelled correctly.
  */
+/**
+ * starts_at and ends_at (supabase/migrations/20260924000200_event_bounds.sql):
+ * instants Postgres computes from the wall-clock columns, in Bucharest time.
+ */
+test.describe("when an event starts and ends", () => {
+  test("they are instants in Bucharest time, daylight saving included", async () => {
+    const summer = await seedEvent({ date: "2099-07-01", time: "10:00", end_time: "12:30", published: false });
+    const winter = await seedEvent({ date: "2099-01-15", time: "10:00", end_time: null, published: false });
+    try {
+      const [s] = await eventsBySlug(summer.slug);
+      expect(new Date(s.starts_at).toISOString()).toBe("2099-07-01T07:00:00.000Z");
+      expect(new Date(s.ends_at).toISOString()).toBe("2099-07-01T09:30:00.000Z");
+
+      const [w] = await eventsBySlug(winter.slug);
+      expect(new Date(w.starts_at).toISOString()).toBe("2099-01-15T08:00:00.000Z");
+      // No end time: it runs to midnight after its last day.
+      expect(new Date(w.ends_at).toISOString()).toBe("2099-01-15T22:00:00.000Z");
+    } finally {
+      await deleteEventBySlug(summer.slug);
+      await deleteEventBySlug(winter.slug);
+    }
+  });
+
+  test("nothing can write them directly", async () => {
+    const { error, slug } = await tryInsertEvent({ ends_at: "2099-01-01T00:00:00Z" });
+    try {
+      expect(error?.message ?? "").toContain("ends_at");
+    } finally {
+      await deleteEventBySlug(slug);
+    }
+  });
+
+  test("the database refuses an event that ends before it starts", async () => {
+    // One day, no end date, and an end time before the start time.
+    const { error, slug } = await tryInsertEvent({ time: "18:00", end_time: "10:00" });
+    try {
+      expect(error?.message ?? "").toContain("events_ends_after_start");
+    } finally {
+      await deleteEventBySlug(slug);
+    }
+  });
+});
+
 test.describe("event money and capacity constraints", () => {
   test("a negative price is rejected by the database", async () => {
     const { error, slug } = await tryInsertEvent({ price: -50 });

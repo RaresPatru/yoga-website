@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
 import { buttonClasses } from "@/lib/button-styles";
 
 /**
@@ -16,6 +17,7 @@ import { buttonClasses } from "@/lib/button-styles";
  */
 export default function ForgotPasswordPage() {
   const { t } = useAdminLocale();
+  useDocumentTitle(t("admin.forgot_title"));
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);

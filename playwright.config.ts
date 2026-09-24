@@ -135,10 +135,24 @@ export default defineConfig({
       // Admin panel, already authenticated via the saved session.
       name: "admin",
       dependencies: ["setup"],
-      testMatch: /admin-(?!login).*\.spec\.ts/,
+      testMatch: /admin-(?!login|mobile).*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 800 },
+        storageState: ADMIN_STATE,
+      },
+    },
+    {
+      // The admin panel on a phone. She uses it at a computer most of the
+      // time and on her iPhone some of the time, so the phone layout (the
+      // drawer in place of the sidebar) gets WebKit, the engine that phone
+      // runs. Only admin-mobile.spec.ts runs here; every other admin spec
+      // drives the desktop layout.
+      name: "admin-mobile",
+      dependencies: ["setup"],
+      testMatch: /admin-mobile\.spec\.ts/,
+      use: {
+        ...devices["iPhone 14"],
         storageState: ADMIN_STATE,
       },
     },
@@ -154,9 +168,10 @@ export default defineConfig({
       //
       // Sequencing it fixes the coupling without weakening sign-out: "log me
       // out everywhere" is the behaviour you want from an admin panel if a
-      // device goes missing.
+      // device goes missing. The phone project shares the same session, so
+      // this waits for it too.
       name: "admin-auth",
-      dependencies: ["admin"],
+      dependencies: ["admin", "admin-mobile"],
       testMatch: /admin-login\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
     },
@@ -167,11 +182,10 @@ export default defineConfig({
       // this much closer to the typical visitor than desktop Chrome ever was.
       name: "mobile",
       use: { ...devices["iPhone 14"] },
-      // Public pages only. The admin panel is a desktop tool the instructor
-      // uses at a computer, and its layout collapses the sidebar below `lg`,
-      // so running those specs here would test a screen nobody administers
-      // from. The sanitizer runs on the server, so no engine changes what it
-      // does; the chromium project covers it once.
+      // Public pages only. The admin panel's phone layout has its own project
+      // above (admin-mobile), signed in; the rest of the admin specs drive the
+      // desktop layout. The sanitizer runs on the server, so no engine changes
+      // what it does; the chromium project covers it once.
       testIgnore: [
         /auth\.setup\.ts/,
         /admin-.*\.spec\.ts/,
@@ -180,6 +194,7 @@ export default defineConfig({
         /brand-colors\.spec\.ts/,
         /checkout-params\.spec\.ts/,
         /updated-at\.spec\.ts/,
+        /plural\.spec\.ts/,
       ],
     },
   ],

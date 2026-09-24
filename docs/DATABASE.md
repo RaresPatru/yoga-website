@@ -43,11 +43,11 @@ because only one of the two was done.
 
 | Table | Holds | anon | Touched by |
 |---|---|---|---|
-| `events` | Classes, workshops, retreats. The central table. | `select` where `published` | `app/[locale]/events/*`, `app/admin/events` |
-| `blog_posts` | Articles. | `select` where `published and not hidden` | `app/[locale]/blog/*`, `app/admin/blog` |
+| `events` | Classes, workshops, retreats. The central table. | `select` where `published` | `app/[locale]/events/*`, `app/admin/(panel)/events` |
+| `blog_posts` | Articles. | `select` where `published and not hidden` | `app/[locale]/blog/*`, `app/admin/(panel)/blog` |
 | `testimonials` | Attendee feedback. | `select` where `approved` | home + testimonials pages, `/api/testimonials` |
-| `site_content` | Key/value page copy the instructor edits. | `select` (all) | `lib/site-content.ts`, `app/admin/content` |
-| `faqs` | Questions on the home page. | `select` where `published` | home page, `app/admin/content` |
+| `site_content` | Key/value page copy the instructor edits. | `select` (all) | `lib/site-content.ts`, `app/admin/(panel)/content` |
+| `faqs` | Questions on the home page. | `select` where `published` | home page, `app/admin/(panel)/content` |
 | `event_availability` | **View.** `(event_id, capacity, taken)`. | `select` | every page showing seat counts |
 
 ### Private — admins only, no public policy in either direction
@@ -62,6 +62,8 @@ because only one of the two was done.
 | `whatsapp_links` | Saved invite URLs. | **A URL is a capability** | `/admin/events` |
 | `admins` | Who may enter `/admin`. | Revoked from everyone; read only by `is_admin()` | by hand |
 | `profiles` | Extra auth fields. | Vestigial — see below | nothing |
+| `admin_dashboard` | **View.** One row: the dashboard's five counts. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
+| `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 
 `whatsapp_links` is the only table on this schema that is admin-only for
 *reading* as well as writing. Anyone holding a WhatsApp invite URL can join the
@@ -70,6 +72,28 @@ group, so it is a secret, not a piece of content.
 `profiles` is unused. The site has no public sign-up — only the instructor's
 admin account — so nothing queries it. It stays because `registrations.user_id`
 and `testimonials.user_id` have foreign keys into it.
+
+The two `admin_*` views (`20260924000400_admin_dashboard.sql`) are
+`security_invoker`, the opposite of `event_availability` below: they run with
+the permissions of whoever asks, so the admin-only row policies underneath still
+decide what they count. Anyone signed in who is not the admin would see only the
+published events and zero for everything else, and `anon` has no grant at all.
+A pending payment is defined once, per event, in `admin_event_overview`, and the
+dashboard's total is its sum.
+
+**When an event starts and ends.** `events.starts_at` and `events.ends_at` are
+generated columns (`20260924000200_event_bounds.sql`): Postgres computes them
+from `date`, `time`, `end_date` and `end_time` in Europe/Bucharest and refuses
+any write to them. A blank start time counts as midnight; a blank end time means
+the event runs to the end of its last day. Supabase's generated types do not
+know they are read-only, so a writer that spreads a whole row into an update
+must leave them out. `events_ends_after_start` requires the end to come after
+the start (added `not valid`: enforced on every write from then on, without
+re-checking old rows). `show_in_archive` decides whether a past event is listed
+in the public archive.
+
+**Message state.** `contact_messages` gained `read_at` (NULL means unread),
+`starred`, `archived_at` and `locale` (`20260924000300_message_state.sql`).
 
 ---
 

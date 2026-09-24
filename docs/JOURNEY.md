@@ -1337,6 +1337,53 @@ the `.env` parser (written twice, with different handling of quotes; both now us
 Node's own), and the share images' colours, which had kept a rose the site had
 stopped using. A test now compares that palette with the CSS.
 
+### Phase 1: a frame that remembers, and a dashboard that speaks
+
+**The frame used to decide its shape by reading the address.** One client
+layout wrapped the whole admin and compared the pathname with the three sign-in
+addresses to decide whether to draw the sidebar. Route groups let the folders
+decide instead: `(auth)` for the sign-in pages, `(panel)` for the rest. That
+also let the panel's layout run on the server, which is what a remembered
+sidebar width needs. The choice lives in a cookie the server reads before it
+sends any HTML. Kept in `localStorage`, it would have drawn the sidebar wide and
+snapped it narrow on every page load.
+
+**Widening over the page, not beside it.** Rares wanted the narrow rail to
+open when the pointer rests on it. If its grid column widened, the whole page
+would slide sideways every time the pointer crossed the left edge. So the panel
+sits inside the column, and when pinned narrow only the panel widens. The page
+underneath doesn't move. It opens after 120 ms, so a pointer passing across the
+screen doesn't flash it, and closes 250 ms after the pointer leaves, which
+forgives a small slip off the edge.
+
+**A title that kept coming back.** Every admin tab used to have the same title
+(B21). Each page now sets its own. That worked when moving between pages and
+failed when a page was opened from the address bar. A probe of the `<title>`
+element showed why: Next.js wrote the layout's title into it one millisecond
+after the page had set its own. The page's title now puts itself back whenever
+something replaces it. The test waits a second after a full load, because that
+is the case that failed.
+
+**An event could end before it began.** Computing each event's start and end as
+instants exposed a gap in the old checks: they compared times only when an end
+date was filled in, so a one-day event from 18:00 to 10:00 saved without a
+murmur. On the new dashboard it would have counted as over before it started. A
+single constraint now compares the two instants. The instants themselves became
+generated columns rather than trigger-maintained ones, because Postgres refuses
+to let anyone write a generated column, so it can never disagree with the date
+and times it comes from. The catch is that Supabase's generated types don't know
+that, so the events editor has to leave both columns out of what it saves.
+
+**A dashboard that says what is waiting.** The old dashboard showed five totals
+that answered no question: every registration ever made, every post ever
+written. Rares defined what each number should mean: events not yet ended,
+payments still pending, unread messages, testimonials to approve, drafts. The
+new rows say each count as a sentence, and Romanian has three plural forms:
+"1 plată", "2 plăți", "20 de plăți", and then "101 plăți" again, because the
+third form returns after each hundred. `Intl.PluralRules` knows the rule, and
+a test pins it down. Rows for things waiting on her turn rose, and at zero they
+say "Totul la zi", so the eye goes only where it is needed.
+
 ---
 
 ## Decisions worth defending

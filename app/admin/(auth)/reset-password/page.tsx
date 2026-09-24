@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
 import { buttonClasses } from "@/lib/button-styles";
 
 /**
@@ -23,6 +24,7 @@ type Status = "checking" | "ready" | "invalid" | "done";
 
 export default function ResetPasswordPage() {
   const { t } = useAdminLocale();
+  useDocumentTitle(t("admin.reset_title"));
   const [status, setStatus] = useState<Status>("checking");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

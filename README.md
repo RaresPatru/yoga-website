@@ -110,7 +110,8 @@ the one thing not to do here.
 
 ```
 app/[locale]/          public pages, server-rendered
-app/admin/             admin panel (client-side, guarded server-side by proxy.ts)
+app/admin/(auth)/      admin sign-in pages, without the sidebar
+app/admin/(panel)/     admin panel: sidebar, dashboard, editors (guarded server-side by proxy.ts)
 app/api/               route handlers — registration, Stripe, uploads
 app/api/og/            generated share images (link previews)
 components/            UI; components/events holds the client islands

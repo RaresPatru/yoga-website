@@ -160,6 +160,17 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   (`npx supabase gen types typescript --local > lib/database.types.ts`). All
   four Supabase clients are typed from it, so a stale file type-checks code
   against a schema that no longer exists.
+- **The generated types offer generated columns on insert and update.**
+  `events.starts_at` and `events.ends_at` are computed by Postgres, which
+  refuses any write to them, but `lib/database.types.ts` lists both as optional
+  fields of `Insert` and `Update`. Spread a whole `Row` into `.update()` and
+  every save fails. The events editor's `EventDraft` omits them; any new writer
+  of `events` has to as well.
+- **Next.js writes the layout's `<title>` after a page's effects on a full
+  load.** A client page that sets `document.title` in an effect sees it
+  replaced by the metadata title a moment later. In the admin panel use
+  `useDocumentTitle()` (`components/admin/shell/admin-site.tsx`), which puts
+  its title back whenever something changes it.
 - Playwright's `isVisible()` does not auto-wait. Branch on viewport width, not
   on a visibility probe.
 - **A Suspense boundary high in the tree costs you HTTP status codes.** Wrapping

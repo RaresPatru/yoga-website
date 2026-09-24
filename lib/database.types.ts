@@ -96,27 +96,39 @@ export type Database = {
       }
       contact_messages: {
         Row: {
+          archived_at: string | null
           created_at: string
           email: string
           id: string
+          locale: string
           message: string
           name: string
+          read_at: string | null
+          starred: boolean
           subject: string | null
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           email: string
           id?: string
+          locale?: string
           message: string
           name: string
+          read_at?: string | null
+          starred?: boolean
           subject?: string | null
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           email?: string
           id?: string
+          locale?: string
           message?: string
           name?: string
+          read_at?: string | null
+          starred?: boolean
           subject?: string | null
         }
         Relationships: []
@@ -160,6 +172,7 @@ export type Database = {
           description_ro: string | null
           end_date: string | null
           end_time: string | null
+          ends_at: string
           id: string
           image_url: string | null
           location: string | null
@@ -167,7 +180,9 @@ export type Database = {
           max_participants: number | null
           price: number
           published: boolean
+          show_in_archive: boolean
           slug: string
+          starts_at: string
           time: string | null
           title_en: string | null
           title_ro: string
@@ -182,6 +197,7 @@ export type Database = {
           description_ro?: string | null
           end_date?: string | null
           end_time?: string | null
+          ends_at?: string
           id?: string
           image_url?: string | null
           location?: string | null
@@ -189,7 +205,9 @@ export type Database = {
           max_participants?: number | null
           price?: number
           published?: boolean
+          show_in_archive?: boolean
           slug: string
+          starts_at?: string
           time?: string | null
           title_en?: string | null
           title_ro: string
@@ -204,6 +222,7 @@ export type Database = {
           description_ro?: string | null
           end_date?: string | null
           end_time?: string | null
+          ends_at?: string
           id?: string
           image_url?: string | null
           location?: string | null
@@ -211,7 +230,9 @@ export type Database = {
           max_participants?: number | null
           price?: number
           published?: boolean
+          show_in_archive?: boolean
           slug?: string
+          starts_at?: string
           time?: string | null
           title_en?: string | null
           title_ro?: string
@@ -316,6 +337,13 @@ export type Database = {
             foreignKeyName: "registrations_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
+            referencedRelation: "admin_event_overview"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "registrations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "event_availability"
             referencedColumns: ["event_id"]
           },
@@ -410,6 +438,13 @@ export type Database = {
             foreignKeyName: "testimonials_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
+            referencedRelation: "admin_event_overview"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "testimonials_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "event_availability"
             referencedColumns: ["event_id"]
           },
@@ -478,6 +513,13 @@ export type Database = {
             foreignKeyName: "waiting_list_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
+            referencedRelation: "admin_event_overview"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "waiting_list_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "event_availability"
             referencedColumns: ["event_id"]
           },
@@ -520,6 +562,13 @@ export type Database = {
             foreignKeyName: "waiting_list_notifications_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
+            referencedRelation: "admin_event_overview"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "waiting_list_notifications_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "event_availability"
             referencedColumns: ["event_id"]
           },
@@ -558,6 +607,34 @@ export type Database = {
       }
     }
     Views: {
+      admin_dashboard: {
+        Row: {
+          active_events: number | null
+          draft_posts: number | null
+          pending_payments: number | null
+          pending_testimonials: number | null
+          unread_messages: number | null
+        }
+        Relationships: []
+      }
+      admin_event_overview: {
+        Row: {
+          event_id: string | null
+          pending_payments: number | null
+          waiting: number | null
+        }
+        Insert: {
+          event_id?: string | null
+          pending_payments?: never
+          waiting?: never
+        }
+        Update: {
+          event_id?: string | null
+          pending_payments?: never
+          waiting?: never
+        }
+        Relationships: []
+      }
       event_availability: {
         Row: {
           capacity: number | null

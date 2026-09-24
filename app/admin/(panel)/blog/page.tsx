@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
 import { useAdminData } from "@/lib/admin/use-admin-data";
+import { useNewFromLink } from "@/lib/admin/use-new-from-link";
 import { useToast } from "@/components/admin/ui/toaster";
 import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { getAuthToken } from "@/lib/get-auth-token";
@@ -13,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Edit2, Trash2, EyeOff, Loader2 } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
+import { PageHeader } from "@/components/admin/ui/page-header";
 import {
   RichTextEditor,
   useBlogEditor,
@@ -297,10 +300,13 @@ function BlogEditor({
 
 export default function AdminBlogPage() {
   const { t } = useAdminLocale();
+  useDocumentTitle(t("admin.blog"));
   const toast = useToast();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<BlogPost | null>(null);
-  const [creating, setCreating] = useState(false);
+  // The dashboard's "Articol nou" opens this page with the empty editor showing.
+  const openedForNew = useNewFromLink();
+  const [creating, setCreating] = useState(openedForNew);
 
   const {
     data: posts = [],
@@ -357,23 +363,25 @@ export default function AdminBlogPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="font-serif text-2xl text-charcoal">{t("admin.blog_title")}</h1>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="mr-2 h-4 w-4" /> {t("admin.new_post")}
-        </Button>
-      </div>
+      <PageHeader
+        title={t("admin.blog")}
+        actions={
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" /> {t("admin.new_post")}
+          </Button>
+        }
+      />
 
       {loading ? (
-        <div className="mt-8 flex justify-center">
+        <div className="flex justify-center py-6">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-rose border-t-transparent" />
         </div>
       ) : loadError ? (
-        <p role="alert" className="mt-8 text-error">{t(adminErrorKey(loadError))}</p>
+        <p role="alert" className="text-error">{t(adminErrorKey(loadError))}</p>
       ) : posts.length === 0 ? (
-        <p className="mt-8 text-charcoal-light">{t("admin.no_posts")}</p>
+        <p className="text-charcoal-light">{t("admin.no_posts")}</p>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
           {posts.map((post) => (
             <GlassCard key={post.id} hover={false} className="flex items-center justify-between">
               <div>

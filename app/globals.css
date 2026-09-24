@@ -926,6 +926,181 @@ body {
     }
   }
 
+  /*
+   * The admin frame (components/admin/shell/admin-shell.tsx).
+   *
+   * On a computer, a two-column grid: the sidebar's column is 15rem, or 4.5rem
+   * when she pins it narrow, and the page takes the rest. The sidebar sticks to
+   * the viewport, so a long page never scrolls it away. Its panel is positioned
+   * inside the column rather than being the column, so when the narrow sidebar
+   * widens on hover it grows over the page, with a shadow, instead of pushing
+   * the page sideways.
+   *
+   * Below 1024px there is no sidebar: the menu button in the top bar opens the
+   * same links in a drawer.
+   */
+  .admin-shell {
+    --admin-rail-width: 15rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 100dvh;
+    background-color: var(--color-cream);
+  }
+
+  .admin-shell[data-collapsed="true"] {
+    --admin-rail-width: 4.5rem;
+  }
+
+  .admin-rail {
+    display: none;
+  }
+
+  .admin-nav-label {
+    white-space: nowrap;
+    transition: opacity 150ms ease;
+  }
+
+  @media (min-width: 1024px) {
+    .admin-shell {
+      grid-template-columns: var(--admin-rail-width) minmax(0, 1fr);
+      transition: grid-template-columns 200ms ease;
+    }
+
+    .admin-rail {
+      display: block;
+      position: sticky;
+      top: 0;
+      height: 100dvh;
+      z-index: 40;
+    }
+
+    .admin-rail-panel {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--admin-rail-width);
+      display: flex;
+      flex-direction: column;
+      background-color: var(--color-warm-white);
+      border-inline-end: 1px solid color-mix(in oklab, var(--color-sage) 25%, transparent);
+      transition:
+        width 200ms ease,
+        box-shadow 200ms ease;
+    }
+
+    /* Widened over the page while pinned narrow. */
+    .admin-shell[data-peek="true"] .admin-rail-panel {
+      width: 15rem;
+      box-shadow: 0 12px 32px rgb(45 45 45 / 0.12);
+    }
+
+    /*
+     * Pinned narrow: the labels fade out rather than being removed, so each
+     * link keeps its text as its accessible name for a screen reader.
+     */
+    .admin-shell[data-collapsed="true"]:not([data-peek="true"]) .admin-nav-label {
+      opacity: 0;
+    }
+  }
+
+  /*
+   * The toggle sits at the left edge of the screen, so its tooltip starts at
+   * the button instead of being centred on it, which would push half of it off
+   * the screen.
+   */
+  .admin-rail [data-tooltip]::after {
+    left: 0;
+    translate: none;
+  }
+
+  /* Hidden until a keyboard user tabs to it, then pinned to the top corner. */
+  .admin-skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 70;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    background-color: var(--color-charcoal);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    translate: 0 calc(-100% - 1rem);
+  }
+
+  .admin-skip-link:focus-visible {
+    translate: none;
+  }
+
+  /*
+   * The phone drawer: a modal <dialog> that slides in from the left. The
+   * slide runs both ways because `display` and `overlay` are transitioned as
+   * discrete properties, which keeps the dialog on screen, and in the top layer
+   * where the browser supports `overlay`, until the slide-out has finished.
+   *
+   * WebKit does not support `overlay` yet, so there the dialog leaves the top
+   * layer the moment it closes and finishes sliding out as an ordinary fixed
+   * element. The z-index keeps it above the page for those 250ms; inside the
+   * top layer it has no effect.
+   */
+  .admin-drawer {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 50;
+    width: min(18rem, 85vw);
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
+    border: 0;
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+    box-shadow: 0 12px 32px rgb(45 45 45 / 0.18);
+    translate: -100% 0;
+    transition:
+      translate 250ms ease,
+      display 250ms allow-discrete,
+      overlay 250ms allow-discrete;
+  }
+
+  .admin-drawer[open] {
+    translate: 0 0;
+  }
+
+  @starting-style {
+    .admin-drawer[open] {
+      translate: -100% 0;
+    }
+  }
+
+  .admin-drawer::backdrop {
+    background-color: rgb(45 45 45 / 0);
+    transition:
+      background-color 250ms ease,
+      display 250ms allow-discrete,
+      overlay 250ms allow-discrete;
+  }
+
+  .admin-drawer[open]::backdrop {
+    background-color: rgb(45 45 45 / 0.4);
+  }
+
+  @starting-style {
+    .admin-drawer[open]::backdrop {
+      background-color: rgb(45 45 45 / 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-shell,
+    .admin-rail-panel,
+    .admin-nav-label,
+    .admin-drawer,
+    .admin-drawer::backdrop {
+      transition: none;
+    }
+  }
+
 }
 
 @layer utilities {

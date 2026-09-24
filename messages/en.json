@@ -114,17 +114,15 @@
     "login": "Login",
     "login_forbidden": "This account does not have access to the admin panel.",
     "dashboard": "Dashboard",
-    "blog": "Blog Posts",
+    "blog": "Blog posts",
     "events": "Events",
     "registrations": "Registrations",
     "testimonials": "Testimonials",
     "emails": "Emails",
     "messages": "Messages",
-    "logout": "Logout",
-    "dashboard_title": "Dashboard",
-    "pending_testimonials": "Unapproved Testimonials",
+    "logout": "Log out",
     "logging_in": "Logging in...",
-    "new_event": "New Event",
+    "new_event": "New event",
     "edit_event": "Edit Event",
     "cancel": "Cancel",
     "saving": "Saving...",
@@ -164,7 +162,6 @@
     "approved": "Approved",
     "unapproved": "Unapproved",
     "confirm_delete_testimonial": "Are you sure you want to delete this testimonial?",
-    "email_templates": "Email Templates",
     "available_variables": "Available variables:",
     "edit": "Edit",
     "delete": "Delete",
@@ -177,9 +174,8 @@
     "waiting_list_variables": "Waiting-list email only:",
     "no_messages": "No messages.",
     "confirm_delete_message": "Are you sure you want to delete this message?",
-    "new_post": "New Post",
+    "new_post": "New post",
     "edit_post": "Edit Post",
-    "blog_title": "Blog Posts",
     "no_posts": "No posts yet.",
     "confirm_delete_post": "Are you sure you want to delete this post?",
     "hidden": "Hidden",
@@ -322,6 +318,53 @@
       "saved": "Saved",
       "deleted": "Deleted",
       "approved": "Approved"
+    },
+    "skip_to_content": "Skip to content",
+    "view_site": "View site",
+    "opens_new_tab": "(opens in a new tab)",
+    "nav": {
+      "label": "Admin sections",
+      "menu": "Menu",
+      "narrow": "Narrow sidebar",
+      "narrow_hint": "Narrow the sidebar",
+      "widen_hint": "Keep the sidebar wide"
+    },
+    "dash": {
+      "events": {
+        "zero": "No active events",
+        "one": "{count} active event",
+        "other": "{count} active events"
+      },
+      "payments": {
+        "zero": "All caught up",
+        "one": "{count} payment pending",
+        "other": "{count} payments pending"
+      },
+      "messages": {
+        "zero": "All caught up",
+        "one": "{count} unread message",
+        "other": "{count} unread messages"
+      },
+      "testimonials": {
+        "zero": "All caught up",
+        "one": "{count} testimonial to approve",
+        "other": "{count} testimonials to approve"
+      },
+      "drafts": {
+        "zero": "No drafts",
+        "one": "{count} draft",
+        "other": "{count} drafts"
+      },
+      "next_event": "Next event",
+      "happening_now": "Happening now",
+      "no_upcoming": "No events scheduled.",
+      "no_upcoming_hint": "The next published event that hasn’t ended shows here.",
+      "seats": "Seats taken",
+      "seats_of": "{taken} of {capacity}",
+      "seats_closed": "{taken}, bookings closed",
+      "waiting": "On the waiting list",
+      "pending_payments": "Payments pending",
+      "view_page": "View the event page"
     }
   }
 }

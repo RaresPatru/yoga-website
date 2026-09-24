@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { GlassCard } from "@/components/ui/glass-card";
 import { MediaLibrary } from "@/components/admin/media-library";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useDocumentTitle } from "@/components/admin/shell/admin-site";
+import { PageHeader } from "@/components/admin/ui/page-header";
 import { ImageIcon, Check, Plus, Trash2 } from "lucide-react";
 import NextImage from "next/image";
 
@@ -64,6 +66,7 @@ const SECTION_LABELS: Record<string, { ro: string; en: string }> = {
 
 export default function AdminContentPage() {
   const { t, locale } = useAdminLocale();
+  useDocumentTitle(t("admin.content"));
   const ro = locale === "ro";
 
   const toast = useToast();
@@ -161,28 +164,40 @@ export default function AdminContentPage() {
     setFaqs((prev) => prev.filter((f) => f.id !== faq.id));
   };
 
+  const header = (
+    <PageHeader
+      title={t("admin.content")}
+      description={
+        ro
+          ? "Textele și fotografiile de pe site. Câmpurile goale apar ca marcaje pe site până le completezi."
+          : "The words and photos on the site. Empty fields show as placeholders until you fill them in."
+      }
+    />
+  );
+
   if (loading) {
-    return <p className="text-charcoal-light">{t("admin.loading")}</p>;
+    return (
+      <div>
+        {header}
+        <p className="text-charcoal-light">{t("admin.loading")}</p>
+      </div>
+    );
   }
 
   if (loadError) {
-    return <p role="alert" className="text-error">{t(adminErrorKey(loadError))}</p>;
+    return (
+      <div>
+        {header}
+        <p role="alert" className="text-error">{t(adminErrorKey(loadError))}</p>
+      </div>
+    );
   }
 
   const sections = [...new Set(rows.map((r) => r.section))];
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-serif text-2xl text-charcoal">
-          {ro ? "Conținut site" : "Site content"}
-        </h1>
-        <p className="mt-1 text-sm text-charcoal-light">
-          {ro
-            ? "Textele și fotografiile de pe site. Câmpurile goale apar ca marcaje pe site până le completezi."
-            : "The words and photos on the site. Empty fields show as placeholders until you fill them in."}
-        </p>
-      </div>
+      {header}
 
       {sections.map((section) => (
         <GlassCard key={section} hover={false}>

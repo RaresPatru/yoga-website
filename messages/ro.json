@@ -113,7 +113,7 @@
     "password": "Parolă",
     "login": "Autentificare",
     "login_forbidden": "Contul acesta nu are acces la panoul de administrare.",
-    "dashboard": "Panou de Control",
+    "dashboard": "Panou de control",
     "blog": "Articole",
     "events": "Evenimente",
     "registrations": "Înscrieri",
@@ -121,10 +121,8 @@
     "emails": "Email-uri",
     "messages": "Mesaje",
     "logout": "Deconectare",
-    "dashboard_title": "Dashboard",
-    "pending_testimonials": "Testimoniale neaprobate",
     "logging_in": "Se autentifică...",
-    "new_event": "Eveniment Nou",
+    "new_event": "Eveniment nou",
     "edit_event": "Editează eveniment",
     "cancel": "Anulează",
     "saving": "Se salvează...",
@@ -164,7 +162,6 @@
     "approved": "Aprobat",
     "unapproved": "Neaprobat",
     "confirm_delete_testimonial": "Sigur dorești să ștergi acest testimonial?",
-    "email_templates": "Template-uri Email",
     "available_variables": "Variabile disponibile:",
     "edit": "Editează",
     "delete": "Șterge",
@@ -177,9 +174,8 @@
     "waiting_list_variables": "Doar pentru emailul de listă de așteptare:",
     "no_messages": "Nu există mesaje.",
     "confirm_delete_message": "Sigur dorești să ștergi acest mesaj?",
-    "new_post": "Articol Nou",
+    "new_post": "Articol nou",
     "edit_post": "Editează articol",
-    "blog_title": "Articole Blog",
     "no_posts": "Nu există articole încă.",
     "confirm_delete_post": "Sigur dorești să ștergi acest articol?",
     "hidden": "Ascuns",
@@ -322,6 +318,58 @@
       "saved": "Salvat",
       "deleted": "Șters",
       "approved": "Aprobat"
+    },
+    "skip_to_content": "Sari la conținut",
+    "view_site": "Vezi site-ul",
+    "opens_new_tab": "(se deschide într-un tab nou)",
+    "nav": {
+      "label": "Secțiuni admin",
+      "menu": "Meniu",
+      "narrow": "Bară laterală îngustă",
+      "narrow_hint": "Îngustează bara laterală",
+      "widen_hint": "Păstrează bara laterală lată"
+    },
+    "dash": {
+      "events": {
+        "zero": "Niciun eveniment activ",
+        "one": "{count} eveniment activ",
+        "few": "{count} evenimente active",
+        "other": "{count} de evenimente active"
+      },
+      "payments": {
+        "zero": "Totul la zi",
+        "one": "{count} plată în așteptare",
+        "few": "{count} plăți în așteptare",
+        "other": "{count} de plăți în așteptare"
+      },
+      "messages": {
+        "zero": "Totul la zi",
+        "one": "{count} mesaj necitit",
+        "few": "{count} mesaje necitite",
+        "other": "{count} de mesaje necitite"
+      },
+      "testimonials": {
+        "zero": "Totul la zi",
+        "one": "{count} testimonial de aprobat",
+        "few": "{count} testimoniale de aprobat",
+        "other": "{count} de testimoniale de aprobat"
+      },
+      "drafts": {
+        "zero": "Nicio ciornă",
+        "one": "{count} ciornă",
+        "few": "{count} ciorne",
+        "other": "{count} de ciorne"
+      },
+      "next_event": "Următorul eveniment",
+      "happening_now": "În desfășurare",
+      "no_upcoming": "Niciun eveniment programat.",
+      "no_upcoming_hint": "Aici apare următorul eveniment publicat care nu s-a încheiat.",
+      "seats": "Locuri ocupate",
+      "seats_of": "{taken} din {capacity}",
+      "seats_closed": "{taken}, înscrieri închise",
+      "waiting": "Pe lista de așteptare",
+      "pending_payments": "Plăți în așteptare",
+      "view_page": "Vezi pagina evenimentului"
     }
   }
 }

@@ -6,7 +6,7 @@ test.describe("admin email templates", () => {
   });
 
   test("lists every template and can open the editor", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "Template-uri Email" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Email-uri" })).toBeVisible();
 
     // One per row in email_templates. The list is driven by the database, so a
     // type added there with no entry in the page's label map used to take the
