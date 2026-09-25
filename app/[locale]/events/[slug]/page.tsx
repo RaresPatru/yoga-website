@@ -2,7 +2,10 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Clock, MapPin, Users } from "lucide-react";
 import { createPublicClient } from "@/lib/supabase/public";
-import { sanitizeHtml } from "@/lib/sanitize";
+import { sanitizeArticleHtml } from "@/lib/sanitize";
+import { TEXT_TYPOGRAPHY } from "@/lib/article-typography";
+import { RichHtml } from "@/components/rich-html";
+import { getTranslations } from "next-intl/server";
 import { formatDate, formatEventSchedule, eventStartInstant } from "@/lib/utils";
 import { toCurrency } from "@/lib/money";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
@@ -131,6 +134,7 @@ export default async function EventDetailPage({
    */
   const isFull = !event.max_participants || taken >= event.max_participants;
   const t = (ro: string, en: string) => (locale === "ro" ? ro : en);
+  const te = await getTranslations({ locale, namespace: "embed" });
 
   /*
    * Null when she has not pinned the place, or when what she typed was neither
@@ -344,12 +348,16 @@ export default async function EventDetailPage({
           </div>
 
           {description && (
-            <div
-              // break-words for the same reason as the heading: this is
-              // instructor-written HTML and may contain a bare URL, which is
-              // one long unbreakable token.
-              className="prose prose-sage blog-content mt-8 max-w-none break-words"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }}
+            // TEXT_TYPOGRAPHY breaks words for the same reason as the
+            // heading: this is instructor-written HTML and may contain a bare
+            // URL, which is one long unbreakable token. Videos wait for a
+            // press, as in a blog post (sanitizeArticleHtml).
+            <RichHtml
+              className={`${TEXT_TYPOGRAPHY} blog-content mt-8`}
+              html={sanitizeArticleHtml(description, {
+                play: te("play", { provider: "{provider}" }),
+                note: te("note", { provider: "{provider}" }),
+              })}
             />
           )}
 

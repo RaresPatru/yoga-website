@@ -8,6 +8,7 @@ import { buildPageMetadata } from "@/lib/metadata";
 import { absoluteUrl, siteUrl } from "@/lib/site-config";
 import { formatDate } from "@/lib/utils";
 import { TextPlaceholder } from "@/components/ui/content-placeholder";
+import { TEXT_TYPOGRAPHY } from "@/lib/article-typography";
 
 export type LegalKind = "privacy" | "terms" | "cookies";
 
@@ -58,7 +59,7 @@ export async function LegalDocument({ kind, locale }: { kind: LegalKind; locale:
             <time dateTime={document.updatedAt}>{formatDate(document.updatedAt, locale)}</time>
           </p>
           <div
-            className="prose mt-8 max-w-none text-charcoal-light prose-headings:font-serif prose-headings:font-normal prose-headings:text-charcoal prose-a:text-rose-deep prose-strong:text-charcoal"
+            className={`${TEXT_TYPOGRAPHY} mt-8`}
             dangerouslySetInnerHTML={{
               __html: sanitizeHtml(
                 fillLegalTokens(document.html, content, locale, { siteName, siteUrl: siteUrl() })

@@ -15,7 +15,11 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { contentText, getSiteContent, getFaqs, placeholderName } from "@/lib/site-content";
 import type { SiteContentKey } from "@/lib/site-content-schema";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { formatDate, eventStartInstant } from "@/lib/utils";
+import { eventStartInstant } from "@/lib/utils";
+import { getTranslations } from "next-intl/server";
+import { CARD_COLUMNS } from "@/lib/blog";
+import { TEXT_TYPOGRAPHY } from "@/lib/article-typography";
+import { PostCard } from "@/components/blog/post-card";
 import { eventAvailability } from "@/lib/event-availability";
 
 /**
@@ -95,6 +99,7 @@ export default async function HomePage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const tBlog = await getTranslations({ locale, namespace: "blog" });
   const supabase = createPublicClient();
   // One reading of the clock, used for both the query's date floor and the
   // time-of-day cutoff below. Taking it twice would let a render that straddles
@@ -133,9 +138,10 @@ export default async function HomePage({
       .limit(3),
     supabase
       .from("blog_posts")
-      .select("id, slug, title_ro, title_en, created_at")
+      .select(CARD_COLUMNS)
       .eq("published", true)
       .eq("hidden", false)
+      .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(3),
   ]);
@@ -365,7 +371,7 @@ export default async function HomePage({
           </h2>
           {content["home.intro"] ? (
             <div
-              className="prose prose-sage mx-auto mt-5 max-w-none text-lg text-charcoal-light"
+              className={`${TEXT_TYPOGRAPHY} mx-auto mt-5 text-lg`}
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["home.intro"]) }}
             />
           ) : (
@@ -447,22 +453,18 @@ export default async function HomePage({
             <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
               {text("home.blog_title")}
             </h2>
-            <div className="mt-8 grid gap-5 sm:grid-cols-3">
+            <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {posts.map((post) => (
-                <Link key={post.id} href={`/blog/${post.slug}`} className="block rounded-2xl">
-                  <GlassCard
-                    className="h-full"
-                  >
-                    <h3 className="font-serif text-lg text-charcoal">
-                      {locale === "ro" ? post.title_ro : post.title_en || post.title_ro}
-                    </h3>
-                    <p className="mt-2 text-sm text-charcoal-light">
-                      {formatDate(post.created_at, locale)}
-                    </p>
-                  </GlassCard>
-                </Link>
+                <li key={post.id} className="min-w-0">
+                  <PostCard
+                    post={post}
+                    locale={locale}
+                    headingLevel={3}
+                    readingTime={(minutes) => tBlog("reading_time", { minutes })}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
             <div className="mt-8 text-center">
               <Link href="/blog" className={buttonClasses({ variant: "secondary" })}>
                   {text("home.blog_button")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />

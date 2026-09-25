@@ -20,7 +20,7 @@
  * without a browser.
  */
 
-export type ShortcutGroup = "headings" | "text" | "blocks" | "alignment" | "more" | "code";
+export type ShortcutGroup = "headings" | "text" | "blocks" | "alignment" | "more";
 
 export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   "headings",
@@ -28,7 +28,6 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   "blocks",
   "alignment",
   "more",
-  "code",
 ];
 
 /**
@@ -38,7 +37,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
 export type ShortcutSample =
   | "h1" | "h2" | "h3" | "p"
   | "strong" | "em" | "s" | "u" | "link" | "code"
-  | "ul" | "ol" | "blockquote" | "hr" | "pre"
+  | "ul" | "ol" | "blockquote" | "hr"
   | "left" | "center" | "right"
   | "br" | "plain";
 
@@ -124,6 +123,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
     keys: ["Mod-u"],
     check: { expect: "u", start: PLAIN, select: true },
   },
+  // Inline code: a yoga blog rarely wants it, but a stray pair of backticks
+  // produces it whether she knows about it or not, so it is listed.
+  {
+    id: "code", group: "text", sample: "code",
+    typed: { text: "`text`" }, keys: ["Mod-e"],
+    check: { expect: "code", start: PLAIN, select: true },
+  },
   // Typing an address and then a space turns it into a link (TipTap's
   // autolink). Ctrl+K opens the link dialog instead, which has its own test.
   {
@@ -172,24 +178,12 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
 
   // Everything else. None of these formats anything, so none has a check here.
+  // Tab and Shift+Tab for sub-items are not listed: the toolbar has buttons for
+  // them, shown while the caret is in a list.
   { id: "line_break", group: "more", sample: "br", keys: ["Shift-Enter"] },
-  { id: "list_indent", group: "more", sample: "plain", keys: ["Tab", "Shift-Tab"] },
   { id: "undo", group: "more", sample: "plain", keys: ["Mod-z"] },
   { id: "redo", group: "more", sample: "plain", keys: ["Mod-Shift-z", "Mod-y"] },
   { id: "shortcuts", group: "more", sample: "plain", keys: ["Mod-/"] },
-
-  // Code, last: a yoga blog rarely wants it, but the editor has it, and a
-  // stray pair of backticks produces it whether she knows about it or not.
-  {
-    id: "code", group: "code", sample: "code",
-    typed: { text: "`text`" }, keys: ["Mod-e"],
-    check: { expect: "code", start: PLAIN, select: true },
-  },
-  {
-    id: "code_block", group: "code", sample: "pre",
-    typed: { text: "```", then: "Space" }, keys: ["Mod-Alt-c"],
-    check: { expect: "pre", start: PLAIN },
-  },
 ];
 
 /**

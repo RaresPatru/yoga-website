@@ -8,6 +8,7 @@ import { TextPlaceholder, ImagePlaceholder } from "@/components/ui/content-place
 import { contentText, getSiteContent, placeholderName } from "@/lib/site-content";
 import type { SiteContentKey } from "@/lib/site-content-schema";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { TEXT_TYPOGRAPHY } from "@/lib/article-typography";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
 import { absoluteUrl } from "@/lib/site-config";
 
@@ -112,7 +113,7 @@ export default async function AboutPage({
 
           {content["about.body"] ? (
             <div
-              className="prose prose-sage mt-6 max-w-none text-charcoal-light"
+              className={`${TEXT_TYPOGRAPHY} mt-6`}
               dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["about.body"]) }}
             />
           ) : (
@@ -127,7 +128,7 @@ export default async function AboutPage({
                 {text("about.credentials_title")}
               </h2>
               <div
-                className="prose prose-sage mt-4 max-w-none text-charcoal-light"
+                className={`${TEXT_TYPOGRAPHY} mt-4`}
                 dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["about.credentials"]) }}
               />
             </GlassCard>

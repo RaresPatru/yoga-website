@@ -206,32 +206,86 @@ Starea plății:
 
 ## 4. Articole pe blog
 
-**Meniu: Articole** → **Articol Nou**
+**Meniu: Articole**
 
-Editorul funcționează ca un document normal: selectezi text și apeși pe butoane
-pentru **îngroșat**, titluri, liste, citate și aliniere (stânga, centru, dreapta).
+### Lista
 
-- **Scurtături:** butonul cu tastatură, ultimul din bară (sau Ctrl+/, ⌘/ pe Mac),
-  arată tot ce poți face fără mouse, cu rezultatul lângă fiecare. Multe merg și
-  doar scriind, inclusiv pe telefon: `## ` la început de rând face un titlu,
-  `- ` o listă, `**cuvânt**` îl îngroașă. Dacă nu voiai formatarea, apasă
-  Backspace imediat după și rămâne exact ce ai scris.
-- **Imagini, audio, video:** butonul cu imagine deschide Biblioteca Media.
-- **Video de pe YouTube / Vimeo / Instagram:** butonul cu ▶ — lipești linkul
-  paginii, nu ai nevoie de cod. Reels-urile și Shorts-urile apar în format
-  vertical, ca pe telefon.
-- **Corectură ortografică:** butonul RO/EN/off, în editorul în română; cel în
-  engleză verifică mereu în engleză. Pentru română, Chrome are nevoie de
-  dicționarul românesc instalat (Setări → Limbi → adaugă Română).
-- **Ascuns:** articolul rămâne salvat dar dispare de pe site.
+Articolele sunt împărțite în **Publicate**, **Ciorne** și **Ascunse**, cu
+numărul lor lângă fiecare. Căutarea găsește după titlu, subtitlu sau adresă, în
+română sau engleză, și nu ține cont de diacritice. **Ordine** le așază după
+ultima editare, după data publicării sau alfabetic. Un articol publicat la care
+ai schimbat ceva nepublicat are eticheta **Modificări nepublicate**.
 
-Butonul **→ EN** de lângă titlu traduce titlul. Cel de lângă **Conținut (RO)**
-traduce tot articolul în editorul **Conținut (EN)**, cu formatare cu tot:
-titlurile, listele, textul îngroșat, linkurile, alinierea, imaginile și
-videourile rămân la locul lor. Dacă ai deja un text în engleză, te întreabă
-înainte să-l înlocuiască, iar dacă te răzgândești, **Desfă** din bara
-editorului în engleză îl aduce înapoi. E o traducere automată — merită citită
-înainte de publicare.
+Tot ce alegi rămâne în adresa paginii, așa că butonul Înapoi al browserului te
+întoarce exact unde erai.
+
+### Scrierea
+
+**Articol nou** deschide o pagină goală. Nu trebuie să salvezi nimic: articolul
+**se salvează singur** la o secundă și jumătate după ce te oprești din scris, cel
+puțin o dată la zece secunde cât scrii, și când treci în alt tab sau altă
+aplicație. Bara de sus arată **Salvat**, **Se salvează…** sau **Nu s-a salvat**.
+Dacă internetul cade, textul rămâne și în browser și ți se oferă înapoi data
+viitoare când deschizi articolul. Ctrl+S (⌘S pe Mac) salvează imediat.
+
+Dacă deschizi **Articol nou** și pleci cu **Articole** fără să scrii nimic, nu
+rămâne nimic în urmă.
+
+- **Coperta:** poza de sus a articolului și de pe card. Fără copertă, se
+  folosește prima imagine din text.
+- **Titlul și subtitlul** arată ca pe site. Subtitlul e opțional și apare pe
+  card și sub titlu.
+- **Adresa articolului** (în Detalii) se ia din titlu până la prima publicare.
+  După aceea nu se mai schimbă singură, pentru că linkurile deja distribuite duc
+  la ea.
+- **Autor:** vine completat cu autorul din Conținut site → Blog. Îl poți schimba
+  pentru un singur articol.
+- **Ascuns:** articolul dispare de pe site imediat, inclusiv de la adresa lui,
+  publicat sau nu.
+
+### Bara editorului
+
+- **Format** (primul buton): text normal, Titlu 2, Titlu 3.
+- **Aliniere:** un singur buton cu meniu; stânga e implicit.
+- **Liste:** cât ești într-o listă apar două butoane care fac dintr-un rând un
+  subpunct și înapoi (pe calculator merg și Tab și Shift+Tab).
+- **Imagine** deschide Biblioteca Media, doar cu imagini.
+- **Video:** lipești adresa de pe YouTube (și Shorts), Vimeo, Instagram
+  (postare sau reel) sau TikTok (adresa completă, cu /video/ în ea). Hărțile și
+  alte site-uri nu merg, și fereastra spune de ce.
+- **Link:** adresa și textul afișat. Dacă lași textul gol, se afișează adresa.
+  Când editezi un link vezi ce e acum și îl poți scoate. `https://` se adaugă
+  singur.
+- **Undo / Redo** își păstrează numele din engleză.
+- **Scurtături:** butonul cu tastatură (sau Ctrl+/, ⌘/ pe Mac) arată tot ce poți
+  face fără mouse. Multe merg doar scriind, inclusiv pe telefon: `## + Spațiu`
+  la început de rând face un titlu, `- + Spațiu` o listă, `**cuvânt**` îl
+  îngroașă. Dacă nu voiai formatarea, apasă Backspace imediat după.
+- **Corector ortografic:** butonul cu A și bifă îl pornește sau îl oprește.
+  Pentru română, Chrome are nevoie de dicționarul românesc (Setări → Limbi).
+
+Pe site, un video nu se încarcă până nu apasă cineva pe el: până atunci pagina
+nu contactează YouTube, Instagram sau TikTok. De aceea site-ul nu are nevoie de
+banner de cookie-uri.
+
+### Engleza
+
+Comutatorul **RO / EN** din bară arată câte texte au și variantă în engleză (de
+exemplu 2/3). În EN, fiecare câmp are deasupra textul în română. **Tradu ce
+lipsește** completează tot ce e gol în engleză, cu formatare cu tot. **Tradu din
+nou din română** înlocuiește textul în engleză cu o traducere nouă, după ce te
+întreabă; Undo îl aduce înapoi. E o traducere automată, care merită citită.
+
+### Publicarea
+
+- **Publică** verifică să existe titlu, adresă și text, apoi publică articolul.
+  Rămâi în editor, iar mesajul din colț are linkul spre articol.
+- După publicare, ce schimbi **nu apare pe site** până nu apeși **Publică
+  modificările**. Până atunci vizitatorii văd versiunea publicată.
+- **Previzualizare** arată articolul exact cum va fi pe site, cu modificările
+  nepublicate, pe lățime de telefon sau de calculator, în română sau engleză.
+- Meniul **⋯** are **Renunță la modificări** (revii la versiunea publicată) și
+  **Șterge articolul**.
 
 ---
 

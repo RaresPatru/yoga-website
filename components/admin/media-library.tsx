@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { GlassCard } from "@/components/ui/glass-card";
-import { Image, Music, Video, Upload, Trash2, X, Search, FileType, PlaySquare } from "lucide-react";
+import { Image, Music, Video, Upload, Trash2, X, Search, FileType } from "lucide-react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 import { useToast } from "@/components/admin/ui/toaster";
 import { useConfirm } from "@/components/admin/ui/confirm-dialog";
@@ -97,6 +97,10 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<MediaType>(filterType);
+  // Opened for one kind of file (a picture for a post or a page), the library
+  // shows and accepts only that kind: the blog editor's image button used to
+  // offer audio and video too, and inserting them did nothing (audit B12).
+  const locked = filterType !== "all";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -267,7 +271,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
         <div className="flex items-center justify-between border-b border-sage/20 px-6 py-4">
           <h2 className="font-serif text-xl text-charcoal">{t("admin.media_library")}</h2>
           <div className="flex items-center gap-3">
-            <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} accept="image/*,audio/*,video/mp4,video/webm" />
+            <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} accept={locked && filterType === "image" ? "image/jpeg,image/png,image/webp,image/gif" : "image/*,audio/*,video/mp4,video/webm"} />
             <Button size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
               <Upload className="mr-2 h-4 w-4" />
               {uploading ? t("admin.media_uploading") : t("admin.media_upload")}
@@ -283,7 +287,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
         </div>
 
         <div className="flex flex-col gap-3 border-b border-sage/20 px-6 py-3 sm:flex-row sm:items-center">
-          <div className="flex gap-1" role="group" aria-label={t("admin.media_library")}>
+          {!locked && <div className="flex gap-1" role="group" aria-label={t("admin.media_library")}>
             {tabs.map(({ key, labelKey, icon: Icon }) => (
               <button
                 key={key}
@@ -299,7 +303,7 @@ export function MediaLibrary({ open, onClose, onSelect, filterType = "all" }: Me
                 {t(labelKey)}
               </button>
             ))}
-          </div>
+          </div>}
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-charcoal-light" />
             <input
@@ -411,149 +415,5 @@ function MediaItem({
         <Trash2 className="h-3.5 w-3.5" />
       </button>
     </GlassCard>
-  );
-}
-
-export function VideoUrlDialog({
-  open,
-  onClose,
-  onInsert,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onInsert: (html: string) => void;
-}) {
-  const { t } = useAdminLocale();
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState("");
-  const dialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    if (open && dialogRef.current && !dialogRef.current.open) {
-      dialogRef.current.showModal();
-    }
-  }, [open]);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    const handleClose = () => onClose();
-    dialog?.addEventListener("close", handleClose);
-    return () => dialog?.removeEventListener("close", handleClose);
-  }, [onClose]);
-
-  const handleInsert = () => {
-    const trimmed = url.trim();
-    if (!trimmed) return;
-
-    if (!/^https?:\/\//i.test(trimmed)) return;
-
-    // Converts a page URL into the provider's embeddable URL, and says what
-    // shape the result is.
-    //
-    // Two things changed here. Instagram links were previously used verbatim as
-    // an iframe src, which does not work — Instagram only renders inside a
-    // frame at its /embed path — and anything else at all was turned into an
-    // iframe pointing wherever the URL said. lib/sanitize.ts now strips iframes
-    // whose src is not a known provider, so an unsupported link would be
-    // silently discarded on save. Refusing it here, with a message, beats
-    // letting the instructor paste something that quietly vanishes.
-    const embed = (() => {
-      const youtube = trimmed.match(
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]+)/
-      )?.[1];
-      if (youtube) {
-        return {
-          src: `https://www.youtube.com/embed/${youtube}`,
-          title: "YouTube video",
-          // Shorts are portrait, like reels.
-          aspect: trimmed.includes("/shorts/") ? "9 / 16" : "16 / 9",
-        };
-      }
-
-      const vimeo = trimmed.match(/vimeo\.com\/(\d+)/)?.[1];
-      if (vimeo) {
-        return {
-          src: `https://player.vimeo.com/video/${vimeo}`,
-          title: "Vimeo video",
-          aspect: "16 / 9",
-        };
-      }
-
-      const instagram = trimmed.match(
-        /instagram\.com\/(p|reel|tv)\/([\w-]+)/
-      );
-      if (instagram) {
-        const [, kind, code] = instagram;
-        return {
-          src: `https://www.instagram.com/${kind}/${code}/embed`,
-          title: "Instagram",
-          // Reels and IGTV are portrait; a standard post embed is roughly
-          // square once Instagram's caption chrome is included.
-          aspect: kind === "p" ? "4 / 5" : "9 / 16",
-        };
-      }
-
-      return null;
-    })();
-
-    if (!embed) {
-      setError(t("admin.video_unsupported"));
-      return;
-    }
-
-    setError("");
-    onInsert(
-      `<iframe src="${embed.src}" data-aspect="${embed.aspect}" frameborder="0" allowfullscreen title="${embed.title}"></iframe>`
-    );
-    setUrl("");
-    onClose();
-  };
-
-  if (!open) return null;
-
-  return (
-    <dialog
-      ref={dialogRef}
-      className="m-auto w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-transparent p-0 backdrop:bg-black/40"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-md rounded-2xl border border-white/30 bg-white/90 p-6 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-serif text-lg text-charcoal">{t("admin.video_title")}</h3>
-          <button
-            onClick={onClose}
-            aria-label={t("admin.close")}
-            className="rounded-full p-1 text-charcoal-light hover:bg-white/40"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <p className="mb-4 text-sm text-charcoal-light">
-          {t("admin.video_hint")}
-        </p>
-        <Input
-          value={url}
-          onChange={(e) => {
-            setUrl(e.target.value);
-            if (error) setError("");
-          }}
-          placeholder={t("admin.video_placeholder")}
-          onKeyDown={(e) => e.key === "Enter" && handleInsert()}
-        />
-        {error && (
-          <p className="mt-2 text-sm text-error" role="alert">
-            {error}
-          </p>
-        )}
-        <div className="mt-4 flex gap-2 justify-end">
-          <Button variant="ghost" onClick={onClose}>{t("admin.cancel")}</Button>
-          <Button onClick={handleInsert} disabled={!url.trim()}>
-            <PlaySquare className="mr-2 h-4 w-4" /> {t("admin.video_insert")}
-          </Button>
-        </div>
-      </div>
-    </dialog>
   );
 }

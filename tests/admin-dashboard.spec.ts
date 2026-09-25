@@ -79,6 +79,8 @@ test.describe("the dashboard's counts", () => {
     const before = await dashboardCounts();
     const draft = await seedPost({ published: false });
     const live = await seedPost({ published: true });
+    // Hidden is its own tab in the post list, so not a draft here either.
+    const hiddenDraft = await seedPost({ published: false, hidden: true });
     const now = new Date().toISOString();
     const messages = [
       await seedMessage(), // unread: counts
@@ -95,6 +97,7 @@ test.describe("the dashboard's counts", () => {
     } finally {
       await deletePostBySlug(draft.slug);
       await deletePostBySlug(live.slug);
+      await deletePostBySlug(hiddenDraft.slug);
       await deleteMessages(messages);
       await deleteTestimonial(waiting);
       await deleteTestimonial(approved);
@@ -211,7 +214,8 @@ test.describe("the dashboard page", () => {
 
     await page.goto("/admin");
     await page.getByRole("link", { name: "Articol nou" }).click();
-    await expect(page.getByRole("heading", { name: "Articol nou" })).toBeVisible();
-    await expect(page).toHaveURL(/\/admin\/blog$/);
+    // The post editor has an address of its own now.
+    await expect(page).toHaveURL(/\/admin\/blog\/new$/);
+    await expect(page.getByLabel("Titlu (RO)", { exact: true })).toHaveValue("");
   });
 });

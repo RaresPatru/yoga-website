@@ -1,6 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { SHORTCUTS } from "../lib/editor-shortcuts";
-import { adminAccessToken, deletePostBySlug, seedPost, unique } from "./helpers";
+import { adminAccessToken, deletePostBySlug, postById, seedPost, unique } from "./helpers";
 
 /**
  * The blog editor's shortcuts, alignment and translation.
@@ -44,17 +44,23 @@ const enEditor = (page: Page) => page.getByRole("textbox", { name: "Conținut (E
  * is proof the page has hydrated (CLAUDE.md, "a form that does nothing").
  */
 async function openNewPost(page: Page): Promise<Locator> {
-  await page.goto("/admin/blog");
-  await page.getByRole("button", { name: "Articol Nou" }).click();
+  await page.goto("/admin/blog/new");
   await expect(page.getByRole("button", { name: "Îngroșat" }).first()).toBeVisible();
   return roEditor(page);
 }
 
-async function openPost(page: Page, slug: string) {
-  await page.goto("/admin/blog");
-  await page.getByRole("button", { name: `Editează articol: Articol E2E ${slug}` }).click();
+async function openPost(page: Page, id: string) {
+  await page.goto(`/admin/blog/${id}`);
   await expect(page.getByRole("button", { name: "Îngroșat" }).first()).toBeVisible();
 }
+
+/** The one-switch language control in the editor's bar. */
+async function showEnglish(page: Page) {
+  await page.getByRole("radio", { name: /EN/ }).check({ force: true });
+  await expect(enEditor(page)).toBeVisible();
+}
+
+const saveStatus = (page: Page) => page.locator("[data-save-status]");
 
 /**
  * Replaces the editor's content and puts the caret at the end, or selects
@@ -153,7 +159,7 @@ test.describe("blog editor shortcuts", () => {
     // lying over the middle of it.
     await page.getByRole("button", { name: "Scurtături" }).first().click();
     await expect(list).toBeVisible();
-    await page.getByRole("heading", { name: "Articol Nou" }).click();
+    await page.getByRole("heading", { name: "Detalii" }).click();
     await expect(list).toBeHidden();
   });
 
@@ -180,10 +186,21 @@ test.describe("blog editor shortcuts", () => {
     // ProseMirror parks its own <br> in empty paragraphs; those are not hers.
     await expect(editor.locator("p br:not(.ProseMirror-trailingBreak)")).toHaveCount(1);
 
+    // Outside a list there is nothing to indent, so the buttons are not there.
+    const indent = page.getByRole("button", { name: "Fă din el un subpunct" });
+    const outdent = page.getByRole("button", { name: "Scoate-l din subpunct" });
+    await expect(indent).toHaveCount(0);
+
     await reset(editor, "<ul><li><p>Unu</p></li><li><p>Doi</p></li></ul>");
     await page.keyboard.press("Tab");
     await expect(editor.locator("ul ul li")).toHaveText("Doi");
     await page.keyboard.press("Shift+Tab");
+    await expect(editor.locator("ul ul")).toHaveCount(0);
+
+    // The same with the toolbar, which is how it is done on a phone.
+    await indent.click();
+    await expect(editor.locator("ul ul li")).toHaveText("Doi");
+    await outdent.click();
     await expect(editor.locator("ul ul")).toHaveCount(0);
 
     await reset(editor, "<p>Text</p>");
@@ -209,18 +226,24 @@ test.describe("blog editor alignment", () => {
     slug = unique("aliniere");
     const editor = await openNewPost(page);
 
-    await page.getByLabel("Titlu (RO)").fill(`Aliniere ${slug}`);
-    await page.getByLabel("Slug").fill(slug);
+    await page.getByLabel("Titlu (RO)", { exact: true }).fill(`Aliniere ${slug}`);
+    await page.getByRole("textbox", { name: "Adresa articolului" }).fill(slug);
     await editor.click();
     await page.keyboard.type("Un rând centrat");
-    const centre = page.getByRole("button", { name: "Aliniere la centru" }).first();
-    await centre.click();
-    await expect(centre).toHaveAttribute("aria-pressed", "true");
+    // One menu, left by default.
+    const alignment = page.getByRole("button", { name: "Aliniere", exact: true });
+    await alignment.click();
+    const menu = page.getByRole("menu", { name: "Aliniere" });
+    await expect(menu.getByRole("menuitemradio", { name: "Aliniere la stânga" })).toHaveAttribute("aria-checked", "true");
+    await menu.getByRole("menuitemradio", { name: "Aliniere la centru" }).click();
     await expect(editor.locator('p[style*="text-align: center"]')).toHaveText("Un rând centrat");
+    await alignment.click();
+    await expect(menu.getByRole("menuitemradio", { name: "Aliniere la centru" })).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
 
-    await page.getByText("Publicat", { exact: true }).click();
-    await page.getByRole("button", { name: "Salvează" }).click();
-    await expect(editor).toHaveCount(0);
+    await page.getByRole("button", { name: "Publică", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Notificări" })).toContainText("Articol publicat");
 
     await page.goto(`/ro/blog/${slug}`);
     // Through the sanitizer and the CSP, which both have to let the style
@@ -256,7 +279,7 @@ test.describe("blog editor translation", () => {
     return requests;
   }
 
-  test("→ EN translates paragraph by paragraph and keeps every piece of formatting", async ({ page }) => {
+  test("translating the missing English goes paragraph by paragraph and keeps every piece of formatting", async ({ page }) => {
     const post = await seedPost({
       content_ro: [
         "<h2>Despre respirație</h2>",
@@ -273,10 +296,11 @@ test.describe("blog editor translation", () => {
     slug = post.slug;
     const requests = await fakeTranslator(page);
 
-    await openPost(page, slug);
+    await openPost(page, post.id);
+    await showEnglish(page);
     const en = enEditor(page);
-    // The content's → EN; the first one on the page is the title's.
-    await page.getByRole("button", { name: "→ EN" }).nth(1).click();
+    // Only the text is missing; the title already has its English.
+    await page.getByRole("button", { name: "Tradu ce lipsește" }).click();
 
     await expect(en.locator("h2")).toHaveText("EN Despre respirație");
     await expect(en.locator("p strong")).toHaveText("adânc");
@@ -295,22 +319,25 @@ test.describe("blog editor translation", () => {
     expect(requests[0].join("")).not.toMatch(/<(p|h\d|ul|ol|li|blockquote|hr|iframe|div)\b/);
     expect(requests[0][1]).toContain("<strong>adânc</strong>");
 
-    await page.getByRole("button", { name: "Salvează" }).click();
-    await expect(en).toHaveCount(0);
+    // A live post: the translation is a private change until published.
+    await expect(saveStatus(page)).toHaveText("Salvat");
+    await page.getByRole("button", { name: "Publică modificările" }).click();
+    await expect(page.getByRole("region", { name: "Notificări" })).toContainText("Modificări publicate");
     await page.goto(`/en/blog/${slug}`);
     await expect(page.locator(".blog-content h2")).toHaveText("EN Despre respirație");
     await expect(page.locator(".blog-content ul > li")).toHaveCount(2);
   });
 
-  test("replacing English that is already there is asked first, and Desfă brings it back", async ({ page }) => {
+  test("replacing English that is already there is asked first, and Undo brings it back", async ({ page }) => {
     const post = await seedPost({ content_ro: "<p>Bună</p>", content_en: "<p>My own English</p>" });
     slug = post.slug;
     const requests = await fakeTranslator(page);
 
-    await openPost(page, slug);
+    await openPost(page, post.id);
+    await showEnglish(page);
     const en = enEditor(page);
     await expect(en).toHaveText("My own English");
-    const translate = page.getByRole("button", { name: "→ EN" }).nth(1);
+    const translate = page.getByRole("button", { name: "Tradu din nou din română" });
 
     const question = page.getByRole("dialog", { name: "Înlocuiești textul în engleză?" });
 
@@ -321,12 +348,12 @@ test.describe("blog editor translation", () => {
     expect(requests).toHaveLength(0);
 
     await translate.click();
-    await expect(question).toContainText("Desfă");
+    await expect(question).toContainText("Undo");
     await question.getByRole("button", { name: "Înlocuiește" }).click();
     await expect(en).toHaveText("EN Bună");
 
-    // The English editor's own Desfă: the second one on the page.
-    await page.getByRole("button", { name: "Desfă" }).nth(1).click();
+    // The English editor's own Undo; the Romanian toolbar is hidden in this mode.
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
     await expect(en).toHaveText("My own English");
   });
 
@@ -336,22 +363,28 @@ test.describe("blog editor translation", () => {
     });
     slug = post.slug;
 
-    await openPost(page, slug);
+    await openPost(page, post.id);
+    await showEnglish(page);
     const paragraphs = enEditor(page).locator("p");
     await expect(paragraphs).toHaveCount(2);
     await expect(paragraphs.nth(1).locator("br:not(.ProseMirror-trailingBreak)")).toHaveCount(1);
   });
 
   test("an untouched English editor saves as no English, so the page falls back to Romanian", async ({ page }) => {
-    const post = await seedPost({ content_ro: "<p>Doar în română.</p>", content_en: null });
+    const post = await seedPost({ content_ro: "<p>Doar în română.</p>", content_en: null, published: false });
     slug = post.slug;
 
-    await openPost(page, slug);
-    await page.getByRole("button", { name: "Salvează" }).click();
-    await expect(enEditor(page)).toHaveCount(0);
+    await openPost(page, post.id);
+    await roEditor(page).click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" Da.");
+    await expect(saveStatus(page)).toHaveText("Salvat");
+    expect((await postById(post.id))?.content_en).toBeNull();
+    await page.getByRole("button", { name: "Publică", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Notificări" })).toContainText("Articol publicat");
 
     await page.goto(`/en/blog/${slug}`);
-    await expect(page.locator(".blog-content")).toHaveText("Doar în română.");
+    await expect(page.locator(".blog-content")).toHaveText("Doar în română. Da.");
   });
 
   test("the translation route refuses what it cannot translate, before asking Google", async ({ request }) => {

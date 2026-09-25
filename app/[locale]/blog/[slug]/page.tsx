@@ -1,38 +1,25 @@
 import { notFound } from "next/navigation";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getLocale, getTranslations } from "next-intl/server";
-import { formatDate } from "@/lib/utils";
-import { sanitizeHtml } from "@/lib/sanitize";
-import { GlassCard } from "@/components/ui/glass-card";
-import { ShareButton } from "@/components/ui/share-button";
+import { sanitizeArticleHtml } from "@/lib/sanitize";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
 import { absoluteUrl } from "@/lib/site-config";
 import { getSiteContent, getSiteName } from "@/lib/site-content";
-import { Link } from "@/i18n/navigation";
-import { ArrowLeft } from "lucide-react";
+import { localisePost } from "@/lib/blog";
+import { Article } from "@/components/blog/article";
 import type { Metadata } from "next";
 
-interface PostRow {
-  id: string;
-  slug: string;
-  title_ro: string;
-  title_en: string | null;
-  content_ro: string | null;
-  content_en: string | null;
-  created_at: string;
-}
-
-async function getPost(slug: string): Promise<PostRow | null> {
-  const supabase = createPublicClient();
-  const { data } = await supabase
+async function getPost(slug: string) {
+  const { data } = await createPublicClient()
     .from("blog_posts")
-    .select("id, slug, title_ro, title_en, content_ro, content_en, created_at")
+    .select(
+      "id, slug, title_ro, title_en, subtitle_ro, subtitle_en, content_ro, content_en, cover_url, first_image, author, published_at, created_at, updated_at, reading_minutes_ro, reading_minutes_en"
+    )
     .eq("slug", slug)
     .eq("published", true)
     .eq("hidden", false)
     .maybeSingle();
-
-  return (data as PostRow) ?? null;
+  return data;
 }
 
 export async function generateMetadata({
@@ -47,20 +34,18 @@ export async function generateMetadata({
     return { title: locale === "ro" ? "Articol negăsit" : "Post not found" };
   }
 
-  const title = locale === "ro" ? post.title_ro : post.title_en || post.title_ro;
-  const content = locale === "ro" ? post.content_ro : post.content_en || post.content_ro;
+  const view = localisePost(post, locale);
 
   return buildPageMetadata({
-    title,
-    // The excerpt is derived from the post body with the HTML stripped —
-    // TipTap stores markup, and raw tags in a meta description look broken in
-    // search results.
-    description: toDescription(content, title),
+    title: view.title,
+    // The subtitle when she wrote one, since it is her own summary; otherwise
+    // the start of the text with the HTML stripped.
+    description: view.subtitle ?? toDescription(view.content, view.title),
     path: `/blog/${post.slug}`,
     locale,
     image: absoluteUrl(`/api/og/post/${post.slug}?locale=${locale}`),
     type: "article",
-    publishedTime: post.created_at,
+    publishedTime: view.date,
   });
 }
 
@@ -72,63 +57,59 @@ export default async function BlogPostPage({
   const { slug } = await params;
   const locale = await getLocale();
   const t = await getTranslations("blog");
+  const te = await getTranslations("embed");
   const post = await getPost(slug);
 
   if (!post) notFound();
 
-  const title = locale === "ro" ? post.title_ro : (post.title_en || post.title_ro);
-  const content = locale === "ro" ? post.content_ro : (post.content_en || post.content_ro);
-
+  const view = localisePost(post, locale);
   const siteContent = await getSiteContent(locale);
-  const author = siteContent["blog.default_author"] ?? siteContent["seo.person_name"];
+  // Her own byline for this post, else the blog's default author, else her
+  // name from Conținut site, else none: a placeholder name would be a false
+  // statement a search engine repeats (audit R6).
+  const author =
+    post.author?.trim() || siteContent["blog.default_author"] || siteContent["seo.person_name"] || null;
 
   // schema.org Article, so search engines can show this as a proper article
   // result with an author and a date rather than a generic page.
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "Article",
-    headline: title,
-    datePublished: post.created_at,
-    description: toDescription(content, title),
-    // The author only when she has said who that is: the blog's default
-    // author, else her own name ("Conținut site"). A placeholder name here
-    // would be a false statement a search engine repeats (audit R6).
+    headline: view.title,
+    datePublished: view.date,
+    dateModified: post.updated_at,
+    description: view.subtitle ?? toDescription(view.content, view.title),
+    ...(view.picture ? { image: /^https?:/.test(view.picture) ? view.picture : absoluteUrl(view.picture) } : {}),
     ...(author ? { author: { "@type": "Person", name: author } } : {}),
     publisher: { "@type": "Organization", name: await getSiteName(locale) },
     mainEntityOfPage: absoluteUrl(`/${locale}/blog/${post.slug}`),
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
+    <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
       />
-
-      <Link
-        href="/blog"
-        className="mb-8 inline-flex items-center gap-2 text-sm text-charcoal-light hover:text-charcoal"
-      >
-        <ArrowLeft className="h-4 w-4" /> {t("back")}
-      </Link>
-
-      <GlassCard hover={false}>
-        <div className="flex items-center justify-between">
-          <h1 className="font-serif text-3xl text-charcoal md:text-4xl">{title}</h1>
-          <ShareButton title={title} />
-        </div>
-        <p className="mt-3 text-sm text-charcoal-light">
-          {formatDate(post.created_at, locale)}
-        </p>
-
-        {content && (
-          <div
-            className="prose prose-sage blog-content mt-8 max-w-none"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
-          />
-        )}
-
-      </GlassCard>
-    </div>
+      <Article
+        locale={locale}
+        view={{
+          ...view,
+          author,
+          html: view.content
+            ? sanitizeArticleHtml(view.content, {
+                // The placeholder stays in, for sanitizeArticleHtml to fill per video.
+                play: te("play", { provider: "{provider}" }),
+                note: te("note", { provider: "{provider}" }),
+              })
+            : null,
+        }}
+        labels={{
+          back: t("back"),
+          by: (name) => t("by", { author: name }),
+          readingTime: (minutes) => t("reading_time", { minutes }),
+        }}
+      />
+    </>
   );
 }

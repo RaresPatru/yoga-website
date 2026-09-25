@@ -1360,3 +1360,66 @@ of the site on a phone, where "Acasă" is inside the menu (audit I20). On
 24 September 2026 Rares chose "home": the wordmark links to the home page, and
 on the home page itself the same click scrolls to the top. A back-to-top button
 for long pages comes in phase 9.
+
+### Videos in posts wait for a press, and have no thumbnail
+
+A YouTube, Vimeo, Instagram or TikTok frame contacts that company the moment
+the page loads, and may set its cookies, before the reader has shown any
+interest in the video. EU rules treat those as non-essential cookies that need
+consent first, which would have meant a banner. So the public pages draw a
+placeholder in the frame's place (`sanitizeArticleHtml` in `lib/sanitize.ts`),
+and `components/rich-html.tsx` swaps the player in when it is pressed, from
+YouTube's no-cookie host. The placeholder has no thumbnail: fetching one from
+YouTube's image server would tell Google who is reading, which is the thing the
+placeholder exists to avoid. The stored HTML keeps the real `<iframe>`, so the
+editor shows the video and nothing is lost if this is ever revisited.
+
+One list of players, `lib/embeds.ts`, feeds the editor's video dialog, the
+sanitizer and the placeholder. `tests/sanitize.spec.ts` checks the live CSP
+allows each of them.
+
+### A live post's changes are private until published
+
+Autosave on a published post would otherwise publish every half-written
+sentence. Its saves go to `content_drafts` instead, and visitors read the post
+row until "Publică modificările" copies the draft over in one transaction
+(`publish_post_draft`). The draft holds the whole edited version, not a diff,
+so it always says exactly what publishing would produce. Hiding is the
+exception: it applies at once, since it exists to take something down quickly.
+Events get the same treatment in phase 4 through the same table.
+
+### The preview is read in the browser, and is the one framed page
+
+Only the admin may read an unpublished post, so the preview needs her session,
+and a public page must not read the session on the server (CLAUDE.md, the 504s
+of `lib/supabase/server.ts`). `app/[locale]/preview/blog/[id]` therefore reads
+the post with the browser client and draws it with the published article's own
+component, inside the public layout. The editor shows it in a frame at phone or
+computer width, so that path alone is served with `frame-ancestors 'self'` and
+`X-Frame-Options: SAMEORIGIN` (a second header rule in `next.config.ts`, which
+Next applies after the global one), plus `noindex`.
+
+### Every post is in exactly one tab
+
+Publicate, Ciorne, Ascunse: a hidden post is in Ascunse whether or not it was
+ever published, and the dashboard's draft count follows the same rule, so the
+number on the dashboard is the number on the tab it links to. The list fetches
+every post without its text and filters, sorts and pages in the browser: a solo
+blog has tens of posts, and it keeps each tab's count exact without a query per
+tab. Revisit if it ever reaches the thousands.
+
+### A post's address follows its title until it goes live
+
+Before the first publish nobody has the link, so the address is rebuilt from the
+title as she types (and numbered if another post has it). After publishing it
+changes only when she changes it, because shared links lead to it. An address
+she types that another post has is refused on its own: everything else keeps
+saving, and the field says why.
+
+### Pictures from unknown hosts are shown unoptimised
+
+`next/image` throws, and takes the page down with it, for any host missing from
+`images.remotePatterns`. A post's first picture becomes its card's picture, and
+pictures can be pasted from anywhere, so one outside image broke both the
+article and `/blog` during phase 3. `canOptimise()` (`lib/image-src.ts`) sends
+those through `unoptimized`, which shows the file as it is.

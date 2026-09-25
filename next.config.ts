@@ -60,12 +60,18 @@ function localAddresses(): string[] {
  *   challenges.cloudflare.com The Turnstile CAPTCHA widget and its iframe.
  *   *.posthog.com             Analytics.
  *   *.supabase.co             The database/API and the public media bucket.
- *   youtube / vimeo / instagram  Embedded video in blog posts.
+ *   youtube / vimeo / instagram / tiktok  Embedded video in posts and event
+ *                             descriptions, loaded only when a visitor presses
+ *                             play (lib/embeds.ts lists them;
+ *                             tests/sanitize.spec.ts checks this list covers it).
  *
  * frame-ancestors 'none' stops the site being loaded inside an iframe on
- * another domain, which is what clickjacking relies on.
+ * another domain, which is what clickjacking relies on. The one exception is
+ * the blog preview, which the admin's editor frames from this same site
+ * (`framedBySelf`, and the header rule for /:locale/preview below), which is
+ * also why frame-src names 'self'.
  */
-function contentSecurityPolicy(): string {
+function contentSecurityPolicy({ framedBySelf = false } = {}): string {
 
   // The browser talks to Supabase directly (public pages read events, the admin
   // panel signs in), so its origin has to be on the allowlist.
@@ -124,8 +130,8 @@ function contentSecurityPolicy(): string {
     // address on the event page is a plain link to a map instead, which sends
     // nothing until somebody presses it. Do not re-add this without re-reading
     // that list.
-    "frame-src https://challenges.cloudflare.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.instagram.com",
-    "frame-ancestors 'none'",
+    "frame-src 'self' https://challenges.cloudflare.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.instagram.com https://www.tiktok.com",
+    framedBySelf ? "frame-ancestors 'self'" : "frame-ancestors 'none'",
     "base-uri 'self'",
     // Restricts where <form action="..."> may submit. Stripe redirects the
     // visitor via a normal navigation rather than a form post, so it does not
@@ -248,6 +254,19 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
           },
+        ],
+      },
+      {
+        // The blog preview (app/[locale]/preview): the admin's editor shows it
+        // in a frame at phone or computer width, so this site, and only this
+        // site, may frame it. Listed after the rule above, and Next applies the
+        // last matching value for a header.
+        source: "/:locale(ro|en)/preview/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: contentSecurityPolicy({ framedBySelf: true }) },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          // Nothing unpublished belongs in a search index.
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
     ];

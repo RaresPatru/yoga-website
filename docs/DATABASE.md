@@ -62,6 +62,7 @@ because only one of the two was done.
 | `whatsapp_links` | Saved invite URLs. | **A URL is a capability** | `/admin/events` |
 | `admins` | Who may enter `/admin`. | Revoked from everyone; read only by `is_admin()` | by hand |
 | `profiles` | Extra auth fields. | Vestigial — see below | nothing |
+| `content_drafts` | Unpublished changes to a live post (and, from phase 4, an event). | Work in progress | the post editor's autosave |
 | `admin_dashboard` | **View.** One row: the dashboard's five counts. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 
@@ -104,6 +105,29 @@ not read by the site. The three legal documents are rows too
 `20260925000000_faq_hidden_and_legal_drafts.sql`, which also makes
 `faqs.published` default to false: a new question stays hidden until she
 publishes it.
+
+**Blog posts as articles** (`20260926000000_blog_editorial.sql`). A post has
+an optional subtitle in each language, a `cover_url`, an `author` (empty means
+the default author from site content) and `published_at`, which the trigger
+`blog_posts_stamp_published` sets the first time the post is saved as
+published and never again. Two things are generated columns, computed by
+Postgres on every save and refused on write: `first_image`, the first `<img>`
+in the Romanian text (the card's picture when there is no cover), and
+`reading_minutes_ro` / `_en`, the words at 200 a minute. The same caveat as
+`events.starts_at` applies: the generated types offer them on insert and
+update. `blog_posts_slug_format` limits the address to lowercase letters,
+digits and single hyphens (`not valid`, like the events check). `media_urls`
+is gone; nothing ever used it.
+
+**Private changes.** While a post is live, the editor's autosave writes to
+its row in `content_drafts` (`data` holds the fields by column name), so
+visitors keep reading the published version. Exactly one of `post_id` and
+`event_id` is set, and each is a foreign key that deletes the draft with its
+owner. `publish_post_draft(id)` copies the draft onto the post and deletes
+it in one transaction; it is `security invoker`, so the admin-only policies
+on both tables decide, and only `authenticated` may execute it. The
+dashboard's `draft_posts` counts unpublished posts that are not hidden, the
+same set as the post list's Ciorne tab.
 
 ---
 

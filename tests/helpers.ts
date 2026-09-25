@@ -638,3 +638,41 @@ export async function insertBareFaq(questionRo: string): Promise<{ published: bo
   if (error) throw new Error(`insertBareFaq failed: ${error.message}`);
   return data as { published: boolean };
 }
+
+/** A post as the admin sees it, by id, or null. */
+export async function postById(id: string) {
+  const { data, error } = await (await adminScoped()).from("blog_posts").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`postById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** A post's unpublished changes (content_drafts.data), or null. */
+export async function draftFor(postId: string) {
+  const { data, error } = await (await adminScoped())
+    .from("content_drafts")
+    .select("data")
+    .eq("post_id", postId)
+    .maybeSingle();
+  if (error) throw new Error(`draftFor failed: ${error.message}`);
+  return (data?.data as Record<string, unknown> | undefined) ?? null;
+}
+
+/** Posts whose Romanian title starts with a test's marker: for cleaning up posts the editor created. */
+export async function deletePostsTitled(prefix: string) {
+  const { error } = await (await adminScoped()).from("blog_posts").delete().like("title_ro", `${prefix}%`);
+  if (error) throw new Error(`deletePostsTitled failed: ${error.message}`);
+}
+
+export async function deletePostById(id: string) {
+  const { error } = await (await adminScoped()).from("blog_posts").delete().eq("id", id);
+  if (error) throw new Error(`deletePostById failed: ${error.message}`);
+}
+
+/** How many posts exist in total, drafts included. */
+export async function postCount(): Promise<number> {
+  const { count, error } = await (await adminScoped())
+    .from("blog_posts")
+    .select("id", { count: "exact", head: true });
+  if (error) throw new Error(`postCount failed: ${error.message}`);
+  return count ?? 0;
+}

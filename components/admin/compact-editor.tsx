@@ -6,7 +6,13 @@ import { Bold, Italic, Link2, List, ListOrdered } from "lucide-react";
 import { compactEditorExtensions } from "@/lib/compact-editor";
 import { toEditorContent } from "@/lib/blog-editor";
 import { cn } from "@/lib/utils";
-import { LinkDialog } from "@/components/admin/link-dialog";
+import {
+  LinkDialog,
+  applyLink,
+  readLink,
+  removeLink,
+  type LinkValue,
+} from "@/components/admin/link-dialog";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 
 /**
@@ -37,7 +43,7 @@ export function CompactEditor({
 }) {
   const { t } = useAdminLocale();
   const [linkOpen, setLinkOpen] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
+  const [link, setLink] = useState<LinkValue>({ href: "", text: "" });
   const extensions = useMemo(() => compactEditorExtensions(), []);
 
   const editor = useEditor({
@@ -125,7 +131,8 @@ export function CompactEditor({
           className={button(!!editor?.isActive("link"))}
           aria-label={t("admin.content_editor.link")}
           onClick={() => {
-            setLinkUrl(editor?.getAttributes("link").href ?? "");
+            if (!editor) return;
+            setLink(readLink(editor));
             setLinkOpen(true);
           }}
         >
@@ -135,14 +142,10 @@ export function CompactEditor({
       <EditorContent editor={editor} />
       <LinkDialog
         open={linkOpen}
-        initialUrl={linkUrl}
+        initial={link}
         onClose={() => setLinkOpen(false)}
-        onApply={(url) => {
-          if (!editor) return;
-          if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-          else editor.chain().focus().extendMarkRange("link").unsetLink().run();
-          setLinkOpen(false);
-        }}
+        onApply={(value) => editor && applyLink(editor, value, link)}
+        onRemove={() => editor && removeLink(editor)}
       />
     </div>
   );

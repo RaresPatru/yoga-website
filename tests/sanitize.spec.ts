@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { spawnSync } from "node:child_process";
-import { sanitizeHtml } from "../lib/sanitize";
+import { sanitizeArticleHtml, sanitizeHtml } from "../lib/sanitize";
+import { EMBED_ORIGINS, embedFromUrl, playerSrc, portraitMaxWidth } from "../lib/embeds";
 import { deletePostBySlug, seedPost } from "./helpers";
 
 /**
@@ -65,6 +66,7 @@ test.describe("sanitizeHtml", () => {
       "https://player.vimeo.com/video/123",
       "https://www.instagram.com/p/AbC_123/embed",
       "https://www.instagram.com/reel/AbC/embed/",
+      "https://www.tiktok.com/player/v1/7234567890123456789",
     ]) {
       const frame = `<iframe src="${src}" allow="autoplay" allowfullscreen="true" title="Video" loading="lazy"></iframe>`;
       expect(sanitizeHtml(frame), src).toBe(frame);
@@ -78,6 +80,8 @@ test.describe("sanitizeHtml", () => {
       "https://www.youtube.com.attacker.example/embed/x",
       "http://www.youtube.com/embed/abc",
       "//www.youtube.com/embed/abc",
+      "https://www.tiktok.com/@someone/video/7234567890123456789",
+      "https://www.google.com/maps/embed?pb=x",
       "",
     ]) {
       expect(sanitizeHtml(`<p>a</p><iframe src="${src}"></iframe>`), src).toBe("<p>a</p>");
@@ -118,6 +122,97 @@ test.describe("sanitizeHtml", () => {
   });
 });
 
+/**
+ * lib/embeds.ts: the one list of video players the editor, the sanitizer and
+ * the public pages share.
+ */
+test.describe("video addresses", () => {
+  test("each supported address becomes its player, portrait where the video is", () => {
+    const cases: [string, string, string][] = [
+      ["https://www.youtube.com/watch?v=abc123XYZ", "https://www.youtube-nocookie.com/embed/abc123XYZ", "16 / 9"],
+      ["https://youtu.be/abc123XYZ?si=share", "https://www.youtube-nocookie.com/embed/abc123XYZ", "16 / 9"],
+      ["https://m.youtube.com/watch?feature=share&v=abc123XYZ", "https://www.youtube-nocookie.com/embed/abc123XYZ", "16 / 9"],
+      ["https://www.youtube.com/shorts/abc123XYZ", "https://www.youtube-nocookie.com/embed/abc123XYZ", "9 / 16"],
+      ["youtube.com/watch?v=abc123XYZ", "https://www.youtube-nocookie.com/embed/abc123XYZ", "16 / 9"],
+      ["https://vimeo.com/123456", "https://player.vimeo.com/video/123456", "16 / 9"],
+      ["https://www.instagram.com/p/AbC_123/", "https://www.instagram.com/p/AbC_123/embed", "4 / 5"],
+      ["https://www.instagram.com/reel/AbC_123/?igsh=x", "https://www.instagram.com/reel/AbC_123/embed", "9 / 16"],
+      ["https://www.instagram.com/reels/AbC_123/", "https://www.instagram.com/reel/AbC_123/embed", "9 / 16"],
+      ["https://www.tiktok.com/@flow4ward/video/7234567890123456789", "https://www.tiktok.com/player/v1/7234567890123456789", "9 / 16"],
+    ];
+    for (const [input, src, aspect] of cases) {
+      expect(embedFromUrl(input), input).toMatchObject({ src, aspect });
+      // And what the dialog makes, the sanitizer keeps.
+      expect(sanitizeHtml(`<iframe src="${src}"></iframe>`), input).toContain(src);
+    }
+  });
+
+  test("maps, TikTok short links and everything else are refused with a reason", () => {
+    expect(embedFromUrl("https://maps.app.goo.gl/abc")).toEqual({ refused: "map" });
+    expect(embedFromUrl("https://www.google.com/maps/place/Cluj")).toEqual({ refused: "map" });
+    expect(embedFromUrl("https://vm.tiktok.com/ZMabc/")).toEqual({ refused: "tiktok_short" });
+    expect(embedFromUrl("https://example.com/video")).toEqual({ refused: "unsupported" });
+    expect(embedFromUrl("nu e o adresă")).toEqual({ refused: "not_a_link" });
+  });
+
+  test("a pressed video plays from the no-cookie host, and portrait ones are capped in width", () => {
+    expect(playerSrc("https://www.youtube.com/embed/abc")).toBe("https://www.youtube-nocookie.com/embed/abc?autoplay=1");
+    expect(playerSrc("https://player.vimeo.com/video/1")).toBe("https://player.vimeo.com/video/1?autoplay=1");
+    expect(playerSrc("https://www.instagram.com/p/a/embed")).toBe("https://www.instagram.com/p/a/embed");
+    expect(portraitMaxWidth("16 / 9")).toBeNull();
+    expect(portraitMaxWidth("9 / 16")).toBe("22.5rem");
+    expect(portraitMaxWidth("4 / 5")).toBe("32rem");
+  });
+
+  test("the page's Content-Security-Policy lets every player load", async ({ request }) => {
+    const csp = (await request.get("/ro")).headers()["content-security-policy"] ?? "";
+    const frameSrc = csp.split(";").map((d) => d.trim()).find((d) => d.startsWith("frame-src")) ?? "";
+    for (const origin of EMBED_ORIGINS) expect(frameSrc, origin).toContain(origin);
+  });
+
+  test("only the preview may be framed, and only by this site", async ({ request }) => {
+    const page = (await request.get("/ro")).headers();
+    expect(page["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(page["x-frame-options"]).toBe("DENY");
+    const preview = (await request.get("/ro/preview/blog/00000000-0000-0000-0000-000000000000")).headers();
+    expect(preview["content-security-policy"]).toContain("frame-ancestors 'self'");
+    expect(preview["content-security-policy"]).not.toContain("frame-ancestors 'none'");
+    expect(preview["x-frame-options"]).toBe("SAMEORIGIN");
+    expect(preview["x-robots-tag"]).toContain("noindex");
+  });
+});
+
+test.describe("videos on public pages", () => {
+  const labels = { play: "Play from {provider}", note: "{provider} not contacted" };
+
+  test("become placeholders that remember the player, its shape and its name", () => {
+    const out = sanitizeArticleHtml(
+      '<p>a</p><div class="relative" style="aspect-ratio:9 / 16;max-width:360px"><iframe src="https://www.instagram.com/reel/AbC/embed" data-aspect="9 / 16" title="Instagram"></iframe></div><p>b</p>',
+      labels
+    );
+    expect(out).not.toContain("<iframe");
+    expect(out).toContain('data-embed-src="https://www.instagram.com/reel/AbC/embed"');
+    expect(out).toContain("aspect-ratio:9 / 16;max-width:22.5rem;");
+    expect(out).toContain("Play from Instagram");
+    expect(out).toContain("Instagram not contacted");
+    // The wrapper went with the frame, and the words around it stayed.
+    expect(out).toMatch(/^<p>a<\/p><figure[^>]*>[\s\S]*<\/figure><p>b<\/p>$/);
+  });
+
+  test("read the shape of posts saved before it was on the frame", () => {
+    const out = sanitizeArticleHtml(
+      '<div style="aspect-ratio:9 / 16;"><iframe src="https://www.youtube.com/embed/abc"></iframe></div>',
+      labels
+    );
+    expect(out).toContain("aspect-ratio:9 / 16;");
+  });
+
+  test("are not made for frames the sanitizer drops", () => {
+    const out = sanitizeArticleHtml('<iframe src="https://evil.example/embed/x"></iframe><p>ok</p>', labels);
+    expect(out).toBe("<p>ok</p>");
+  });
+});
+
 test.describe("a stored post on its page", () => {
   let slug = "";
 
@@ -125,7 +220,7 @@ test.describe("a stored post on its page", () => {
     if (slug) await deletePostBySlug(slug);
   });
 
-  test("arrives sanitized, with its allowed embed intact", async ({ page }) => {
+  test("arrives sanitized, with its allowed embed waiting to be played", async ({ page }) => {
     // The embed only has to exist, not play: nothing leaves the machine.
     await page.route(/^https:\/\/(www\.)?youtube\.com\//, (route) =>
       route.fulfill({ status: 200, contentType: "text/html", body: "" })
@@ -148,9 +243,11 @@ test.describe("a stored post on its page", () => {
     await expect(body.getByText("Paragraf păstrat.")).toBeVisible();
     await expect(body.locator("script")).toHaveCount(0);
     await expect(body.locator("[onerror]")).toHaveCount(0);
-    await expect(body.locator("iframe")).toHaveCount(1);
-    await expect(body.locator("iframe")).toHaveAttribute(
-      "src",
+    // The evil frame is gone; the YouTube one is a placeholder until pressed.
+    await expect(body.locator("iframe")).toHaveCount(0);
+    await expect(body.locator(".embed-facade")).toHaveCount(1);
+    await expect(body.locator(".embed-facade")).toHaveAttribute(
+      "data-embed-src",
       "https://www.youtube.com/embed/abc123"
     );
     expect(await page.evaluate(() => "__injected" in window)).toBe(false);

@@ -22,7 +22,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 0 | Groundwork: error handling, typed database, checkout fix, shared pieces | done, 24 Sep |
 | 1 | Admin shell (sticky collapsible sidebar) and the dashboard | done, 24 Sep |
 | 2 | Site content, one-switch bilingual editing, public copy and legal pages | done, 25 Sep |
-| 3 | Blog: toolbar, post list, editor, public cards and article | not started |
+| 3 | Blog: toolbar, post list, editor, public cards and article | done, 25 Sep |
 | 4 | Events: admin list and editor, per-event numbers, public archive | not started |
 | 5 | Registrations: one list with the waiting list, archive, notes, exports | not started |
 | 6 | Testimonials and verified reviews | not started |
@@ -515,7 +515,7 @@ passed in both engines (87 of 87).
 
 ### Phase 3: Blog
 
-- [ ] **Toolbar:**
+- [x] **Toolbar:**
   - The code block goes. Inline code and underline stay.
   - Alignment becomes one dropdown, with left as the default.
   - Indent and outdent buttons appear for lists, replacing the Tab row in the
@@ -528,10 +528,10 @@ passed in both engines (87 of 87).
     screens, shortcuts button included.
   - The image button shows images only; audio and video had never worked
     there (B12).
-- [ ] **Link dialog:** an address plus "Text afișat" (text shown); an empty text
+- [x] **Link dialog:** an address plus "Text afișat" (text shown); an empty text
   shows the address itself. Editing a link shows its current text, there is a
   Remove link button, and `https://` is added when missing.
-- [ ] **Video:**
+- [x] **Video:**
   - The tooltip and the dialog list exactly what works: YouTube videos and
     Shorts, Vimeo, Instagram posts and reels, and TikTok.
   - Maps and other sites are refused with an explanation.
@@ -539,12 +539,12 @@ passed in both engines (87 of 87).
     testimonials.
   - Portrait embeds keep their shape (B34), and 4:5 posts are sized properly
     (B26).
-- [ ] **Tooltips paint above the text:** the toolbar becomes its own layer.
-- [ ] **One source for typography** (`lib/article-typography.ts`), used by both
+- [x] **Tooltips paint above the text:** the toolbar becomes its own layer.
+- [x] **One source for typography** (`lib/article-typography.ts`), used by both
   the public article and the editor.
   - It replaces `prose-sage`, which never existed.
   - H2 and H3 now use the title's weight.
-- [ ] **The post list** at `/admin/blog`:
+- [x] **The post list** at `/admin/blog`:
   - Tabs with counts: Toate · Publicate · Ciorne · Ascunse.
   - Search across title, subtitle and slug, in both languages.
   - Sort by last edited (newest or oldest), publish date, or title.
@@ -552,7 +552,7 @@ passed in both engines (87 of 87).
     unpublished changes, and when it was last edited.
   - A readable width, 25 per page, and the whole state kept in the address.
   - It opens on the Ciorne tab when the dashboard's link says `?tab=drafts`.
-- [ ] **The editor** at `/admin/blog/new` and `/admin/blog/[id]`. The
+- [x] **The editor** at `/admin/blog/new` and `/admin/blog/[id]`. The
   dashboard's "Articol nou" links there, and the `?new=1` stopgap
   (`lib/admin/use-new-from-link.ts`) goes.
   - **A sticky bar** with:
@@ -580,7 +580,7 @@ passed in both engines (87 of 87).
   - **Preview** opens the real public article, draft version, at phone or
     computer width, in RO or EN.
   - **No error closes the editor** (B5).
-- [ ] **The public blog.**
+- [x] **The public blog.**
   - **Cards on the home page and `/blog`** show the cover, title, subtitle,
     date and reading time ("5 min de citit").
   - `/blog` is split into pages of 12.
@@ -588,6 +588,23 @@ passed in both engines (87 of 87).
     the author, date and reading time.
   - The Share button sits under the title now, not beside it (B24).
   - Embedded videos wait for a click, and YouTube uses its no-cookie domain.
+
+**How it turned out** (25 September 2026)
+
+- **One migration, not two:** `20260926000000_blog_editorial.sql` holds the
+  new columns, `content_drafts`, `publish_post_draft()` and the
+  `published_at` trigger. It also makes the dashboard's draft count match the
+  Ciorne tab (hidden posts are in Ascunse), and updates the cookie policy's
+  sentence about videos where the draft is still unedited.
+- **Spellcheck** is one on/off button; the language follows the RO / EN
+  switch.
+- **The editor's bar sticks on a computer only.** On a phone it scrolls away,
+  because with the toolbar it covered half the screen.
+- **Event descriptions** get the click-to-play videos too, since they share
+  the sanitizer.
+- **Found by the tests and fixed:** a pasted picture from an unknown host took
+  the article and `/blog` down (`next/image`); the leave guard swallowed the
+  editor's Back; a taken address went unnoticed on a live post.
 
 **New migrations**
 

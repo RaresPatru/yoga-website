@@ -1419,6 +1419,43 @@ address) is a `{{token}}` that shows as a dashed marker until she fills it
 in. The ANPC pictogram is official artwork, so she uploads ANPC's own file
 rather than the site drawing an imitation.
 
+### Phase 3: writing on the page she publishes
+
+**The editor was a form; now it is the page.** A post used to be a title field,
+a slug field and two stacked editors with a Save button that closed the whole
+thing. The editor now has an address of its own, and the title, subtitle and
+text are set exactly as the published article sets them, from one typography
+file both share. That file replaced `prose-sage`, a class the pages had used for
+months that never existed: the typography plugin has no sage theme, so it
+quietly did nothing, and headings came out in a heavy sans-serif that looked
+like a different site.
+
+**Saving is no longer something she does.** Autosave, and with it a question
+autosave raises at once: on a live post, every half-written sentence would go
+public. Its changes wait in `content_drafts` until "Publică modificările", and
+visitors keep reading the published version. Preview shows the private version
+inside the real public layout, which needed the admin's session on a public
+page. That is exactly what took three pages down with 504s earlier in the
+month, so the preview reads the post in the browser instead of on the server.
+
+**The tests found three things I would have shipped.** A test that pasted an
+image from an unknown host into a post brought the whole article down: the
+first picture in a post becomes its card picture, and `next/image` throws on a
+host it does not know. The leave guard, which catches link clicks before
+anything else, swallowed the editor's own Back button, so an empty post was
+saved instead of thrown away. And an address that another post already had was
+invisible on a live post, because its changes sit in a table the unique
+constraint does not look at. The editor now checks before saving.
+
+**Videos wait to be asked for.** A YouTube frame contacts Google as the page
+loads, so every post with a video needed a cookie banner the site has
+promised not to have. Each one is now a placeholder that loads the video when
+pressed, from YouTube's no-cookie host, with no thumbnail (fetching one would
+contact Google too). The stored HTML keeps the real frame, so nothing is lost
+if that ever changes. Along the way, the portrait-video bug the audit
+reproduced turned out to be a shape written in one attribute and read back
+from another.
+
 ---
 
 ## Decisions worth defending

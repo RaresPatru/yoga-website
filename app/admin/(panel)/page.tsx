@@ -313,7 +313,7 @@ export default function AdminDashboard() {
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           {t("admin.new_event")}
         </Link>
-        <Link href="/admin/blog?new=1" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+        <Link href="/admin/blog/new" className={buttonClasses({ variant: "secondary", size: "sm" })}>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           {t("admin.new_post")}
         </Link>

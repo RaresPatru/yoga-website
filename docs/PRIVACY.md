@@ -44,10 +44,15 @@ advertising and embedded social media. What the site sets:
   nothing in the visitor's browser (`persistence: "memory"` in
   `components/providers/posthog-provider.tsx`).
 
-**One gap remains until phase 3:** videos embedded in blog posts (YouTube,
-Vimeo, Instagram) load straight away, and those companies may set their own
-cookies when they do. Phase 3 turns them into a still picture that loads the
-video only when pressed, which is what makes "no banner" fully true.
+- **Videos in posts and event descriptions** (YouTube, Vimeo, Instagram,
+  TikTok) load only when a visitor presses play. Until then the page shows a
+  placeholder that says so, and contacts none of those companies: no
+  thumbnail is fetched either. YouTube plays from its no-cookie host. Since
+  26 September 2026 (phase 3) this is what makes "no banner" true; before, the
+  videos loaded with the page.
+
+Pressing play is the visitor asking for the video, after which the video
+site's own terms apply. The cookie policy should say that in a sentence.
 
 ## What she has to fill in
 

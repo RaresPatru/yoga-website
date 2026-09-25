@@ -481,6 +481,25 @@ values
   )
 on conflict (slug) do nothing;
 
+-- Published on the day each was written, so the dates on the cards are spread
+-- out rather than all reading "today" (the trigger stamps now() otherwise).
+-- Two have a cover, one only a picture inside its text (the card then uses
+-- that), and two have neither, so every way a card can look is on screen.
+update public.blog_posts set published_at = created_at where published;
+update public.blog_posts set
+  subtitle_ro = 'Un minut de atenție înainte de orice poziție.',
+  subtitle_en = 'One minute of attention before any pose.',
+  cover_url = '/mock/about.webp'
+where slug = 'de-ce-respiratia-conteaza';
+update public.blog_posts set
+  subtitle_ro = 'Despre obiceiuri mici care chiar se țin.',
+  subtitle_en = 'On small habits that actually last.',
+  cover_url = '/mock/event-2.webp'
+where slug = 'cinci-minute-dimineata';
+update public.blog_posts set
+  content_ro = '<p>Haine în care te poți mișca și o sticlă de apă. Atât.</p><img src="/mock/event-1.webp" alt="Saltele pregătite înainte de o întâlnire"><p>Saltelele sunt la sală. Nu ai nevoie de nimic special și nu trebuie să te pregătești.</p>'
+where slug = 'ce-sa-aduci-la-prima-ora';
+
 
 -- ---------------------------------------------------------------------------
 -- Testimonials

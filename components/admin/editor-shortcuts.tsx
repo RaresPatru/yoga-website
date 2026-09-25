@@ -14,6 +14,7 @@ import {
   type Shortcut,
   type ShortcutSample,
 } from "@/lib/editor-shortcuts";
+import { ARTICLE_TYPOGRAPHY } from "@/lib/article-typography";
 
 /** Nothing here can change while the page is open, so there is nothing to
  *  subscribe to. Hoisted so React sees the same function every render. */
@@ -192,11 +193,12 @@ function ShortcutRow({
     <tr className="border-t border-sage/15" data-keys-only={!shortcut.typed || undefined}>
       <th scope="row" className="py-2 pr-3 align-middle font-normal">
         {/*
-          Drawn by the editor's own stylesheet — the same `prose prose-sm` the
-          editing area uses — so each row shows the result at the size and
-          weight it will really have. Only the margins are taken away.
+          Drawn with the article's own typography (lib/article-typography.ts),
+          which the editing area and the public page share, so each row shows
+          the result at the size and weight it will really have. Only the
+          margins are taken away.
         */}
-        <div className="prose prose-sm max-w-none prose-headings:my-0 prose-p:my-0 prose-blockquote:my-0 prose-ul:my-0 prose-ol:my-0 prose-li:my-0 prose-pre:my-0 prose-pre:px-2.5 prose-pre:py-1 prose-hr:mb-0 prose-hr:mt-1.5">
+        <div className={`${ARTICLE_TYPOGRAPHY} prose-headings:my-0 prose-p:my-0 prose-blockquote:my-0 prose-ul:my-0 prose-ol:my-0 prose-li:my-0 prose-hr:mb-0 prose-hr:mt-1.5`}>
           <Sample kind={shortcut.sample} label={t(`admin.editor.${shortcut.id}`)} />
         </div>
         {shortcut.hint && (
@@ -207,11 +209,15 @@ function ShortcutRow({
       </th>
       <td className="py-2 pr-3 align-middle">
         {shortcut.typed && (
-          // One line: "##" above "Spațiu" reads as two separate things.
+          // One line, joined by "+": "##" above "Spațiu" read as two separate
+          // things, and side by side without the "+" as a choice of either.
           <span className="inline-flex items-center gap-1 whitespace-nowrap">
             <kbd className="editor-typed">{shortcut.typed.text}</kbd>
             {shortcut.typed.then === "Space" && (
-              <kbd className="editor-keycap">{words.space}</kbd>
+              <>
+                <span className="text-xs text-charcoal-light">+</span>
+                <kbd className="editor-keycap">{words.space}</kbd>
+              </>
             )}
           </span>
         )}
@@ -267,8 +273,6 @@ function Sample({ kind, label }: { kind: ShortcutSample; label: string }) {
           <hr role="presentation" />
         </>
       );
-    case "pre":
-      return <pre><code>{label}</code></pre>;
     case "left":
     case "center":
     case "right":

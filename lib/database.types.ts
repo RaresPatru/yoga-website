@@ -54,40 +54,61 @@ export type Database = {
       }
       blog_posts: {
         Row: {
+          author: string | null
           content_en: string | null
           content_ro: string | null
+          cover_url: string | null
           created_at: string
+          first_image: string | null
           hidden: boolean
           id: string
-          media_urls: Json | null
           published: boolean
+          published_at: string | null
+          reading_minutes_en: number | null
+          reading_minutes_ro: number | null
           slug: string
+          subtitle_en: string | null
+          subtitle_ro: string | null
           title_en: string | null
           title_ro: string
           updated_at: string
         }
         Insert: {
+          author?: string | null
           content_en?: string | null
           content_ro?: string | null
+          cover_url?: string | null
           created_at?: string
+          first_image?: string | null
           hidden?: boolean
           id?: string
-          media_urls?: Json | null
           published?: boolean
+          published_at?: string | null
+          reading_minutes_en?: number | null
+          reading_minutes_ro?: number | null
           slug: string
+          subtitle_en?: string | null
+          subtitle_ro?: string | null
           title_en?: string | null
           title_ro: string
           updated_at?: string
         }
         Update: {
+          author?: string | null
           content_en?: string | null
           content_ro?: string | null
+          cover_url?: string | null
           created_at?: string
+          first_image?: string | null
           hidden?: boolean
           id?: string
-          media_urls?: Json | null
           published?: boolean
+          published_at?: string | null
+          reading_minutes_en?: number | null
+          reading_minutes_ro?: number | null
           slug?: string
+          subtitle_en?: string | null
+          subtitle_ro?: string | null
           title_en?: string | null
           title_ro?: string
           updated_at?: string
@@ -132,6 +153,62 @@ export type Database = {
           subject?: string | null
         }
         Relationships: []
+      }
+      content_drafts: {
+        Row: {
+          created_at: string
+          data: Json
+          event_id: string | null
+          id: string
+          post_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json
+          event_id?: string | null
+          id?: string
+          post_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          event_id?: string | null
+          id?: string
+          post_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_drafts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "admin_event_overview"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "content_drafts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "event_availability"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "content_drafts_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_drafts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_templates: {
         Row: {
@@ -647,6 +724,7 @@ export type Database = {
     Functions: {
       is_admin: { Args: never; Returns: boolean }
       pending_hold_interval: { Args: never; Returns: string }
+      publish_post_draft: { Args: { p_post_id: string }; Returns: undefined }
       register_for_event: {
         Args: {
           p_email: string

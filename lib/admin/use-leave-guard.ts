@@ -20,6 +20,9 @@ import { useRouter } from "next/navigation";
  * hold a history navigation, and her typing survives in the page until she
  * reloads.
  *
+ * A link marked `data-leave-guard="skip"` is left alone: it handles leaving
+ * itself.
+ *
  * Returns `guardedPush`, for navigations the page starts itself (the section
  * dropdown on a phone).
  */
@@ -41,6 +44,9 @@ export function useLeaveGuard(dirty: boolean, confirmLeave: () => Promise<boolea
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest?.("a");
       if (!anchor || !anchor.href || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+      // A link that settles leaving itself, such as the post editor's Back,
+      // which saves first or throws away a post nobody wrote in.
+      if (anchor.dataset.leaveGuard === "skip") return;
       const url = new URL(anchor.href, window.location.href);
       if (url.origin !== window.location.origin) return;
       // A link to this same page (such as the skip link) is not leaving.

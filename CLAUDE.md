@@ -166,12 +166,23 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   refuses any write to them, but `lib/database.types.ts` lists both as optional
   fields of `Insert` and `Update`. Spread a whole `Row` into `.update()` and
   every save fails. The events editor's `EventDraft` omits them; any new writer
-  of `events` has to as well.
+  of `events` has to as well. `blog_posts.first_image` and
+  `reading_minutes_ro` / `_en` are the same: the post editor writes only the
+  fields in `POST_FIELDS` (`lib/admin/blog.ts`).
 - **Next.js writes the layout's `<title>` after a page's effects on a full
   load.** A client page that sets `document.title` in an effect sees it
   replaced by the metadata title a moment later. In the admin panel use
   `useDocumentTitle()` (`components/admin/shell/admin-site.tsx`), which puts
   its title back whenever something changes it.
+- **Playwright's `getByLabel` and `getByRole({ name })` match substrings,
+  ignoring case.** "Titlu (RO)" also finds "Subtitlu (RO)", and "Adresa
+  articolului" finds a help button called "Ce este adresa articolului?". Most
+  of the post editor's first test run failed on this, in strict mode. Pass
+  `{ exact: true }` whenever one label could sit inside another.
+- **`next/image` throws on a host missing from `images.remotePatterns`,** and
+  takes the page with it. Anything drawn from text she pasted (a post's first
+  picture) goes through `canOptimise()` in `lib/image-src.ts` and
+  `unoptimized` when it says no.
 - Playwright's `isVisible()` does not auto-wait. Branch on viewport width, not
   on a visibility probe.
 - **A Suspense boundary high in the tree costs you HTTP status codes.** Wrapping

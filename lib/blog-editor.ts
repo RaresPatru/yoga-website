@@ -116,11 +116,15 @@ export function blogEditorExtensions() {
     StarterKit.configure({
       link: false,
       heading: { levels: [...HEADING_LEVELS] },
+      // No code blocks: a yoga blog has no use for them, and three backticks
+      // typed by accident made one. A <pre> in an older post arrives as a
+      // paragraph with its words kept. Inline `code` stays.
+      codeBlock: false,
       /*
        * TipTap keeps an empty paragraph at the very end of the document, so
        * there is always somewhere to click after the last block. Here it only
        * does so after images, embeds and dividers, which nothing can be typed
-       * into; after a heading, list, quote or code block, Enter already leads
+       * into; after a heading, list or quote, Enter already leads
        * out.
        *
        * The narrower rule is what makes Backspace undo an automatic format at
@@ -131,7 +135,7 @@ export function blogEditorExtensions() {
        * "##" gone. The shortcut list promises the undo, and the spec checks it
        * for every typed shortcut.
        */
-      trailingNode: { notAfter: ["heading", "bulletList", "orderedList", "blockquote", "codeBlock"] },
+      trailingNode: { notAfter: ["heading", "bulletList", "orderedList", "blockquote"] },
     }),
     ImageExtension,
     LinkExtension.configure({ openOnClick: false }),
