@@ -1456,6 +1456,51 @@ if that ever changes. Along the way, the portrait-video bug the audit
 reproduced turned out to be a shape written in one attribute and read back
 from another.
 
+### Phase 4: an event has a life, and the site follows it
+
+**Nothing knew when an event was over.** The booking function counted seats
+and never looked at the clock, so an Instagram story from the spring still
+opened a page with a working payment button. Now the database refuses once an
+event has started, the four routes that lead to it refuse in the same terms,
+and the page follows the event: the booking panel before, a notice once it
+has begun, and once it is over, what the people who came said about it. Past
+events that she has not hidden become an archive, twelve to a page.
+
+**The rule for a seat, written once.** Whether a booking holds a seat was
+written out twice, in the public count and in the booking gate, and kept
+identical by hand. It is one function now, and a booking she removes frees its
+seat in both places at once. The admin overview reads it too, and gives every
+event a state and five numbers: who is waiting, whose payment is pending, who
+asked for a refund, whose offer is unanswered, who was refunded. Each number
+opens those people.
+
+**A claim link that lost its seat used to call itself invalid.** When someone
+booked the last seat before the waitlisted person pressed their link, the page
+told them the link was invalid, and worse, their unanswered offer went on
+counting as a promised seat, so the next seat was offered to nobody. They get
+an apology now, and are back at the front of the queue.
+
+**The event editor borrowed the blog's.** Rather than copy phase 3's autosave
+into a second editor, it moved into a hook both share; the blog's tests
+passed before and after, which was the point of having them. What an event
+adds is a lock: once it has ended, its date, price and places are what people
+paid for, so the editor disables them and the publish function ignores them.
+
+**Then a round of polish, from Rares going over the panel.** An event's row
+did nothing under the pointer: its only hover changed a colour its own text
+overrode. It cannot be one link like a post's row, because its numbers are
+links, so the title's link now stretches over the row and the numbers sit
+above it. The order menus opened as the square grey list Windows draws; the
+customizable select lets the page draw it instead, but sizes the closed
+control to whichever order is chosen, which pulled the search box sideways
+at every change, so the control has a width of its own. The sort labels now
+say which way they run. The sidebar's toggle had its lines running into its
+chevron; it has Chrome's proportions now, read out of Chromium's source
+rather than guessed. The top bar came down to the public bar's full-width
+height, measured at 52 pixels (the comment there said 51), and on a wide
+screen the content page's menu moved into the middle of the empty space
+instead of hugging the form.
+
 ---
 
 ## Decisions worth defending

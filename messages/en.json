@@ -60,7 +60,10 @@
     "claim_spot_success": "Spot claimed successfully! You'll receive a confirmation email.",
     "phone_country": "Country Code",
     "phone_hint": "Enter your phone number with country code",
-    "captcha_error": "Security check failed. Please try again."
+    "captcha_error": "Security check failed. Please try again.",
+    "ongoing": "Under way",
+    "archive_title": "Past events",
+    "archive_page_title": "Past events, page {page}"
   },
   "testimonials": {
     "title": "Testimonials",
@@ -137,7 +140,7 @@
     "map_link_hint": "Paste the link from Google Maps (Share), or coordinates: 46.7712, 23.5949. Leave blank if the address is enough.",
     "price": "Price (0 = free)",
     "max_participants": "Max Participants",
-    "max_participants_hint": "Blank or 0 = sold out; only the waiting list is offered. If seats are free when you save, the people first in line are emailed.",
+    "max_participants_hint": "Blank or 0 = sold out; only the waiting list stays open. When you publish with seats free, the first people on the list get an email.",
     "image_url": "Image URL",
     "whatsapp_link": "WhatsApp Link",
     "published": "Published",
@@ -422,7 +425,8 @@
       "sort": "Order",
       "sort_edited": "Recently edited",
       "sort_edited_oldest": "Least recently edited",
-      "sort_published": "Publish date",
+      "sort_published": "Publish date, descending",
+      "sort_published_oldest": "Publish date, ascending",
       "sort_title": "Title, A to Z",
       "status_published": "Published",
       "status_draft": "Draft",
@@ -495,7 +499,115 @@
       "leave_body": "Your latest changes didn't save. If you leave now, they're lost.",
       "slug_what": "What is the post address?"
     },
-    "media_video_hint": "For large videos, use YouTube or Vimeo and insert the URL from the editor. Supabase free limit is 50 MB per file."
+    "media_video_hint": "For large videos, use YouTube or Vimeo and insert the URL from the editor. Supabase free limit is 50 MB per file.",
+    "events_list": {
+      "tabs": "Events by status",
+      "tab_upcoming": "Upcoming",
+      "tab_drafts": "Drafts",
+      "tab_past": "Past",
+      "search": "Search titles, places and addresses",
+      "sort": "Order",
+      "sort_soonest": "Event date, ascending",
+      "sort_latest": "Event date, descending",
+      "sort_edited": "Recently edited",
+      "sort_title": "Title, A to Z",
+      "status_draft": "Draft",
+      "status_upcoming": "Upcoming",
+      "status_ongoing": "Under way",
+      "status_ended_pending": "Ended, something pending",
+      "status_archived": "Ended",
+      "seats": "{taken}/{capacity} seats",
+      "seats_closed": "{taken} booked, bookings closed",
+      "numbers": "The event's numbers",
+      "untitled": "Untitled",
+      "empty": "No events yet. The first one starts from “New event”.",
+      "empty_tab": "No events in “{tab}”.",
+      "empty_search": "No event contains “{query}”."
+    },
+    "event_numbers": {
+      "waitlist": {
+        "zero": "Nobody on the waiting list",
+        "one": "{count} on the waiting list",
+        "few": "{count} on the waiting list",
+        "other": "{count} on the waiting list"
+      },
+      "pending": {
+        "zero": "No payments pending",
+        "one": "{count} payment pending",
+        "few": "{count} payments pending",
+        "other": "{count} payments pending"
+      },
+      "refund_requested": {
+        "zero": "No refunds requested",
+        "one": "{count} refund requested",
+        "few": "{count} refunds requested",
+        "other": "{count} refunds requested"
+      },
+      "offers": {
+        "zero": "No offers awaiting a reply",
+        "one": "{count} offer awaiting a reply",
+        "few": "{count} offers awaiting a reply",
+        "other": "{count} offers awaiting a reply"
+      },
+      "refunded": {
+        "zero": "No refunds made",
+        "one": "{count} refund made",
+        "few": "{count} refunds made",
+        "other": "{count} refunds made"
+      }
+    },
+    "event_editor": {
+      "back": "Events",
+      "new_title": "New event",
+      "edit_title": "Edit event",
+      "status_new": "Saves itself once it has a title and a date",
+      "delete": "Delete event",
+      "basics": "About the event",
+      "when": "When",
+      "where": "Where",
+      "price_places": "Price and places",
+      "photo": "Photograph",
+      "description": "Description",
+      "whatsapp": "WhatsApp group",
+      "title_placeholder": "The event's name",
+      "slug": "Event address",
+      "slug_what": "What is the event address?",
+      "slug_help": "The last part of the page's address: /events/your-address. It follows the title until the first publish; after that it only changes if you change it, because shared links lead to it.",
+      "slug_taken": "Another event already uses this address. Choose another; everything else keeps saving.",
+      "locked": "This event has ended. Its date, times, price and places can no longer change: that is what people booked and paid for.",
+      "need_title": "Write a title before publishing.",
+      "need_slug": "The address can only have lowercase letters without accents, digits and hyphens, such as “mountain-yoga”.",
+      "need_date": "Choose the event's date before publishing.",
+      "published_toast": "Event published",
+      "changes_published_toast": "Changes published",
+      "view_event": "View event",
+      "discard_body": "The event goes back to its published version, and what you changed since is lost.",
+      "delete_with_bookings": "Bookings for it: {count}. They are deleted with the event.",
+      "leave_new": "This event hasn't been saved yet: it needs a title and a date. If you leave now, it is lost.",
+      "state": "Status",
+      "all_participants": "All participants",
+      "archive": "Shown in the past events archive",
+      "archive_hint": "Once it ends, the event appears under “Past events”, with what participants said. Applies at once.",
+      "photo_add": "Add a photograph",
+      "photo_change": "Change photograph",
+      "photo_remove": "Remove photograph",
+      "photo_none": "Without a photograph, the event's page starts with its title.",
+      "not_found": "This event doesn't exist. It may have been deleted."
+    },
+    "participants_filter": {
+      "label": "Filter",
+      "event": "Event: {title}",
+      "status_waitlist": "On the waiting list",
+      "status_pending": "Payments pending",
+      "status_refund_requested": "Refunds requested",
+      "status_offers": "Offers awaiting a reply",
+      "status_refunded": "Refunded",
+      "clear": "All registrations",
+      "waiting_since": "Waiting since {date}",
+      "offer_until": "Offer expires on {date}",
+      "refund_requested_on": "Refund requested on {date}",
+      "none": "Nobody here."
+    }
   },
   "pagination": {
     "label": "Pages",

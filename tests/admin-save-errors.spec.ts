@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { deleteEventBySlug, deletePostBySlug, deletePostsTitled, seedEvent, seedPost, unique } from "./helpers";
+import { deleteEventBySlug, deleteEventsTitled, deletePostBySlug, deletePostsTitled, seedEvent, seedPost, unique } from "./helpers";
 
 /**
  * Supabase returns errors instead of throwing, so a save that nobody checks
@@ -37,23 +37,27 @@ test.describe("a failed save keeps her work", () => {
     }
   });
 
-  test("an event with a taken slug stays open, details intact, and says why", async ({ page }) => {
+  test("an event with a taken address keeps her details, saves them, and says why", async ({ page }) => {
     const existing = await seedEvent();
     const title = `Eveniment duplicat ${unique("b5")}`;
     try {
-      await page.goto("/admin/events");
-      await page.getByRole("button", { name: "Eveniment Nou" }).click();
+      await page.goto("/admin/events/new");
+      await expect(page.getByRole("button", { name: "Îngroșat" }).first()).toBeVisible();
       await page.getByLabel("Titlu (RO)", { exact: true }).fill(title);
-      await page.getByLabel("Slug").fill(existing.slug);
+      await page.getByRole("textbox", { name: "Adresa evenimentului" }).fill(existing.slug);
       await page.getByLabel("Data", { exact: true }).fill("2099-02-01");
-      await page.getByRole("button", { name: "Salvează" }).click();
 
-      await expect(page.getByRole("region", { name: "Notificări" })).toContainText(
-        "Adresa (slug-ul) e folosită deja"
-      );
+      await expect(
+        page.getByRole("alert").filter({ hasText: "Alt eveniment folosește deja adresa asta" })
+      ).toBeVisible();
       await expect(page.getByLabel("Titlu (RO)", { exact: true })).toHaveValue(title);
+      await expect(page.getByRole("textbox", { name: "Adresa evenimentului" })).toHaveValue(existing.slug);
+      // Everything but the address reached the database.
+      await expect(page.locator("[data-save-status]")).toHaveText("Salvat");
+      await expect(page).toHaveURL(/\/admin\/events\/[0-9a-f-]{36}$/);
     } finally {
       await deleteEventBySlug(existing.slug);
+      await deleteEventsTitled(title);
     }
   });
 });

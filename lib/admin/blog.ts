@@ -49,13 +49,6 @@ export function fieldsOf(row: Pick<PostRow, PostField>): PostFields {
   return Object.fromEntries(POST_FIELDS.map((f) => [f, row[f] ?? (f === "slug" || f === "title_ro" ? "" : null)])) as PostFields;
 }
 
-/** Fields that differ between two versions: what a save has to send. */
-export function changedFields(from: PostFields, to: PostFields): Partial<PostFields> {
-  const out: Partial<PostFields> = {};
-  for (const f of POST_FIELDS) if (from[f] !== to[f]) (out as Record<string, unknown>)[f] = to[f];
-  return out;
-}
-
 /** Which tab a post belongs to. Every post is in exactly one. */
 export type PostStatus = "published" | "draft" | "hidden";
 
@@ -214,11 +207,6 @@ export function publishProblem(fields: PostFields): string | null {
   if (!SLUG_PATTERN.test(fields.slug)) return "need_slug";
   if (!fields.content_ro?.trim()) return "need_content";
   return null;
-}
-
-/** The error a save failed with, if it was the address already being taken. */
-export function isSlugTaken(error: unknown): boolean {
-  return error instanceof AdminError && error.kind === "duplicate" && error.field === "slug";
 }
 
 /** The blog's default author, from Conținut site; empty when she has not set one. */

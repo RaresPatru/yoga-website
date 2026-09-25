@@ -1,19 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import NextImage from "next/image";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Info, Loader2 } from "lucide-react";
 import type { Editor } from "@tiptap/core";
-import { AdminError, adminErrorKey, toAdminError } from "@/lib/admin/db";
+import { adminErrorKey, toAdminError } from "@/lib/admin/db";
 import {
   createPost,
   deletePost,
   discardDraft,
   fieldsOf,
-  changedFields,
   isBlank,
-  isSlugTaken,
   loadPost,
   slugInUse,
   publishChanges,
@@ -26,9 +24,8 @@ import {
   type PostFields,
   type PostRow,
 } from "@/lib/admin/blog";
-import { useLeaveGuard } from "@/lib/admin/use-leave-guard";
-import { getAuthToken } from "@/lib/get-auth-token";
-import { translateTexts } from "@/lib/admin/translate";
+import { isSlugTaken, useAutosave } from "@/lib/admin/use-autosave";
+import { TranslationFailed, translateBlocks, translateTexts } from "@/lib/admin/translate";
 import { translateDocument } from "@/lib/translate-document";
 import { toEditorContent } from "@/lib/blog-editor";
 import { cn } from "@/lib/utils";
@@ -39,85 +36,23 @@ import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { useDocumentTitle } from "@/components/admin/shell/admin-site";
 import { MediaLibrary } from "@/components/admin/media-library";
 import { RichTextEditor, useBlogEditor } from "@/components/admin/rich-text-editor";
-import { EditorBar, type SaveState } from "./editor-bar";
+import { EditorBar } from "./editor-bar";
 import { PreviewDialog } from "./preview-dialog";
 
 /*
- * AUTOSAVE, IN SHORT
- *
- * A save runs 1.5 seconds after she stops typing, at least every 10 seconds
- * while she keeps typing, when she switches to another tab or app, and before
- * Back, Preview and Publish. Until the server confirms a save, the latest
- * version is also kept in this browser (localStorage), and offered back the
- * next time the post is opened if it never arrived.
- *
- * Where a save goes depends on the post (lib/admin/blog.ts): straight onto a
- * post nobody can see yet, or into private changes on a published one.
- *
- * A new post is created by its first save with anything in it, so opening
- * "Articol nou" and leaving creates nothing. Back with every field still
- * empty deletes a post that was created and never published.
+ * Saving is lib/admin/use-autosave.ts, shared with the event editor: a save
+ * 1.5 seconds after she stops typing, private changes once the post is live,
+ * a copy in the browser until the server has it. A new post is created by its
+ * first save with anything in it, so opening "Articol nou" and leaving creates
+ * nothing; Back with every field still empty deletes a post that was created
+ * and never published.
  */
-const IDLE_MS = 1500;
-const MAX_WAIT_MS = 10_000;
 
 /** A short random ending for the address of a post that has no title yet. */
 function placeholderSlug() {
   return `articol-${Math.random().toString(36).slice(2, 8)}`;
 }
 const PLACEHOLDER_SLUG = /^articol-[a-z0-9]{6}$/;
-
-function backupKey(id: string | null) {
-  return `blog-editor:${id ?? "new"}`;
-}
-
-interface Backup {
-  fields: PostFields;
-  at: number;
-}
-
-function readBackup(id: string | null): Backup | null {
-  try {
-    const raw = localStorage.getItem(backupKey(id));
-    return raw ? (JSON.parse(raw) as Backup) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeBackup(id: string | null, fields: PostFields) {
-  try {
-    localStorage.setItem(backupKey(id), JSON.stringify({ fields, at: Date.now() }));
-  } catch {
-    // Private browsing or a full disk: the server copy is what matters.
-  }
-}
-
-function dropBackup(id: string | null) {
-  try {
-    localStorage.removeItem(backupKey(id));
-  } catch {}
-}
-
-/** Why a translation failed, when it is something she can act on. */
-class TranslationFailed extends Error {
-  constructor(readonly reason: "too_long" | "failed") {
-    super(`Translation failed: ${reason}`);
-  }
-}
-
-/** One request for every paragraph of the post; see lib/translate-document.ts. */
-async function translateBlocks(texts: string[]): Promise<string[]> {
-  const token = await getAuthToken();
-  const res = await fetch("/api/translate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ texts, from: "ro", to: "en" }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new TranslationFailed(data.code === "too_long" ? "too_long" : "failed");
-  return data.translations;
-}
 
 /** An editor's content as stored: null when nothing is written in it. */
 function htmlOf(editor: Editor | null): string | null {
@@ -200,10 +135,8 @@ export function PostEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [postId, setPostId] = useState<string | null>(initial?.post.id ?? null);
   const [published, setPublished] = useState(initial?.post.published ?? false);
   const [hidden, setHiddenState] = useState(initial?.post.hidden ?? false);
-  const [hasDraft, setHasDraft] = useState(Boolean(initial?.draft));
   const [publishedSlug, setPublishedSlug] = useState(initial?.post.slug ?? "");
   const [fields, setFields] = useState<Omit<PostFields, "content_ro" | "content_en">>(() => {
     const rest: Partial<PostFields> = { ...serverFields };
@@ -216,9 +149,6 @@ export function PostEditor({
       Boolean(initial?.post.published) ||
       (Boolean(initial) && !PLACEHOLDER_SLUG.test(serverFields.slug) && serverFields.slug !== slugify(serverFields.title_ro))
   );
-  const [slugError, setSlugError] = useState<string | null>(null);
-  const [save, setSave] = useState<SaveState>(initial ? "saved" : "new");
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [mode, setMode] = useState<"ro" | "en">("ro");
   const [spell, setSpell] = useState(true);
   const [translating, setTranslating] = useState(false);
@@ -227,44 +157,16 @@ export function PostEditor({
   const [coverOpen, setCoverOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewVersion, setPreviewVersion] = useState(0);
-  const [backup, setBackup] = useState<Backup | null>(null);
   const [barHeight, setBarHeight] = useState(56);
 
-  /** The version the server holds, to compare against and to send differences from. */
-  const saved = useRef<PostFields>(serverFields);
   const placeholder = useRef(PLACEHOLDER_SLUG.test(serverFields.slug) ? serverFields.slug : placeholderSlug());
-  const idle = useRef<number | undefined>(undefined);
-  const maxWait = useRef<number | undefined>(undefined);
-  const inFlight = useRef<Promise<boolean> | null>(null);
-  /** An address she typed that another post has: kept on screen, never sent. */
-  const refusedSlug = useRef<string | null>(null);
-  const withoutRefusedSlug = (fields: PostFields): PostFields =>
-    fields.slug === refusedSlug.current ? { ...fields, slug: saved.current.slug } : fields;
   const barRef = useRef<HTMLDivElement>(null);
   const englishRef = useRef<HTMLDivElement>(null);
-  // flush and schedule call each other; each reaches the other through a ref.
-  const flushRef = useRef<() => Promise<boolean>>(async () => true);
-  const scheduleRef = useRef<() => void>(() => {});
-
-  // Refs the save reads, so an old closure never saves stale settings.
-  const postIdRef = useRef(postId);
-  const publishedRef = useRef(published);
-  const hiddenRef = useRef(hidden);
-  const slugTouchedRef = useRef(slugTouched);
-  useEffect(() => {
-    postIdRef.current = postId;
-    publishedRef.current = published;
-    hiddenRef.current = hidden;
-    slugTouchedRef.current = slugTouched;
-  });
-
-
-  useDocumentTitle(t(postId ? "admin.blog_editor.edit_title" : "admin.blog_editor.new_title"));
 
   const roLabelId = `${ids}-ro`;
   const enLabelId = `${ids}-en`;
 
-  // Changes flow in through `changed()`, which every field and both editors
+  // Changes flow in through `changedRef`, which every field and both editors
   // call. It is a ref so the editors, created once, always call the latest.
   const changedRef = useRef<() => void>(() => {});
   const roEditor = useBlogEditor({
@@ -283,138 +185,46 @@ export function PostEditor({
   });
 
   /** Everything as it stands in the editor right now. */
-  const snapshot = useCallback(
-    (): PostFields => ({ ...fields, content_ro: htmlOf(roEditor), content_en: htmlOf(enEditor) }),
-    [fields, roEditor, enEditor]
-  );
-  const snapshotRef = useRef(snapshot);
+  const snapshot = (): PostFields => ({ ...fields, content_ro: htmlOf(roEditor), content_en: htmlOf(enEditor) });
+
+  const confirmLeave = async () =>
+    (
+      await confirm({
+        title: t("admin.cms.leave_title"),
+        body: t("admin.blog_editor.leave_body"),
+        confirmLabel: t("admin.cms.leave_confirm"),
+        cancelLabel: t("admin.cms.leave_cancel"),
+        tone: "danger",
+      })
+    ).confirmed;
+
+  const autosave = useAutosave<PostFields>({
+    backupPrefix: "blog-editor",
+    initialId: initial?.post.id ?? null,
+    initialSaved: serverFields,
+    initialHasDraft: Boolean(initial?.draft),
+    snapshot,
+    isPublished: () => published,
+    slugIsAuto: () => !slugTouched,
+    canCreate: (f) => !isBlank(f, placeholder.current),
+    create: async (f) => (await createPost(f, hidden)).id,
+    update: updatePost,
+    saveDraft,
+    slugInUse,
+    // The address becomes the post's own, without reloading the page.
+    onCreated: (id) => window.history.replaceState(null, "", `/admin/blog/${id}`),
+    onSlugNumbered: (slug) => setFields((f) => ({ ...f, slug })),
+    slugTakenMessage: t("admin.blog_editor.slug_taken"),
+    confirmLeave,
+    t,
+  });
+  const postId = autosave.id;
+  const { dirty, hasDraft, slugError } = autosave;
   useEffect(() => {
-    snapshotRef.current = snapshot;
+    changedRef.current = autosave.changed;
   });
 
-  // ---------------------------------------------------------------------
-  // Saving
-  // ---------------------------------------------------------------------
-
-  /** Saves what is on screen. Resolves true once the server has it. */
-  const flush = useCallback(async (): Promise<boolean> => {
-    window.clearTimeout(idle.current);
-    window.clearTimeout(maxWait.current);
-    idle.current = maxWait.current = undefined;
-    // One save at a time; a change made during it is saved straight after.
-    if (inFlight.current) {
-      await inFlight.current;
-    }
-
-    const run = async (): Promise<boolean> => {
-      const now = withoutRefusedSlug(snapshotRef.current());
-      let id = postIdRef.current;
-      if (!id && isBlank(now, placeholder.current)) return true;
-      if (id && Object.keys(changedFields(saved.current, now)).length === 0) {
-        setSave("saved");
-        return true;
-      }
-
-      setSave("saving");
-      writeBackup(id, now);
-      try {
-        let stored = now;
-        const attempt = async (version: PostFields) => {
-          if (!id) {
-            const row = await createPost(version, hiddenRef.current);
-            id = row.id;
-            postIdRef.current = row.id;
-            setPostId(row.id);
-            dropBackup(null);
-            // The address becomes the post's own, without reloading the page.
-            window.history.replaceState(null, "", `/admin/blog/${row.id}`);
-          } else if (publishedRef.current) {
-            await saveDraft(id, version);
-            setHasDraft(true);
-          } else {
-            await updatePost(id, changedFields(saved.current, version));
-          }
-        };
-
-        try {
-          // A live post's changes wait in content_drafts, where the unique
-          // address cannot be checked by the database until publishing.
-          if (id && publishedRef.current && now.slug !== saved.current.slug && (await slugInUse(now.slug, id))) {
-            throw new AdminError("duplicate", "slug in use", "slug");
-          }
-          await attempt(now);
-          setSlugError(null);
-          refusedSlug.current = null;
-        } catch (error) {
-          if (!isSlugTaken(error)) throw error;
-          if (!slugTouchedRef.current && !publishedRef.current) {
-            // An address made from the title that another post already has:
-            // add a number and carry on, as she never chose it.
-            for (let n = 2; n < 20; n++) {
-              const candidate = { ...now, slug: `${now.slug}-${n}`.slice(0, 90) };
-              try {
-                await attempt(candidate);
-                stored = candidate;
-                setFields((f) => ({ ...f, slug: candidate.slug }));
-                break;
-              } catch (retry) {
-                if (!isSlugTaken(retry) || n === 19) throw retry;
-              }
-            }
-          } else {
-            // An address she typed: say so, and save everything else. The
-            // address stays in the field, remembered as refused, so it does not
-            // count as unsaved and is not sent again until she changes it.
-            setSlugError(t("admin.blog_editor.slug_taken"));
-            refusedSlug.current = now.slug;
-            stored = { ...now, slug: saved.current.slug };
-            await attempt(stored);
-          }
-        }
-
-        saved.current = stored;
-        dropBackup(id);
-        const current = withoutRefusedSlug(snapshotRef.current());
-        const stillDirty = Object.keys(changedFields(stored, current)).length > 0;
-        setSave(stillDirty ? "unsaved" : "saved");
-        setSaveError(null);
-        if (stillDirty) scheduleRef.current();
-        return !stillDirty;
-      } catch (error) {
-        setSave("failed");
-        setSaveError(t(adminErrorKey(toAdminError(error))));
-        // Try again after the usual pause; her work is in the browser.
-        idle.current = window.setTimeout(() => void flushRef.current(), MAX_WAIT_MS);
-        return false;
-      }
-    };
-
-    const promise = run();
-    inFlight.current = promise;
-    try {
-      return await promise;
-    } finally {
-      if (inFlight.current === promise) inFlight.current = null;
-    }
-  }, [t]);
-
-  const schedule = useCallback(() => {
-    window.clearTimeout(idle.current);
-    idle.current = window.setTimeout(() => void flush(), IDLE_MS);
-    maxWait.current ??= window.setTimeout(() => void flush(), MAX_WAIT_MS);
-  }, [flush]);
-  useEffect(() => {
-    flushRef.current = flush;
-    scheduleRef.current = schedule;
-  });
-
-  const changed = useCallback(() => {
-    setSave((s) => (s === "saving" ? s : "unsaved"));
-    schedule();
-  }, [schedule]);
-  useEffect(() => {
-    changedRef.current = changed;
-  });
+  useDocumentTitle(t(postId ? "admin.blog_editor.edit_title" : "admin.blog_editor.new_title"));
 
   /** Updates one field and schedules a save. */
   const setField = <K extends keyof typeof fields>(key: K, value: (typeof fields)[K]) => {
@@ -422,75 +232,23 @@ export function PostEditor({
       const next = { ...f, [key]: value };
       // The address follows the title until she sets it herself or the post
       // goes live, after which shared links depend on it.
-      if (key === "title_ro" && !slugTouchedRef.current && !publishedRef.current) {
+      if (key === "title_ro" && !slugTouched && !published) {
         next.slug = slugify(String(value)) || placeholder.current;
       }
       return next;
     });
-    changed();
+    autosave.changed();
   };
 
-  // Nothing fires after the editor is gone. Leaving with unsaved work goes
-  // through the leave guard below, which saves first.
-  useEffect(
-    () => () => {
-      window.clearTimeout(idle.current);
-      window.clearTimeout(maxWait.current);
-    },
-    []
-  );
-
-  // Leaving the tab or app saves; closing it with unsaved work asks.
-  useEffect(() => {
-    const onHide = () => {
-      if (document.visibilityState === "hidden") void flush();
-    };
-    document.addEventListener("visibilitychange", onHide);
-    return () => document.removeEventListener("visibilitychange", onHide);
-  }, [flush]);
-
-  // Ctrl+S / ⌘S saves now, rather than opening the browser's "save page".
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        void flush();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [flush]);
-
-  const dirty = save === "unsaved" || save === "saving" || save === "failed";
-  useLeaveGuard(dirty, async () => {
-    if (await flush()) return true;
-    const { confirmed } = await confirm({
-      title: t("admin.cms.leave_title"),
-      body: t("admin.blog_editor.leave_body"),
-      confirmLabel: t("admin.cms.leave_confirm"),
-      cancelLabel: t("admin.cms.leave_cancel"),
-      tone: "danger",
-    });
-    return confirmed;
-  });
-
-  // A copy in this browser that never reached the server is offered back.
-  useEffect(() => {
-    const found = readBackup(postIdRef.current);
-    if (!found) return;
-    const differs = Object.keys(changedFields(saved.current, found.fields)).length > 0;
-    if (differs) setBackup(found);
-    else dropBackup(postIdRef.current);
-  }, []);
-
   const restoreBackup = () => {
-    if (!backup) return;
-    const { content_ro, content_en, ...rest } = backup.fields;
+    const found = autosave.backup;
+    if (!found) return;
+    const { content_ro, content_en, ...rest } = found.fields;
     setFields(rest);
     roEditor?.commands.setContent(content_ro ?? "", { emitUpdate: false });
     enEditor?.commands.setContent(toEditorContent(content_en), { emitUpdate: false });
-    setBackup(null);
-    changed();
+    autosave.dismissBackup(false);
+    autosave.changed();
   };
 
   // The toolbar sticks under this bar, whose height changes as it wraps.
@@ -507,10 +265,10 @@ export function PostEditor({
   // ---------------------------------------------------------------------
 
   const back = async () => {
-    const now = snapshotRef.current();
-    const id = postIdRef.current;
-    if (!published && isBlank(now, placeholder.current)) {
+    if (!published && isBlank(snapshot(), placeholder.current)) {
       // Nothing was written: leave nothing behind.
+      await autosave.settleDown();
+      const id = autosave.currentId();
       if (id) {
         try {
           await deletePost(id);
@@ -519,24 +277,11 @@ export function PostEditor({
           return;
         }
       }
-      dropBackup(id);
-      window.clearTimeout(idle.current);
-      window.clearTimeout(maxWait.current);
+      autosave.forgetBackup();
       router.push("/admin/blog");
       return;
     }
-    if (await flush()) {
-      router.push("/admin/blog");
-      return;
-    }
-    const { confirmed } = await confirm({
-      title: t("admin.cms.leave_title"),
-      body: t("admin.blog_editor.leave_body"),
-      confirmLabel: t("admin.cms.leave_confirm"),
-      cancelLabel: t("admin.cms.leave_cancel"),
-      tone: "danger",
-    });
-    if (confirmed) router.push("/admin/blog");
+    if ((await autosave.flush()) || (await confirmLeave())) router.push("/admin/blog");
   };
 
   const problemField: Record<string, () => void> = {
@@ -546,7 +291,7 @@ export function PostEditor({
   };
 
   const publish = async () => {
-    const now = snapshotRef.current();
+    const now = snapshot();
     const problem = publishProblem(now);
     if (problem) {
       setMode("ro");
@@ -556,15 +301,13 @@ export function PostEditor({
     }
     setPublishing(true);
     try {
-      if (!(await flush())) return;
-      const id = postIdRef.current!;
+      if (!(await autosave.flush())) return;
+      const id = autosave.currentId()!;
       const row = published ? await publishChanges(id) : await publishNew(id, now);
-      saved.current = fieldsOf(row);
+      autosave.acknowledge(fieldsOf(row), false);
       setPublished(true);
-      setHasDraft(false);
       setSlugTouched(true);
       setPublishedSlug(row.slug);
-      setSave("saved");
       toast.success(t(published ? "admin.blog_editor.changes_published_toast" : "admin.blog_editor.published_toast"), {
         label: t("admin.blog_editor.view_article"),
         href: `/ro/blog/${row.slug}`,
@@ -586,24 +329,17 @@ export function PostEditor({
       tone: "danger",
     });
     if (!confirmed || !postId) return;
-    window.clearTimeout(idle.current);
-    window.clearTimeout(maxWait.current);
-    idle.current = maxWait.current = undefined;
-    await inFlight.current;
+    await autosave.settleDown();
     try {
       await discardDraft(postId);
       const fresh = await loadPost(postId);
       if (!fresh) return;
       const clean = fieldsOf(fresh.post);
-      saved.current = clean;
       const { content_ro, content_en, ...rest } = clean;
       setFields(rest);
       roEditor?.commands.setContent(content_ro ?? "", { emitUpdate: false });
       enEditor?.commands.setContent(toEditorContent(content_en), { emitUpdate: false });
-      setHasDraft(false);
-      setSlugError(null);
-      setSave("saved");
-      dropBackup(postId);
+      autosave.acknowledge(clean, false);
       toast.success(t("admin.blog_editor.discarded"));
     } catch (error) {
       toast.error(t(adminErrorKey(toAdminError(error))));
@@ -618,12 +354,10 @@ export function PostEditor({
       tone: "danger",
     });
     if (!confirmed) return;
-    window.clearTimeout(idle.current);
-    window.clearTimeout(maxWait.current);
-    await inFlight.current;
+    await autosave.settleDown();
     try {
       if (postId) await deletePost(postId);
-      dropBackup(postId);
+      autosave.forgetBackup();
       toast.success(t("admin.toast.deleted"));
       router.push("/admin/blog");
     } catch (error) {
@@ -643,7 +377,7 @@ export function PostEditor({
   };
 
   const openPreview = async () => {
-    await flush();
+    await autosave.flush();
     setPreviewVersion((v) => v + 1);
     setPreviewOpen(true);
   };
@@ -666,7 +400,7 @@ export function PostEditor({
         const translated = await translateDocument(roEditor, translateBlocks);
         if (!enEditor.isDestroyed) enEditor.commands.setContent(translated, { emitUpdate: false });
       }
-      changed();
+      autosave.changed();
     } catch (error) {
       toast.error(
         error instanceof TranslationFailed && error.reason === "too_long"
@@ -733,7 +467,7 @@ export function PostEditor({
   const en = mode === "en";
   // Under the admin top bar and, on a computer, this editor's own bar (on a
   // phone that bar does not stick; see EditorBar).
-  const stickyTop = "calc(4rem + var(--editor-bar-h))";
+  const stickyTop = "calc(var(--admin-header-h) + var(--editor-bar-h))";
   const publishState = !published ? "publish" : hasDraft || dirty ? "publish_changes" : "published";
 
   return (
@@ -744,8 +478,11 @@ export function PostEditor({
       <EditorBar
         ref={barRef}
         onBack={() => void back()}
-        save={save}
-        saveError={saveError}
+        back={{ href: "/admin/blog", label: t("admin.blog_editor.back") }}
+        newStatus={t("admin.blog_editor.status_new")}
+        deleteLabel={t("admin.blog_editor.delete")}
+        save={autosave.save}
+        saveError={autosave.saveError}
         mode={mode}
         onMode={setMode}
         english={english}
@@ -763,7 +500,7 @@ export function PostEditor({
         onDelete={() => void remove()}
       />
 
-      {backup && (
+      {autosave.backup && (
         <div role="alert" className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
           <p className="min-w-0 flex-1 text-charcoal">
             <strong className="font-medium">{t("admin.blog_editor.restore_title")}.</strong>{" "}
@@ -774,10 +511,7 @@ export function PostEditor({
           </button>
           <button
             type="button"
-            onClick={() => {
-              dropBackup(postId);
-              setBackup(null);
-            }}
+            onClick={() => autosave.dismissBackup(true)}
             className="rounded-full px-3 py-2 text-charcoal-light hover:bg-sage/15"
           >
             {t("admin.blog_editor.restore_drop")}
@@ -925,7 +659,7 @@ export function PostEditor({
                 value={fields.slug}
                 onChange={(e) => {
                   setSlugTouched(true);
-                  setSlugError(null);
+                  autosave.clearSlugError();
                   setField("slug", e.target.value.toLowerCase().replace(/\s+/g, "-"));
                 }}
                 onBlur={() => {
@@ -1008,7 +742,7 @@ export function PostEditor({
         <PreviewDialog
           open={previewOpen}
           onClose={() => setPreviewOpen(false)}
-          postId={postId}
+          path={`blog/${postId}`}
           version={previewVersion}
         />
       )}

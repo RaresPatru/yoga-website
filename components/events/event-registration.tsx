@@ -26,8 +26,11 @@ function Outcome({
   body,
   whatsappLink,
   whatsappLabel,
+  icon = "check",
 }: {
   tone: "success" | "warning";
+  /** A tick for something done; the alert for news that is not what they hoped. */
+  icon?: "check" | "alert";
   heading: string;
   body: string;
   whatsappLink?: string | null;
@@ -40,7 +43,11 @@ function Outcome({
           tone === "success" ? "bg-success/10" : "bg-warning/10"
         }`}
       >
-        <Check className={`h-8 w-8 ${tone === "success" ? "text-success" : "text-warning"}`} />
+        {icon === "alert" ? (
+          <AlertCircle className="h-8 w-8 text-warning" aria-hidden="true" />
+        ) : (
+          <Check className={`h-8 w-8 ${tone === "success" ? "text-success" : "text-warning"}`} aria-hidden="true" />
+        )}
       </div>
       <h2 className="font-serif text-2xl text-charcoal">{heading}</h2>
       <p className="mt-3 text-charcoal-light">{body}</p>
@@ -105,6 +112,8 @@ export function EventRegistration({
   const [registered, setRegistered] = useState(false);
   const [waitlistJoined, setWaitlistJoined] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
+  // Somebody booked the seat before the waitlisted person pressed their link.
+  const [claimTaken, setClaimTaken] = useState(false);
   const [error, setError] = useState("");
   const [phoneValid, setPhoneValid] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -125,6 +134,12 @@ export function EventRegistration({
    */
   const isFull = !maxParticipants || taken >= maxParticipants;
 
+  /** Said when the event began between loading the page and pressing the button. */
+  const closedMessage = t(
+    "Înscrierile s-au închis: evenimentul a început.",
+    "Bookings have closed: the event has started."
+  );
+
   // Arriving from a waiting-list email: ?claim=<waiting list entry id>.
   useEffect(() => {
     const claimToken = searchParams.get("claim");
@@ -139,17 +154,28 @@ export function EventRegistration({
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
+          // Somebody booked the seat first. Not an error of theirs, and not a
+          // dead link: the offer was a head start, and they keep their place.
+          if (data.code === "taken") {
+            setClaimTaken(true);
+            return;
+          }
           // 410 Gone means the 24-hour window closed. Worth saying plainly
           // rather than showing the same "invalid link" message as a bad token
           // — the seat may well still be free to book normally, and the form is
           // right there.
           setError(
-            res.status === 410
+            data.code === "started"
               ? t(
-                  "Linkul a expirat. Dacă mai sunt locuri, te poți înscrie mai jos.",
-                  "This link has expired. If seats remain, you can register below."
+                  "Înscrierile s-au închis: evenimentul a început.",
+                  "Bookings have closed: the event has started."
                 )
-              : t("Link invalid sau expirat", "Invalid or expired link")
+              : res.status === 410
+                ? t(
+                    "Linkul a expirat. Dacă mai sunt locuri, te poți înscrie mai jos.",
+                    "This link has expired. If seats remain, you can register below."
+                  )
+                : t("Link invalid sau expirat", "Invalid or expired link")
           );
           return;
         }
@@ -173,18 +199,20 @@ export function EventRegistration({
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId, ...form, captchaToken }),
+      body: JSON.stringify({ eventId, ...form, captchaToken, locale }),
     });
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(
-        res.status === 409
-          ? t(
-              "Evenimentul este complet. Înscrie-te pe lista de așteptare.",
-              "Event is full. Join the waiting list."
-            )
-          : data.error || t("Eroare la înscriere. Încearcă din nou.", "Registration error. Try again.")
+        data.code === "started"
+          ? closedMessage
+          : res.status === 409
+            ? t(
+                "Evenimentul este complet. Înscrie-te pe lista de așteptare.",
+                "Event is full. Join the waiting list."
+              )
+            : data.error || t("Eroare la înscriere. Încearcă din nou.", "Registration error. Try again.")
       );
       setCaptchaToken(null);
       setSubmitting(false);
@@ -202,15 +230,17 @@ export function EventRegistration({
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId, ...form, captchaToken }),
+      body: JSON.stringify({ eventId, ...form, captchaToken, locale }),
     });
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(
-        res.status === 409
-          ? t("Evenimentul este complet.", "Event is full.")
-          : data.error || t("Eroare la înscriere.", "Registration error.")
+        data.code === "started"
+          ? closedMessage
+          : res.status === 409
+            ? t("Evenimentul este complet.", "Event is full.")
+            : data.error || t("Eroare la înscriere.", "Registration error.")
       );
       setCaptchaToken(null);
       setSubmitting(false);
@@ -271,12 +301,14 @@ export function EventRegistration({
     const res = await fetch("/api/register/waiting-list", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId, ...form, captchaToken }),
+      body: JSON.stringify({ eventId, ...form, captchaToken, locale }),
     });
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || t("Eroare. Încearcă din nou.", "Error. Try again."));
+      setError(
+        data.code === "started" ? closedMessage : data.error || t("Eroare. Încearcă din nou.", "Error. Try again.")
+      );
       setCaptchaToken(null);
       setSubmitting(false);
       return;
@@ -285,6 +317,20 @@ export function EventRegistration({
     setWaitlistJoined(true);
     setSubmitting(false);
   };
+
+  if (claimTaken) {
+    return (
+      <Outcome
+        tone="warning"
+        icon="alert"
+        heading={t("Ne pare rău, locul a fost ocupat", "Sorry, the seat has been taken")}
+        body={t(
+          "Cineva a rezervat locul înaintea ta. Îți păstrezi locul în fruntea listei de așteptare și îți scriem din nou dacă se mai eliberează unul înainte de eveniment.",
+          "Someone booked the seat before you. You keep your place at the front of the waiting list, and we will write again if another one opens before the event."
+        )}
+      />
+    );
+  }
 
   if (claimSuccess) {
     return (

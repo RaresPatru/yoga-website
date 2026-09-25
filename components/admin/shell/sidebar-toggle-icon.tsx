@@ -5,9 +5,14 @@
  *   narrow  lines on the left, chevron on the right pointing left
  *   widen   chevron on the left pointing right, lines on the right
  *
- * The top and bottom lines run the full width and the middle one is short,
- * leaving room for the chevron beside it. Drawn in the same 24-unit grid and
- * 2-unit stroke as the lucide icons around them, so they read as one set.
+ * The proportions are Chrome's own toggle for its vertical tab strip
+ * (views::kMenuOpenIcon and kMenuCloseCustomIcon in Chromium). The middle line
+ * is short, leaving room for the chevron's point, and the top and bottom lines
+ * stop well short of its arms. They used to run the full width, so at the
+ * height where an arm ends they touched it, and the chevron read as part of
+ * the lines rather than as an arrow beside them. Drawn in the same 24-unit
+ * grid and 2-unit stroke as the lucide icons around them, so they read as one
+ * set.
  */
 export function SidebarToggleIcon({
   action,
@@ -27,17 +32,19 @@ export function SidebarToggleIcon({
       aria-hidden="true"
       className={className}
     >
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="18" x2="21" y2="18" />
       {action === "narrow" ? (
         <>
-          <line x1="3" y1="12" x2="13" y2="12" />
-          <polyline points="21 8 17 12 21 16" />
+          <path d="M4 7h11" />
+          <path d="M4 12h8" />
+          <path d="M4 17h11" />
+          <polyline points="20.25 7.75 16 12 20.25 16.25" />
         </>
       ) : (
         <>
-          <line x1="11" y1="12" x2="21" y2="12" />
-          <polyline points="3 8 7 12 3 16" />
+          <path d="M9 7h11" />
+          <path d="M12 12h8" />
+          <path d="M9 17h11" />
+          <polyline points="3.75 7.75 8 12 3.75 16.25" />
         </>
       )}
     </svg>

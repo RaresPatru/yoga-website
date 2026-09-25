@@ -17,7 +17,10 @@ import { FaqEditor } from "./faq-editor";
  *
  * Each section has its own address (/admin/content/home), so the back button,
  * a reload and a bookmark all land on the same section. On a computer the
- * menu is a column beside the form; on a phone it is a dropdown above it.
+ * menu is a column beside the form; on a phone it is a dropdown above it. On
+ * a wide screen the menu, with the page title above it, moves into the middle
+ * of the space between the sidebar and the form (.admin-content-menu in
+ * app/globals.css) instead of staying pressed against the form.
  * Leaving a section with unsaved changes asks first, whichever way she leaves.
  */
 export function ContentScreen({ sectionId }: { sectionId: string }) {
@@ -44,10 +47,12 @@ export function ContentScreen({ sectionId }: { sectionId: string }) {
 
   return (
     <div>
-      <PageHeader title={t("admin.content")} />
+      <div className="admin-content-menu">
+        <PageHeader title={t("admin.content")} />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
-        <nav aria-label={t("admin.cms.sections")}>
+        <nav aria-label={t("admin.cms.sections")} className="admin-content-menu">
           <label htmlFor="content-section" className="sr-only">
             {t("admin.cms.section")}
           </label>
@@ -63,7 +68,7 @@ export function ContentScreen({ sectionId }: { sectionId: string }) {
               </option>
             ))}
           </select>
-          <ul className="hidden space-y-1 lg:sticky lg:top-24 lg:block">
+          <ul className="hidden space-y-1 lg:sticky lg:top-[calc(var(--admin-header-h)+2rem)] lg:block">
             {CONTENT_SECTIONS.map((item) => {
               const current = item.id === section.id;
               return (

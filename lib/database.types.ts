@@ -377,35 +377,59 @@ export type Database = {
       }
       registrations: {
         Row: {
+          admin_note: string | null
           created_at: string
           email: string
           event_id: string
           full_name: string
           id: string
+          locale: string
+          marketing_consent_at: string | null
+          note_consent_at: string | null
+          participant_note: string | null
           payment_status: string
           phone: string
+          refund_requested_at: string | null
+          removal_reason: string | null
+          removed_at: string | null
           stripe_session_id: string | null
           user_id: string | null
         }
         Insert: {
+          admin_note?: string | null
           created_at?: string
           email: string
           event_id: string
           full_name: string
           id?: string
+          locale?: string
+          marketing_consent_at?: string | null
+          note_consent_at?: string | null
+          participant_note?: string | null
           payment_status?: string
           phone: string
+          refund_requested_at?: string | null
+          removal_reason?: string | null
+          removed_at?: string | null
           stripe_session_id?: string | null
           user_id?: string | null
         }
         Update: {
+          admin_note?: string | null
           created_at?: string
           email?: string
           event_id?: string
           full_name?: string
           id?: string
+          locale?: string
+          marketing_consent_at?: string | null
+          note_consent_at?: string | null
+          participant_note?: string | null
           payment_status?: string
           phone?: string
+          refund_requested_at?: string | null
+          removal_reason?: string | null
+          removed_at?: string | null
           stripe_session_id?: string | null
           user_id?: string | null
         }
@@ -551,8 +575,11 @@ export type Database = {
           event_id: string
           full_name: string
           id: string
+          locale: string
           notified_at: string | null
           phone: string
+          removal_reason: string | null
+          removed_at: string | null
         }
         Insert: {
           claim_expires_at?: string | null
@@ -563,8 +590,11 @@ export type Database = {
           event_id: string
           full_name: string
           id?: string
+          locale?: string
           notified_at?: string | null
           phone: string
+          removal_reason?: string | null
+          removed_at?: string | null
         }
         Update: {
           claim_expires_at?: string | null
@@ -575,8 +605,11 @@ export type Database = {
           event_id?: string
           full_name?: string
           id?: string
+          locale?: string
           notified_at?: string | null
           phone?: string
+          removal_reason?: string | null
+          removed_at?: string | null
         }
         Relationships: [
           {
@@ -696,19 +729,15 @@ export type Database = {
       }
       admin_event_overview: {
         Row: {
+          capacity: number | null
           event_id: string | null
+          offers_open: number | null
           pending_payments: number | null
+          refund_requested: number | null
+          refunded: number | null
+          status: string | null
+          taken: number | null
           waiting: number | null
-        }
-        Insert: {
-          event_id?: string | null
-          pending_payments?: never
-          waiting?: never
-        }
-        Update: {
-          event_id?: string | null
-          pending_payments?: never
-          waiting?: never
         }
         Relationships: []
       }
@@ -722,14 +751,22 @@ export type Database = {
       }
     }
     Functions: {
+      holds_seat: {
+        Args: { r: Database["public"]["Tables"]["registrations"]["Row"] }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
       pending_hold_interval: { Args: never; Returns: string }
+      publish_event_draft: { Args: { p_event_id: string }; Returns: undefined }
       publish_post_draft: { Args: { p_post_id: string }; Returns: undefined }
       register_for_event: {
         Args: {
           p_email: string
           p_event_id: string
           p_full_name: string
+          p_locale?: string
+          p_marketing_opt_in?: boolean
+          p_participant_note?: string
           p_payment_status?: string
           p_phone: string
         }

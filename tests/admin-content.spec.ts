@@ -46,6 +46,40 @@ test.describe("the content sections", () => {
     const response = await page.goto("/admin/content/nu-exista");
     expect(response?.status()).toBe(404);
   });
+
+  /**
+   * The page column stops growing and centres itself, and on a wide screen
+   * the menu used to stay pressed against the form with the empty space on
+   * its other side. It moves, with the page title, to the middle of that
+   * space (.admin-content-menu in app/globals.css). The allowance is for a
+   * desktop scrollbar, which 100vw counts and the column does not.
+   */
+  test("the menu sits half way between the sidebar and the form, with the title above it", async ({ page }) => {
+    const layout = () =>
+      page.evaluate(() => {
+        const rail = document.querySelector(".admin-rail")!.getBoundingClientRect();
+        const menu = document.querySelector("nav.admin-content-menu ul")!.getBoundingClientRect();
+        const form = document.querySelector("#content-section-title")!.closest("section")!.getBoundingClientRect();
+        const title = document.querySelector("h1")!.getBoundingClientRect();
+        return {
+          before: Math.round(menu.left - rail.right),
+          after: Math.round(form.left - menu.right),
+          titleOffset: Math.round(title.left - menu.left),
+        };
+      });
+
+    // Not wide enough for the column to be at its widest: the usual 2rem
+    // either side, where the menu has always been.
+    await openSection(page, "home");
+    expect(await layout()).toEqual({ before: 32, after: 32, titleOffset: 0 });
+
+    await page.setViewportSize({ width: 2400, height: 900 });
+    await expect.poll(async () => {
+      const { before, after } = await layout();
+      return before > 200 && Math.abs(before - after) <= 5;
+    }).toBe(true);
+    expect((await layout()).titleOffset).toBe(0);
+  });
 });
 
 test.describe("editing a section", () => {

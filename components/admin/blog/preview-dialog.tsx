@@ -7,10 +7,11 @@ import { useAdminLocale } from "@/components/admin/locale-provider";
 import { cn } from "@/lib/utils";
 
 /**
- * The real public article, unpublished version, in a frame: at a phone's
- * width (390px, an iPhone 14) or the full width of the screen, in Romanian or
- * English. The page inside is app/[locale]/preview/blog/[id], drawn by the
- * same component as the published article.
+ * The real public page, unpublished version, in a frame: at a phone's width
+ * (390px, an iPhone 14) or the full width of the screen, in Romanian or
+ * English. The page inside is app/[locale]/preview/<path>, drawn by the same
+ * component as the published page: blog/<id> for a post, events/<id> for an
+ * event.
  *
  * `version` changes each time the dialog opens, so the frame reloads and
  * shows what was saved a moment ago rather than a cached copy.
@@ -18,12 +19,13 @@ import { cn } from "@/lib/utils";
 export function PreviewDialog({
   open,
   onClose,
-  postId,
+  path,
   version,
 }: {
   open: boolean;
   onClose: () => void;
-  postId: string;
+  /** Under /<locale>/preview/, such as "blog/<id>". */
+  path: string;
   version: number;
 }) {
   const { t } = useAdminLocale();
@@ -45,7 +47,7 @@ export function PreviewDialog({
     return () => dialog?.removeEventListener("close", handle);
   }, [onClose]);
 
-  const src = `/${lang}/preview/blog/${postId}?v=${version}`;
+  const src = `/${lang}/preview/${path}?v=${version}`;
 
   return (
     <dialog

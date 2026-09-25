@@ -1,246 +1,361 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
+  bucharestDate,
   deleteEventBySlug,
+  deleteEventsTitled,
+  deletePostById,
   deleteWhatsappLink,
+  eventById,
+  eventDraft,
   eventsBySlug,
-  seedWaitingEntry,
+  eventsTitled,
+  publishEventDraftAs,
   seedEvent,
+  seedPost,
+  seedRegistrationFor,
+  seedWaitingEntry,
   tryInsertEvent,
   unique,
   anonStorageClient,
+  waitingEntry,
 } from "./helpers";
 
-test.describe("admin events CRUD", () => {
-  let slug = "";
-  let title = "";
+/**
+ * The events list (/admin/events) and the event editor (/admin/events/new,
+ * /admin/events/<id>): tabs, rows that open like a post's, and the numbers
+ * that open their people; autosave
+ * once an event has a title and a date; an end before its start refused on
+ * its own; a live event's changes private until published, with new places
+ * offered to the waiting list; an ended event's date, price and places
+ * locked; Back, Delete and Preview.
+ *
+ * Events the editor creates are cleaned up by the marker in their title.
+ */
 
-  test.afterEach(async () => {
-    if (slug) await deleteEventBySlug(slug);
-  });
+const status = (page: Page) => page.locator("[data-save-status]");
+const titleField = (page: Page) => page.getByLabel("Titlu (RO)", { exact: true });
 
-  test("creates, edits and deletes an event", async ({ page }) => {
-    slug = unique("eveniment-admin");
-    title = `Eveniment Admin ${slug}`;
-    const titleEdited = `${title} (modificat)`;
+/** Waits for the description's toolbar, which proves the client has loaded the event. */
+async function openEditor(page: Page, path: string) {
+  await page.goto(path);
+  await expect(page.getByRole("button", { name: "Îngroșat" }).first()).toBeVisible();
+}
 
-    const cardRow = (headingText: string) =>
-      page
-        .getByRole("heading", { name: headingText })
-        .locator("xpath=ancestor::div[contains(@class,'flex items-center justify-between')]");
+test.describe("the event editor", () => {
+  const marker = unique("ev-editor");
+  test.afterEach(async () => deleteEventsTitled(marker));
 
-    await page.goto("/admin/events");
+  test("a new event saves once it has a title and a date, then publishes and stays in the editor", async ({ page }) => {
+    await openEditor(page, "/admin/events/new");
+    await expect(status(page)).toHaveText("Se salvează singur când are titlu și dată");
 
-    await page.getByRole("button", { name: "Eveniment Nou" }).click();
-    await expect(page.getByRole("heading", { name: "Eveniment Nou" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "→ EN" }).first()).toBeVisible();
+    await titleField(page).fill(`${marker} Yoga la lac`);
+    // Longer than autosave's pause, and still nothing: it has no date yet, and
+    // a date is not something to invent.
+    await page.waitForTimeout(2500);
+    expect(await eventsTitled(marker)).toHaveLength(0);
 
-    await page.getByLabel("Titlu (RO)").fill(title);
-    await page.getByLabel("Slug").fill(slug);
     await page.getByLabel("Data", { exact: true }).fill("2099-01-15");
+    await expect(status(page)).toHaveText("Salvat");
+    await expect(page).toHaveURL(/\/admin\/events\/[0-9a-f-]{36}$/);
+    const [created] = await eventsTitled(marker);
+    expect(created.slug).toBe(`${marker}-yoga-la-lac`);
+    expect(created.published).toBe(false);
+    // Blank is NULL, not an invented midnight or a guessed end.
+    expect(created.time).toBeNull();
+    expect(created.end_date).toBeNull();
+    expect(created.end_time).toBeNull();
+
     await page.getByLabel("Ora", { exact: true }).fill("10:00");
-    await page.getByLabel("Ora de final").fill("11:30");
     await page.getByLabel("Locație").fill("Cluj-Napoca");
-    await page.getByLabel("Preț (0 = gratuit)").fill("0");
     await page.getByLabel("Participanți maxim").fill("10");
-    await page.getByText("Publicat", { exact: true }).click();
-    await page.getByRole("button", { name: "Salvează" }).click();
+    await page.getByRole("button", { name: "Publică", exact: true }).click();
 
-    await expect(page).toHaveURL(/\/admin\/events$/);
-    await expect(cardRow(title)).toBeVisible();
-    await expect(cardRow(title)).toContainText(slug);
+    const toasts = page.getByRole("region", { name: "Notificări" });
+    await expect(toasts).toContainText("Eveniment publicat");
+    await expect(page.getByRole("button", { name: "Publicat" })).toBeDisabled();
+    await expect(page).toHaveURL(/\/admin\/events\/[0-9a-f-]{36}$/);
 
-    /*
-     * By name rather than by position. These three buttons are icon-only, and
-     * the waiting-list one only exists while somebody is on the list — so
-     * "the first button" is the editor on some cards and the waiting list on
-     * others. They carry the event's own title so a screen reader hears which
-     * of a dozen identical rows it is on, and that is what these ask for.
-     */
-    await page.getByRole("button", { name: `Editează eveniment: ${title}` }).click();
-    await page.getByLabel("Titlu (RO)").fill(titleEdited);
-    await page.getByRole("button", { name: "Salvează" }).click();
-    await expect(cardRow(titleEdited)).toBeVisible();
-
-    await page.getByRole("button", { name: `Șterge: ${titleEdited}` }).click();
-    await page
-      .getByRole("dialog", { name: "Sigur dorești să ștergi acest eveniment?" })
-      .getByRole("button", { name: "Șterge" })
-      .click();
-    await expect(cardRow(titleEdited)).toHaveCount(0);
+    const [published] = await eventsTitled(marker);
+    expect(published.published).toBe(true);
+    expect(published.max_participants).toBe(10);
+    await page.goto(`/ro/events/${published.slug}`);
+    await expect(page.getByRole("heading", { level: 1, name: `${marker} Yoga la lac` })).toBeVisible();
   });
 
   /**
-   * Only the start date is required. Everything else about when an event
-   * happens may be left blank, because blank is a real answer: she books a
-   * venue months ahead and does not yet know what time Friday begins.
-   *
-   * The duration field this replaces was required, and had to be — a duration
-   * of nothing is not a fact about an event, it is a missing number. An end
-   * date and an end time are facts that can genuinely be unknown, so they are
-   * allowed to be.
+   * An end before its start is refused on its own: the field says so, and
+   * everything else keeps saving. The database refuses it too
+   * (`events_ends_after_start`), but a refused save says nothing about which
+   * of four fields is wrong.
    */
-  test("an event saves with a date and nothing else about its timing", async ({ page }) => {
-    slug = unique("eveniment-fara-ora");
-    title = `Eveniment Fără Oră ${slug}`;
-
-    await page.goto("/admin/events");
-    await page.getByRole("button", { name: "Eveniment Nou" }).click();
-    await page.getByLabel("Titlu (RO)").fill(title);
-    await page.getByLabel("Slug").fill(slug);
-    await page.getByLabel("Data", { exact: true }).fill("2099-01-15");
-    await page.getByRole("button", { name: "Salvează" }).click();
-
-    // The list entry, not the URL: the panel swaps form for list through React
-    // state without navigating, so `toHaveURL` passes before the insert lands.
-    await expect(page.getByRole("heading", { name: title })).toBeVisible();
-
-    const [saved] = await eventsBySlug(slug);
-    expect(saved.time, "blank is NULL, not an invented midnight").toBeNull();
-    expect(saved.end_date).toBeNull();
-    expect(saved.end_time).toBeNull();
-  });
-
-  /**
-   * An end before its start is refused before it reaches the database, so she
-   * is told which field is wrong rather than meeting a failed save.
-   *
-   * The constraint is the thing that actually holds — see
-   * `events_end_not_before_start` — but a constraint violation surfaces as a
-   * save that silently did not happen.
-   */
-  test("an end before the start is refused, and says so", async ({ page }) => {
-    slug = unique("eveniment-final-gresit");
-    title = `Eveniment Final Greșit ${slug}`;
-
-    await page.goto("/admin/events");
-    await page.getByRole("button", { name: "Eveniment Nou" }).click();
-
-    // The message itself, not `getByRole("alert")`: Next mounts a
-    // `next-route-announcer` containing a permanently present `role="alert"`
-    // element, so the role matches one node on every page before this form has
-    // complained about anything.
+  test("an end before the start is refused and says so, and the rest still saves", async ({ page }) => {
+    await openEditor(page, "/admin/events/new");
     const complaint = page.getByText("Finalul nu poate fi înaintea începutului.");
     const endDate = page.getByLabel("Data de final");
 
-    // The form opens quiet — nothing is said until she asks for the save.
+    // The form opens quiet.
     await expect(endDate).toBeVisible();
     expect(await endDate.getAttribute("aria-invalid")).toBeNull();
     await expect(complaint).toHaveCount(0);
 
-    await page.getByLabel("Titlu (RO)").fill(title);
-    await page.getByLabel("Slug").fill(slug);
+    await titleField(page).fill(`${marker} Final greșit`);
     await page.getByLabel("Data", { exact: true }).fill("2099-01-15");
     await endDate.fill("2099-01-10");
-    await page.getByRole("button", { name: "Salvează" }).click();
-
     await expect(complaint).toBeVisible();
     await expect(endDate).toHaveAttribute("aria-invalid", "true");
-    await expect(page.getByRole("heading", { name: "Eveniment Nou" })).toBeVisible();
-    expect(await eventsBySlug(slug), "nothing was written").toHaveLength(0);
+    await expect(status(page)).toHaveText("Salvat");
+    let [saved] = await eventsTitled(marker);
+    expect(saved.end_date, "the impossible end was not written").toBeNull();
 
-    // Correcting it clears the complaint rather than leaving it up while she
-    // fixes the thing it complains about.
+    // Correcting it clears the complaint and saves the end.
     await endDate.fill("2099-01-17");
     await expect(complaint).toHaveCount(0);
-
-    await page.getByRole("button", { name: "Salvează" }).click();
-    await expect(page.getByRole("heading", { name: title })).toBeVisible();
-    const [saved] = await eventsBySlug(slug);
-    expect(saved.end_date).toBe("2099-01-17");
+    await expect(status(page)).toHaveText("Salvat");
+    await expect.poll(async () => (await eventsTitled(marker))[0]?.end_date).toBe("2099-01-17");
+    [saved] = await eventsTitled(marker);
+    expect(saved.date).toBe("2099-01-15");
   });
 
-  /**
-   * Same day, end time earlier than the start: the other half of the rule, and
-   * the half a date comparison alone would miss.
-   */
-  test("an end time before the start time on the same day is refused", async ({ page }) => {
-    slug = unique("eveniment-ora-gresita");
-    title = `Eveniment Oră Greșită ${slug}`;
-
-    await page.goto("/admin/events");
-    await page.getByRole("button", { name: "Eveniment Nou" }).click();
-    await page.getByLabel("Titlu (RO)").fill(title);
-    await page.getByLabel("Slug").fill(slug);
-    await page.getByLabel("Data", { exact: true }).fill("2099-01-15");
-    await page.getByLabel("Ora", { exact: true }).fill("18:00");
-    await page.getByLabel("Data de final").fill("2099-01-15");
-    await page.getByLabel("Ora de final").fill("17:00");
-    await page.getByRole("button", { name: "Salvează" }).click();
-
-    await expect(
-      page.getByText("Finalul nu poate fi înaintea începutului.")
-    ).toBeVisible();
-    expect(await eventsBySlug(slug), "nothing was written").toHaveLength(0);
-  });
-
-  /**
-   * The same slip with the end date left blank, which means the event ends on
-   * the day it starts. The older checks compared times only when an end date
-   * was filled in, so this one used to save, and the event counted as over
-   * before it began.
-   */
   test("an end time before the start time is refused when the end date is blank", async ({ page }) => {
-    slug = unique("eveniment-fara-final");
-    title = `Eveniment Fără Dată De Final ${slug}`;
-
-    await page.goto("/admin/events");
-    await page.getByRole("button", { name: "Eveniment Nou" }).click();
-    await page.getByLabel("Titlu (RO)").fill(title);
-    await page.getByLabel("Slug").fill(slug);
+    await openEditor(page, "/admin/events/new");
+    await titleField(page).fill(`${marker} Oră greșită`);
     await page.getByLabel("Data", { exact: true }).fill("2099-01-15");
     await page.getByLabel("Ora", { exact: true }).fill("18:00");
     await page.getByLabel("Ora de final").fill("10:00");
-    await page.getByRole("button", { name: "Salvează" }).click();
 
     await expect(page.getByText("Finalul nu poate fi înaintea începutului.")).toBeVisible();
-    expect(await eventsBySlug(slug), "nothing was written").toHaveLength(0);
+    await expect(status(page)).toHaveText("Salvat");
+    const [saved] = await eventsTitled(marker);
+    expect(saved.end_time).toBeNull();
+    expect(saved.time).toBeNull();
   });
 
-  test("waiting list modal shows seeded entries and closes", async ({ page }) => {
-    const event = await seedEvent({ published: false });
-    slug = event.slug;
-    title = `Eveniment E2E ${event.slug}`;
-    await seedWaitingEntry(event.id);
+  test("Back with nothing written leaves nothing behind", async ({ page }) => {
+    await openEditor(page, "/admin/events/new");
+    await titleField(page).fill(`${marker} De șters`);
+    await page.getByLabel("Data", { exact: true }).fill("2099-01-15");
+    await expect(status(page)).toHaveText("Salvat");
+    const id = page.url().split("/").pop()!;
+    expect(await eventById(id)).not.toBeNull();
 
-    const cardRow = (headingText: string) =>
-      page
-        .getByRole("heading", { name: headingText })
-        .locator("xpath=ancestor::div[contains(@class,'flex items-center justify-between')]");
+    await titleField(page).fill("");
+    // The editor's own Back, in its bar; the sidebar has an "Evenimente" too.
+    await page.getByRole("main").getByRole("link", { name: "Evenimente", exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/events$/);
+    expect(await eventById(id)).toBeNull();
+  });
 
-    await page.goto("/admin/events");
-
-    const row = cardRow(title);
-    await expect(row).toBeVisible();
-    await expect(row).toContainText("În așteptare: 1");
-
-    await row.getByRole("button").first().click();
-    const dialog = page.locator("dialog[open]");
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "Lista de așteptare" })).toBeVisible();
-    await expect(dialog).toContainText("Așteptare E2E");
-
-    await dialog.getByRole("button", { name: "Închide" }).click();
-    await expect(dialog).not.toBeVisible();
+  test("Delete, from the menu, asks first", async ({ page }) => {
+    const event = await seedEvent({ title_ro: `${marker} Ciornă de șters`, published: false });
+    await openEditor(page, `/admin/events/${event.id}`);
+    await page.getByRole("button", { name: "Mai multe acțiuni" }).click();
+    await page.getByRole("menuitem", { name: "Șterge evenimentul" }).click();
+    await page
+      .getByRole("dialog", { name: "Sigur dorești să ștergi acest eveniment?" })
+      .getByRole("button", { name: "Șterge" })
+      .click();
+    await expect(page).toHaveURL(/\/admin\/events$/);
+    expect(await eventById(event.id)).toBeNull();
   });
 });
 
-/**
- * Money guards, asserted against the database rather than the form.
- *
- * The admin panel writes to Supabase straight from the browser, so `min="0"` on
- * an input is advice to the person typing and nothing more — anyone holding an
- * admin session can POST whatever they like to PostgREST. A negative price
- * would reach Stripe as a negative charge, and a negative capacity is a typo
- * that would be read as sold out without ever looking like one in the form.
- *
- * So these go through the same client the panel uses and assert the write is
- * refused. Testing the form's `min` attribute would prove only that the
- * attribute is spelled correctly.
- */
-/**
- * starts_at and ends_at (supabase/migrations/20260924000200_event_bounds.sql):
- * instants Postgres computes from the wall-clock columns, in Bucharest time.
- */
+test.describe("a published event", () => {
+  const marker = unique("ev-live");
+  test.afterEach(async () => deleteEventsTitled(marker));
+
+  test("changes stay private until published, and new places go to the waiting list", async ({ page, browser }) => {
+    const original = `${marker} Seară plină`;
+    const changed = `${original} (schimbat)`;
+    const event = await seedEvent({ title_ro: original, max_participants: 0, price: 0 });
+    const waiting = await seedWaitingEntry(event.id, "none");
+
+    await openEditor(page, `/admin/events/${event.id}`);
+    await expect(page.getByRole("button", { name: "Publicat" })).toBeDisabled();
+    await titleField(page).fill(changed);
+    await page.getByLabel("Participanți maxim").fill("1");
+    await expect(status(page)).toHaveText("Salvat");
+
+    // Saved, and private: the draft has it, the event and its page do not.
+    expect((await eventDraft(event.id))?.title_ro).toBe(changed);
+    expect((await eventById(event.id))?.title_ro).toBe(original);
+    const visitor = await browser.newPage({ storageState: { cookies: [], origins: [] } });
+    await visitor.goto(`/ro/events/${event.slug}`);
+    await expect(visitor.getByRole("heading", { level: 1 })).toHaveText(original);
+    expect((await waitingEntry(waiting)).notified_at, "nobody is offered a seat that is not published").toBeNull();
+
+    await page.getByRole("button", { name: "Publică modificările" }).click();
+    const toasts = page.getByRole("region", { name: "Notificări" });
+    await expect(toasts).toContainText("Modificări publicate");
+    // The new place went to the front of the queue, and she is told.
+    await expect(toasts).toContainText("Linkuri de rezervare trimise către lista de așteptare: 1.");
+    expect((await waitingEntry(waiting)).notified_at).not.toBeNull();
+    expect(await eventDraft(event.id)).toBeNull();
+
+    await visitor.reload();
+    await expect(visitor.getByRole("heading", { level: 1 })).toHaveText(changed);
+    await visitor.close();
+  });
+
+  test("Preview shows the unpublished version, and books nobody", async ({ page }) => {
+    const event = await seedEvent({ title_ro: `${marker} Previzualizat` });
+    const changed = `${marker} Previzualizat (nou)`;
+    await openEditor(page, `/admin/events/${event.id}`);
+    await titleField(page).fill(changed);
+
+    await page.getByRole("button", { name: "Previzualizare" }).click();
+    const frame = page.getByRole("dialog", { name: "Previzualizare" }).frameLocator("iframe");
+    await expect(frame.getByRole("heading", { level: 1 })).toHaveText(changed);
+    await expect(frame.getByText("Previzualizare. Vizitatorii nu văd încă versiunea aceasta.")).toBeVisible();
+    // The booking panel is drawn as visitors see it, and inert.
+    await expect(frame.locator("[inert]")).toHaveCount(1);
+  });
+
+  test("once it has ended, its date, price and places are locked, here and in the database", async ({ page }) => {
+    const event = await seedEvent({ title_ro: `${marker} Încheiat`, date: bucharestDate(-3), price: 50 });
+    await openEditor(page, `/admin/events/${event.id}`);
+    await expect(page.getByText(/Evenimentul s-a încheiat\. Data, orele, prețul și locurile/)).toBeVisible();
+    await expect(page.getByLabel("Data", { exact: true })).toBeDisabled();
+    await expect(page.getByLabel("Participanți maxim")).toBeDisabled();
+    await expect(page.getByLabel("Preț (0 = gratuit)")).toBeDisabled();
+    // What she can still fix, she can.
+    await expect(titleField(page)).toBeEnabled();
+
+    // And the rule itself: publishing changes leaves them alone.
+    await publishEventDraftAs(event.id, { date: "2099-01-01", price: 999, title_ro: `${marker} Încheiat, redenumit` });
+    const after = await eventById(event.id);
+    expect(after?.date).toBe(bucharestDate(-3));
+    expect(after?.price).toBe(50);
+    expect(after?.title_ro).toBe(`${marker} Încheiat, redenumit`);
+  });
+});
+
+test.describe("the events list", () => {
+  const marker = unique("ev-lista");
+  const slugs: string[] = [];
+  test.afterAll(async () => {
+    for (const slug of slugs) await deleteEventBySlug(slug);
+  });
+
+  test("tabs sort events by their state, and each number opens its people", async ({ page }) => {
+    const upcoming = await seedEvent({ title_ro: `${marker} Urmează`, price: 100 });
+    const draft = await seedEvent({ title_ro: `${marker} Ciornă`, published: false });
+    const archived = await seedEvent({ title_ro: `${marker} Arhivat`, date: bucharestDate(-5) });
+    const pending = await seedEvent({ title_ro: `${marker} Plată restantă`, date: bucharestDate(-5), price: 100 });
+    slugs.push(upcoming.slug, draft.slug, archived.slug, pending.slug);
+    await seedWaitingEntry(upcoming.id, "none");
+    await seedRegistrationFor(upcoming.id, { payment_status: "pending" });
+    // A checkout still inside its hour, on an event that is over.
+    await seedRegistrationFor(pending.id, { payment_status: "pending" });
+
+    const rows = page.locator("main li").filter({ has: page.locator("a[href^='/admin/events/']") });
+    await page.goto(`/admin/events?q=${encodeURIComponent(marker)}`);
+    // Upcoming holds what can still need her: the event to come, and the one
+    // that is over with a payment pending.
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: "Plată restantă" })).toContainText("Încheiat, ceva în așteptare");
+    await expect(rows.filter({ hasText: "Plată restantă" })).toContainText("1 plată în așteptare");
+    // Once it is over, its waiting list is not news.
+    await expect(rows.filter({ hasText: "Plată restantă" }).getByText(/pe lista de așteptare/)).toHaveCount(0);
+
+    const tabs = page.getByRole("navigation", { name: "Evenimente după stare" });
+    await tabs.getByRole("link", { name: /^Ciorne/ }).click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows).toContainText("Ciornă");
+    await tabs.getByRole("link", { name: /^Trecute/ }).click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows).toContainText("Arhivat");
+
+    // The waiting list, from the upcoming event's row, to its people.
+    await tabs.getByRole("link", { name: /^Următoare/ }).click();
+    const waitlist = rows.filter({ hasText: `${marker} Urmează` }).getByRole("link", { name: "1 pe lista de așteptare" });
+    await expect(waitlist).toHaveAttribute("href", `/admin/registrations?event=${upcoming.id}&status=waitlist`);
+    await waitlist.click();
+    await expect(page.getByText("Eveniment: " + `${marker} Urmează`)).toBeVisible();
+    await expect(page.getByText(/^Așteptare E2E/)).toHaveCount(1);
+  });
+
+  /**
+   * The order menu opens as a list the page draws, with the panel's rounded
+   * corners, wherever the browser allows it (Chromium, with a mouse). A list
+   * drawn that way sizes the closed control to the chosen order, so the page
+   * fixes its width: otherwise a shorter order would shrink it and pull the
+   * search box sideways.
+   */
+  test("the order menu names each direction, keeps its width, and opens a rounded list", async ({ page }) => {
+    await page.goto("/admin/events");
+    const order = page.getByLabel("Ordine");
+    const widths = new Set<number>();
+    for (const label of [
+      "Data evenimentului, crescător",
+      "Data evenimentului, descrescător",
+      "Editate recent",
+      "Titlu, de la A la Z",
+    ]) {
+      await order.selectOption({ label });
+      await expect(order.locator("option:checked")).toHaveText(label);
+      widths.add(Math.round((await order.boundingBox())!.width));
+    }
+    expect(widths.size).toBe(1);
+
+    const corners = await order.evaluate((el) =>
+      CSS.supports("appearance", "base-select") ? getComputedStyle(el, "::picker(select)").borderRadius : null
+    );
+    if (corners !== null) expect(corners).toBe("16px");
+  });
+
+  /**
+   * An event's row cannot be one link, as a post's is, because its numbers
+   * are links of their own; the title's link is stretched over the row
+   * instead. This holds it to the post list's behaviour: the same colour
+   * under the pointer, anywhere on the row opens the event, and over a
+   * number it is the number that answers.
+   */
+  test("the whole row opens the event and lights up as a post's row does", async ({ page }) => {
+    const event = await seedEvent({ title_ro: `${marker} Rând întreg` });
+    slugs.push(event.slug);
+    await seedWaitingEntry(event.id, "none");
+    const post = await seedPost({ title_ro: `${marker} Rând de articol` });
+
+    try {
+      await page.goto(`/admin/blog?q=${encodeURIComponent(marker)}`);
+      const postRow = page.locator("main li a[href^='/admin/blog/']");
+      await postRow.hover();
+      await page.waitForTimeout(300); // past its 150ms colour transition
+      const lit = await postRow.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+      await page.goto(`/admin/events?q=${encodeURIComponent(`${marker} Rând întreg`)}`);
+      const row = page.locator("main li").filter({ has: page.locator("a[href^='/admin/events/']") });
+      await expect(row).toHaveCount(1);
+      const background = () => row.evaluate((el) => getComputedStyle(el).backgroundColor);
+      const resting = await background();
+      expect(resting).not.toBe(lit);
+
+      // A point on the right, over the status: outside the title's link, but
+      // on the layer it stretches over the row.
+      const box = (await row.boundingBox())!;
+      const right = { x: box.width - 40, y: 20 };
+      await row.hover({ position: right });
+      await expect.poll(background).toBe(lit);
+
+      await row.getByRole("link", { name: "1 pe lista de așteptare" }).hover();
+      await expect.poll(background).toBe(resting);
+
+      // From the keyboard, the ring goes round the whole row.
+      await page.getByPlaceholder("Caută după titlu, loc sau adresă").focus();
+      await page.keyboard.press("Tab"); // the order
+      await page.keyboard.press("Tab"); // the row
+      await expect(row.locator("[data-row-link]")).toBeFocused();
+      expect(await row.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+
+      await row.click({ position: right });
+      await expect(page).toHaveURL(new RegExp(`/admin/events/${event.id}$`));
+    } finally {
+      await deletePostById(post.id);
+    }
+  });
+});
+
 test.describe("when an event starts and ends", () => {
   test("they are instants in Bucharest time, daylight saving included", async () => {
     const summer = await seedEvent({ date: "2099-07-01", time: "10:00", end_time: "12:30", published: false });
@@ -376,8 +491,7 @@ test.describe("saved WhatsApp links", () => {
     const label = unique("Grup");
     const url = `https://chat.whatsapp.com/${unique("invite")}`;
 
-    await page.goto("/admin/events");
-    await page.getByRole("button", { name: "Eveniment Nou" }).click();
+    await openEditor(page, "/admin/events/new");
 
     const linkField = page.getByLabel("Link WhatsApp");
     await linkField.fill(url);

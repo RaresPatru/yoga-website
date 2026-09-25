@@ -534,6 +534,33 @@ where not exists (
 
 
 -- ---------------------------------------------------------------------------
+-- One event that is over, for the archive
+-- ---------------------------------------------------------------------------
+-- Six weeks ago, with one approved testimonial, so /events shows its
+-- "Evenimente trecute" section and the event's page shows the ended state and
+-- what participants said. Invented like everything else in this file.
+insert into public.events (slug, title_ro, title_en, description_ro, description_en, date, time, location, price, currency, max_participants, image_url, published)
+values (
+  'yoga-la-rasarit',
+  'Yoga la răsărit',
+  'Sunrise yoga',
+  '<p>O oră de practică lentă, cu fața spre est, înainte de micul dejun.</p>',
+  '<p>An hour of slow practice facing east, before breakfast.</p>',
+  current_date - 42, '06:30', 'Cluj-Napoca', 50, 'RON', 15, '/mock/event-3.webp', true
+)
+on conflict (slug) do nothing;
+
+insert into public.testimonials (event_id, type, content, author_name, rating, approved)
+select e.id, 'text', 'Am prins răsăritul de pe saltea și nu mi-a mai fost frig după primele zece minute.', 'Maria S.', 5, true
+from public.events e
+where e.slug = 'yoga-la-rasarit'
+  and not exists (
+    select 1 from public.testimonials t
+    where t.content = 'Am prins răsăritul de pe saltea și nu mi-a mai fost frig după primele zece minute.'
+  );
+
+
+-- ---------------------------------------------------------------------------
 -- Frequently asked questions
 -- ---------------------------------------------------------------------------
 -- These answer what actually stalls a booking. The home page renders them as a

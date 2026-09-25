@@ -82,25 +82,68 @@ citească documentele o dată înainte de lansare; ce anume, e în
 
 ## 2. Evenimente
 
-**Meniu: Evenimente** → **Eveniment Nou**
+**Meniu: Evenimente**
+
+### Lista
+
+Trei file, cu numărul lor lângă fiecare:
+
+- **Următoare**: tot ce încă poate avea nevoie de tine. Evenimentele care n-au
+  început, cele în desfășurare, și cele încheiate care mai au o plată sau o
+  rambursare în așteptare. Pe aceasta se deschide lista, și pe acestea le
+  numără rândul „Evenimente” din panou.
+- **Ciorne**: nepublicate.
+- **Trecute**: încheiate, fără nimic în așteptare.
+
+Sub fiecare eveniment apar numerele lui, doar cele care nu sunt zero. Întâi ce
+așteaptă după tine: **lista de așteptare, plăți în așteptare, rambursări
+cerute**. Apoi, pentru evidență: **oferte fără răspuns** (oameni de pe listă
+care au primit un link și n-au răspuns încă) și **rambursări făcute**. Fiecare
+număr deschide Înscrieri cu exact oamenii aceia. După ce un eveniment s-a
+încheiat, lista lui de așteptare nu mai apare: nu mai poate primi nimeni un loc.
+
+### Editorul
+
+**Eveniment nou** deschide editorul, care arată și se poartă ca cel de
+articole: se salvează singur, are **Previzualizare** (pagina adevărată, pe
+telefon sau calculator, în română sau engleză) și **Publică**. Un eveniment nou
+se salvează abia când are **titlu și dată**; până atunci bara scrie ce îi
+lipsește.
+
+După publicare, ce schimbi **nu apare pe site** până nu apeși **Publică
+modificările**. La publicare, dacă au apărut locuri libere, primii de pe lista
+de așteptare primesc un link (vezi mai jos), iar un mesaj în colț îți spune
+câți.
+
+**După ce un eveniment s-a încheiat, data, orele, prețul și locurile nu se mai
+pot schimba**: așa au fost rezervate și plătite. Titlul, descrierea și poza
+se pot corecta în continuare.
+
+În dreapta vezi starea evenimentului, locurile ocupate și cele cinci numere, și
+comutatorul **Apare în arhiva evenimentelor trecute**: după ce se încheie,
+evenimentul apare pe site la „Evenimente trecute”, cu ce au spus participanții.
+Îl poți scoate de acolo oricând; se aplică imediat.
 
 | Câmp | Ce înseamnă |
 |---|---|
-| Titlu (RO) | Numele evenimentului. Obligatoriu. |
-| Titlu (EN) | Traducerea. Butonul **→ EN** traduce automat; verifică rezultatul. |
-| Slug | Partea din adresă: `/events/atelier-de-yoga`. Litere mici și liniuțe. |
+| Titlu | Numele evenimentului. Comutatorul **RO / EN** din bară arată câmpul în engleză, cu româna deasupra; **Tradu ce lipsește** completează engleza. |
+| Adresa evenimentului | Partea din adresă: `/events/atelier-de-yoga`. Se ia din titlu până la prima publicare; după aceea nu se mai schimbă singură, pentru că linkurile distribuite duc la ea. |
 | Data | Ziua în care **începe**. Singurul câmp obligatoriu dintre cele patru. |
 | Ora | Ora la care începe, ora României. **Poți lăsa gol** dacă nu știi încă: atunci pe site nu apare nicio oră, doar data. O completezi mai târziu și apare. |
 | Data de final | Doar dacă ține mai multe zile. Lasă gol pentru un eveniment de o singură zi. |
-| Ora de final | Când se termină. Lasă gol dacă nu vrei să promiți o oră de final. |
+| Ora de final | Când se termină. Lasă gol dacă nu vrei să promiți o oră de final. Dacă finalul ar fi înaintea începutului, câmpul îți spune și nu se salvează, dar restul da. |
 | Locație | Orașul sau adresa. Este textul care se vede pe site. |
 | Link hartă | **Opțional.** Deschizi Google Maps, apeși *Share/Distribuie* și lipești linkul aici. Sau scrii coordonatele: `46.7712, 23.5949` — util pentru un loc din parc, care nu are adresă. Dacă e completat, adresa de pe pagina evenimentului devine apăsabilă și deschide harta. Dacă lași gol, adresa rămâne text simplu. |
 | Preț | **0 înseamnă gratuit.** Orice număr mai mare cere plata prin card. Nu poate fi negativ. |
 | Moneda | RON, EUR, USD sau GBP. Implicit RON. Clientul plătește exact în moneda aleasă aici. |
-| Participanți maxim | Câte locuri pot fi rezervate pe site — singurul loc unde se poate rezerva. Scade numărul dacă vrei să păstrezi locuri pentru cineva: din 15 pui 13 și rămân două ale tale. **Gol sau 0** înseamnă „locuri epuizate”: nimeni nu se mai poate înscrie, se poate intra doar pe lista de așteptare. Când pui la loc un număr și rămân locuri libere, primele persoane de pe listă primesc un email — vezi mai jos. |
-| URL Imagine | Deocamdată lipești adresa completă a imaginii. Un buton care deschide Biblioteca Media direct aici nu există încă. |
+| Participanți maxim | Câte locuri pot fi rezervate pe site — singurul loc unde se poate rezerva. Scade numărul dacă vrei să păstrezi locuri pentru cineva: din 15 pui 13 și rămân două ale tale. **Gol sau 0** înseamnă „locuri epuizate”: nimeni nu se mai poate înscrie, se poate intra doar pe lista de așteptare. |
+| Fotografie | Din Biblioteca Media, ca la articole. |
+| Descriere | Același editor ca la articole, cu paragrafe, liste, linkuri și video. |
 | Link WhatsApp | Grupul evenimentului. Se trimite automat în emailul de confirmare. Vezi mai jos. |
-| Publicat | **Cât timp e debifat, evenimentul nu se vede pe site.** |
+
+**Înscrierile se închid când începe evenimentul.** Din acel moment pagina lui
+spune „În desfășurare”, iar după ce se termină, „S-a încheiat”, fără formular.
+Un eveniment fără oră anunțată se închide la începutul zilei lui.
 
 > **Cum apare pe site.** Data și ora se hotărăsc separat.
 >
@@ -159,7 +202,13 @@ prima persoană de pe listă primește automat un email cu un link valabil **24 
 ore**. Dacă nu îl folosește, linkul expiră, dar locul rămâne liber și oricine se
 poate înscrie normal.
 
-Vezi cine așteaptă: **Evenimente** → butonul **Vezi lista de așteptare**.
+Vezi cine așteaptă: numărul **pe lista de așteptare** de sub eveniment deschide
+lista acelor oameni.
+
+**Primul venit, primul servit.** Linkul nu rezervă locul: dacă altcineva se
+înscrie înainte ca persoana de pe listă să apese, ea vede un mesaj de scuze și
+își păstrează locul în fruntea listei. Următorul loc eliberat înainte de
+eveniment îi este oferit tot ei.
 
 #### Când dai drumul la locuri, lista pleacă
 
@@ -167,13 +216,14 @@ La un eveniment cu **Participanți maxim** gol sau 0 nu există niciun loc de da
 așa că nimeni de pe listă nu primește nimic, oricât ar aștepta. Lista pornește
 doar când pui tu un număr.
 
-**De fiecare dată când salvezi un eveniment**, site-ul se uită câte locuri sunt
-libere și trimite atâtea linkuri, în ordinea în care oamenii s-au înscris pe
-listă. Dacă sunt 3 locuri libere și 10 pe listă, pleacă 3 emailuri. Dacă nu e
-niciun loc liber, nu pleacă nimic.
+**De fiecare dată când publici un eveniment sau modificările lui**, site-ul se
+uită câte locuri sunt libere și trimite atâtea linkuri, în ordinea în care
+oamenii s-au înscris pe listă. Dacă sunt 3 locuri libere și 10 pe listă, pleacă
+3 emailuri. Dacă nu e niciun loc liber, nu pleacă nimic. După ce evenimentul a
+început, nu mai pleacă niciunul.
 
-După salvare îți spune câte au plecat, într-o bară verde sus. Nimeni nu
-primește același link de două ori: dacă salvezi din nou peste cinci minute, cei
+După publicare îți spune câte au plecat, într-un mesaj în colț. Nimeni nu
+primește același link de două ori: dacă publici din nou peste cinci minute, cei
 care au deja un link valabil sunt săriți.
 
 > **Deci:** înainte să pui un număr mare la un eveniment cu listă de așteptare,

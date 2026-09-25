@@ -62,7 +62,7 @@ because only one of the two was done.
 | `whatsapp_links` | Saved invite URLs. | **A URL is a capability** | `/admin/events` |
 | `admins` | Who may enter `/admin`. | Revoked from everyone; read only by `is_admin()` | by hand |
 | `profiles` | Extra auth fields. | Vestigial — see below | nothing |
-| `content_drafts` | Unpublished changes to a live post (and, from phase 4, an event). | Work in progress | the post editor's autosave |
+| `content_drafts` | Unpublished changes to a live post or event. | Work in progress | the post and event editors' autosave |
 | `admin_dashboard` | **View.** One row: the dashboard's five counts. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 
@@ -137,7 +137,9 @@ same set as the post list's Ciorne tab.
 |---|---|---|
 | `is_admin()` | definer, `search_path` pinned | `anon`, `authenticated` |
 | `pending_hold_interval()` | immutable, returns `1 hour` | `anon`, `authenticated`, `service_role` |
+| `holds_seat(registrations)` | stable, reads only its argument | `anon`, `authenticated`, `service_role` |
 | `register_for_event(...)` | definer, `search_path` pinned | **`service_role` only** |
+| `publish_post_draft(id)`, `publish_event_draft(id)` | invoker | `authenticated` (RLS makes it the admin) |
 | `set_updated_at()` | trigger function, `search_path` pinned | nobody; only its triggers run it |
 
 `set_updated_at()` runs before every UPDATE on `events`, `blog_posts`,
@@ -182,14 +184,39 @@ what stops two simultaneous bookings both seeing the last free seat. `anon` and
 `authenticated` are explicitly revoked: the browser reaches it through
 `/api/register`, which is where the CAPTCHA and the validation live.
 
-**A seat is held when:** `payment_status <> 'refunded'` **and**
-(`payment_status <> 'pending'` **or** the row is younger than
-`pending_hold_interval()`).
+Since `20260927000000_registration_lifecycle.sql` it also **refuses once the
+event has started** (`starts_at <= now()`; an event with no announced hour
+starts at midnight on its day), and every refusal carries a `code`
+(`not_found`, `unavailable`, `started`, `full`, `invalid`) beside its
+Romanian sentence, which is what lets the API answer in the visitor's
+language. It takes the page's language, the participant's note (stored only
+with the moment they consented, which a CHECK enforces) and the marketing
+opt-in; phase 5 of the overhaul sends them from the form.
 
-That rule is written twice — in `event_availability` and in
-`register_for_event()` — and the two **must** stay identical. When the number a
-page displays and the rule the button enforces disagree, you get a page offering
-seats next to a button that refuses them.
+**A seat is held when** `holds_seat(r)` says so: the booking was not removed
+(`removed_at is null`), is not refunded, and is not an unpaid checkout older
+than `pending_hold_interval()`. It is one function, called by
+`event_availability`, `register_for_event()` and `admin_event_overview`, so
+the number a page shows and the rule the button enforces cannot drift apart.
+It takes the whole row, so PostgREST also offers it to the admin as if it were
+a column. `anon` may execute it because Postgres checks a view's functions
+against the caller; it reads nothing but its argument.
+
+**What a booking records** (same migration): `locale`, `participant_note` and
+`note_consent_at`, `admin_note`, `marketing_consent_at`,
+`refund_requested_at`, and `removed_at` with `removal_reason`. A removed
+booking keeps its history and frees its seat. The waiting list gained
+`locale`, `removed_at` and `removal_reason`; a removed entry is never offered
+a seat, and nobody is offered one once the event has started.
+
+**`admin_event_overview`** gives each event a `status` (`draft`, `upcoming`,
+`ongoing`, `ended_pending` when it is over with a payment or refund still
+pending, `archived`), `taken` and `capacity`, and five numbers: `waiting`
+(in line, no live offer), `pending_payments`, `refund_requested`,
+`offers_open` and `refunded`. The admin list's tabs and the dashboard's
+"Evenimente" count read the status. **`publish_event_draft()`** publishes a live
+event's private changes (`content_drafts.event_id`) and leaves its date, times,
+price, currency and places alone once it has ended.
 
 ### Why `event_availability` is not `security_invoker`
 

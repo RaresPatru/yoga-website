@@ -33,13 +33,19 @@ export async function POST(req: Request) {
 
     const { data: event, error: eventError } = await supabase
       .from("events")
-      .select("id, slug, title_ro, title_en, price, currency")
+      .select("id, slug, title_ro, title_en, price, currency, starts_at")
       .eq("id", eventId)
       .eq("published", true)
       .single();
 
     if (eventError || !event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    // A checkout for an event that has begun would take money for a seat in a
+    // room that is already in session. Bookings close at the start.
+    if (Date.parse(event.starts_at) <= Date.now()) {
+      return NextResponse.json({ error: "Event has started", code: "started" }, { status: 409 });
     }
 
     if (!event.price || event.price <= 0) {
@@ -51,6 +57,7 @@ export async function POST(req: Request) {
       .select("id, email, payment_status")
       .eq("id", registrationId)
       .eq("event_id", eventId)
+      .is("removed_at", null)
       .single();
 
     if (!registration) {

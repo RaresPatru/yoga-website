@@ -4,18 +4,28 @@ import type { Database } from "@/lib/database.types";
 /** The arguments `register_for_event()` takes, as the database declares them. */
 export type RegisterArgs = Database["public"]["Functions"]["register_for_event"]["Args"];
 
+/**
+ * Why the database refused a booking. `started` is an event that has begun
+ * (bookings close at its start), `full` has no seat left or no capacity set,
+ * `unavailable` is a draft, `not_found` does not exist.
+ */
+export type RefusalCode = "not_found" | "unavailable" | "started" | "full" | "invalid";
+
 /** A seat was booked (with the new registration's id), or the database refused. */
-export type RegisterOutcome = { ok: true; id: string } | { ok: false; reason: string };
+export type RegisterOutcome =
+  | { ok: true; id: string }
+  | { ok: false; code: RefusalCode; reason: string };
+
+const CODES: readonly RefusalCode[] = ["not_found", "unavailable", "started", "full", "invalid"];
 
 /**
  * Books a seat through the `register_for_event()` database function.
  *
  * The function locks the event row while it counts, so two people can never
  * both take the last seat. It answers with JSON: `{ success, id }` when a
- * registration was created, or `{ error }` with a Romanian sentence when it
- * refused (event full, missing or unpublished). This turns that JSON into a
- * typed result. A failed call (network, permissions) throws instead, because
- * that is a fault, not an answer.
+ * registration was created, or `{ error, code }` when it refused. This turns
+ * that JSON into a typed result. A failed call (network, permissions) throws
+ * instead, because that is a fault, not an answer.
  */
 export async function registerForEvent(
   supabase: SupabaseClient<Database>,
@@ -24,12 +34,23 @@ export async function registerForEvent(
   const { data, error } = await supabase.rpc("register_for_event", args);
   if (error) throw error;
 
-  const result = (data ?? {}) as { success?: boolean; id?: unknown; error?: unknown };
+  const result = (data ?? {}) as { success?: boolean; id?: unknown; error?: unknown; code?: unknown };
   if (result.success === true && typeof result.id === "string") {
     return { ok: true, id: result.id };
   }
   return {
     ok: false,
+    code: CODES.includes(result.code as RefusalCode) ? (result.code as RefusalCode) : "invalid",
     reason: typeof result.error === "string" ? result.error : "Înscrierea nu a putut fi făcută.",
   };
+}
+
+/** Whether an event has started, from its `starts_at`. The database's rule, for the routes' early answers. */
+export function hasStarted(startsAt: string, now = Date.now()): boolean {
+  return Date.parse(startsAt) <= now;
+}
+
+/** The page's language from a request body: English when it says so, else Romanian. */
+export function localeFrom(value: unknown): "ro" | "en" {
+  return value === "en" ? "en" : "ro";
 }

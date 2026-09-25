@@ -60,7 +60,10 @@
     "claim_spot_success": "Loc revendicat cu succes! Vei primi un email de confirmare.",
     "phone_country": "Prefix",
     "phone_hint": "Introdu numărul de telefon cu prefixul țării",
-    "captcha_error": "Verificare securitate eșuată. Încearcă din nou."
+    "captcha_error": "Verificare securitate eșuată. Încearcă din nou.",
+    "ongoing": "În desfășurare",
+    "archive_title": "Evenimente trecute",
+    "archive_page_title": "Evenimente trecute, pagina {page}"
   },
   "testimonials": {
     "title": "Testimoniale",
@@ -137,7 +140,7 @@
     "map_link_hint": "Lipește linkul din Google Maps (Share), sau coordonate: 46.7712, 23.5949. Lasă gol dacă adresa e suficientă.",
     "price": "Preț (0 = gratuit)",
     "max_participants": "Participanți maxim",
-    "max_participants_hint": "Gol sau 0 = locuri epuizate; rămâne doar lista de așteptare. Dacă la salvare rămân locuri libere, primii de pe listă primesc un email.",
+    "max_participants_hint": "Gol sau 0 = locuri epuizate; rămâne doar lista de așteptare. Când publici și sunt locuri libere, primii de pe listă primesc un email.",
     "image_url": "URL Imagine",
     "whatsapp_link": "Link WhatsApp",
     "published": "Publicat",
@@ -427,7 +430,8 @@
       "sort": "Ordine",
       "sort_edited": "Editate recent",
       "sort_edited_oldest": "Editate demult",
-      "sort_published": "Data publicării",
+      "sort_published": "Data publicării, descrescător",
+      "sort_published_oldest": "Data publicării, crescător",
       "sort_title": "Titlu, de la A la Z",
       "status_published": "Publicat",
       "status_draft": "Ciornă",
@@ -500,7 +504,115 @@
       "leave_body": "Ultimele modificări nu s-au salvat. Dacă pleci acum, se pierd.",
       "slug_what": "Ce este adresa articolului?"
     },
-    "media_video_hint": "Pentru videoclipuri mari, folosește YouTube sau Vimeo și inserează URL-ul din editor. Limita Supabase free este de 50 MB per fișier."
+    "media_video_hint": "Pentru videoclipuri mari, folosește YouTube sau Vimeo și inserează URL-ul din editor. Limita Supabase free este de 50 MB per fișier.",
+    "events_list": {
+      "tabs": "Evenimente după stare",
+      "tab_upcoming": "Următoare",
+      "tab_drafts": "Ciorne",
+      "tab_past": "Trecute",
+      "search": "Caută după titlu, loc sau adresă",
+      "sort": "Ordine",
+      "sort_soonest": "Data evenimentului, crescător",
+      "sort_latest": "Data evenimentului, descrescător",
+      "sort_edited": "Editate recent",
+      "sort_title": "Titlu, de la A la Z",
+      "status_draft": "Ciornă",
+      "status_upcoming": "Urmează",
+      "status_ongoing": "În desfășurare",
+      "status_ended_pending": "Încheiat, ceva în așteptare",
+      "status_archived": "Încheiat",
+      "seats": "{taken}/{capacity} locuri",
+      "seats_closed": "{taken} înscriși, înscrieri închise",
+      "numbers": "Numerele evenimentului",
+      "untitled": "Fără titlu",
+      "empty": "Niciun eveniment încă. Primul începe de la „Eveniment nou”.",
+      "empty_tab": "Niciun eveniment în „{tab}”.",
+      "empty_search": "Niciun eveniment nu conține „{query}”."
+    },
+    "event_numbers": {
+      "waitlist": {
+        "zero": "Nimeni pe lista de așteptare",
+        "one": "{count} pe lista de așteptare",
+        "few": "{count} pe lista de așteptare",
+        "other": "{count} pe lista de așteptare"
+      },
+      "pending": {
+        "zero": "Nicio plată în așteptare",
+        "one": "{count} plată în așteptare",
+        "few": "{count} plăți în așteptare",
+        "other": "{count} de plăți în așteptare"
+      },
+      "refund_requested": {
+        "zero": "Nicio rambursare cerută",
+        "one": "{count} rambursare cerută",
+        "few": "{count} rambursări cerute",
+        "other": "{count} de rambursări cerute"
+      },
+      "offers": {
+        "zero": "Nicio ofertă fără răspuns",
+        "one": "{count} ofertă fără răspuns",
+        "few": "{count} oferte fără răspuns",
+        "other": "{count} de oferte fără răspuns"
+      },
+      "refunded": {
+        "zero": "Nicio rambursare făcută",
+        "one": "{count} rambursare făcută",
+        "few": "{count} rambursări făcute",
+        "other": "{count} de rambursări făcute"
+      }
+    },
+    "event_editor": {
+      "back": "Evenimente",
+      "new_title": "Eveniment nou",
+      "edit_title": "Editează evenimentul",
+      "status_new": "Se salvează singur când are titlu și dată",
+      "delete": "Șterge evenimentul",
+      "basics": "Despre eveniment",
+      "when": "Când",
+      "where": "Unde",
+      "price_places": "Preț și locuri",
+      "photo": "Fotografie",
+      "description": "Descriere",
+      "whatsapp": "Grupul de WhatsApp",
+      "title_placeholder": "Numele evenimentului",
+      "slug": "Adresa evenimentului",
+      "slug_what": "Ce este adresa evenimentului?",
+      "slug_help": "Ultima parte din adresa paginii: /events/adresa-ta. Se ia din titlu până la prima publicare; după aceea se schimbă doar dacă o schimbi tu, pentru că linkurile distribuite duc la ea.",
+      "slug_taken": "Alt eveniment folosește deja adresa asta. Alege alta; restul se salvează în continuare.",
+      "locked": "Evenimentul s-a încheiat. Data, orele, prețul și locurile nu se mai pot schimba: așa au fost rezervate și plătite.",
+      "need_title": "Scrie un titlu înainte să publici.",
+      "need_slug": "Adresa poate avea doar litere mici fără diacritice, cifre și cratime, de exemplu „yoga-la-munte”.",
+      "need_date": "Alege data evenimentului înainte să publici.",
+      "published_toast": "Eveniment publicat",
+      "changes_published_toast": "Modificări publicate",
+      "view_event": "Vezi evenimentul",
+      "discard_body": "Evenimentul revine la versiunea publicată, iar ce ai schimbat de atunci se pierde.",
+      "delete_with_bookings": "Înscrieri la el: {count}. Se șterg odată cu evenimentul.",
+      "leave_new": "Evenimentul nu s-a salvat încă: are nevoie de un titlu și o dată. Dacă pleci acum, se pierde.",
+      "state": "Stare",
+      "all_participants": "Toți participanții",
+      "archive": "Apare în arhiva evenimentelor trecute",
+      "archive_hint": "După ce se încheie, evenimentul apare la „Evenimente trecute”, cu ce au spus participanții. Se aplică imediat.",
+      "photo_add": "Adaugă o fotografie",
+      "photo_change": "Schimbă fotografia",
+      "photo_remove": "Scoate fotografia",
+      "photo_none": "Fără fotografie, pagina evenimentului începe cu titlul.",
+      "not_found": "Evenimentul nu există. Poate a fost șters."
+    },
+    "participants_filter": {
+      "label": "Filtru",
+      "event": "Eveniment: {title}",
+      "status_waitlist": "Pe lista de așteptare",
+      "status_pending": "Plăți în așteptare",
+      "status_refund_requested": "Rambursări cerute",
+      "status_offers": "Oferte fără răspuns",
+      "status_refunded": "Rambursate",
+      "clear": "Toate înscrierile",
+      "waiting_since": "Pe listă din {date}",
+      "offer_until": "Oferta expiră pe {date}",
+      "refund_requested_on": "Rambursare cerută pe {date}",
+      "none": "Nimeni aici."
+    }
   },
   "pagination": {
     "label": "Pagini",

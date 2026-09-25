@@ -11,9 +11,9 @@ import { useAdminLocale } from "@/components/admin/locale-provider";
 export type SaveState = "new" | "saving" | "saved" | "unsaved" | "failed";
 
 /**
- * The post editor's own bar, stuck under the admin's top bar: Back, whether
- * her work is saved, RO / EN with how much English is written, Preview, the
- * publish button, and a menu with Discard changes and Delete.
+ * The bar of the post and event editors: Back, whether her work is saved,
+ * RO / EN with how much English is written, Preview, the publish button,
+ * and a menu with Discard changes and Delete.
  *
  * On a computer it sticks under the admin's top bar. On a phone it scrolls
  * away with the page, because together with the editor's toolbar it would
@@ -28,6 +28,12 @@ export const EditorBar = forwardRef<
   HTMLDivElement,
   {
     onBack: () => void;
+    /** Where Back leads, and what it says: the list this document belongs to. */
+    back: { href: string; label: string };
+    /** Said before a new document has been saved: what it needs to be. */
+    newStatus: string;
+    /** "Șterge articolul", "Șterge evenimentul". */
+    deleteLabel: string;
     save: SaveState;
     saveError: string | null;
     mode: "ro" | "en";
@@ -49,7 +55,7 @@ export const EditorBar = forwardRef<
 >(function EditorBar(props, ref) {
   const { t } = useAdminLocale();
   const status = {
-    new: t("admin.blog_editor.status_new"),
+    new: props.newStatus,
     saving: t("admin.blog_editor.status_saving"),
     saved: t("admin.blog_editor.status_saved"),
     unsaved: t("admin.blog_editor.status_unsaved"),
@@ -59,11 +65,11 @@ export const EditorBar = forwardRef<
   return (
     <div
       ref={ref}
-      className="z-30 -mx-4 -mt-6 mb-6 border-b border-sage/20 bg-cream/90 px-4 py-2.5 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:-mt-8 lg:px-8 sm:sticky sm:top-16"
+      className="z-30 -mx-4 -mt-6 mb-6 border-b border-sage/20 bg-cream/90 px-4 py-2.5 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:-mt-8 lg:px-8 sm:sticky sm:top-(--admin-header-h)"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Link
-          href="/admin/blog"
+          href={props.back.href}
           // The editor's own Back, not a link the leave guard should catch.
           data-leave-guard="skip"
           onClick={(event) => {
@@ -75,7 +81,7 @@ export const EditorBar = forwardRef<
           className="-ml-2 flex h-10 items-center gap-1.5 rounded-full px-2 text-sm text-charcoal-light hover:bg-sage/15 hover:text-charcoal"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {t("admin.blog_editor.back")}
+          {props.back.label}
         </Link>
 
         <p
@@ -167,7 +173,7 @@ export const EditorBar = forwardRef<
               },
               {
                 id: "delete",
-                label: t("admin.blog_editor.delete"),
+                label: props.deleteLabel,
                 icon: <Trash2 className="h-4 w-4" />,
                 tone: "danger",
                 disabled: !props.canDelete,

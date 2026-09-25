@@ -43,3 +43,27 @@ export async function translateHtml(html: string): Promise<string> {
     editor.destroy();
   }
 }
+
+/** Why a translation failed, when it is something she can act on. */
+export class TranslationFailed extends Error {
+  constructor(readonly reason: "too_long" | "failed") {
+    super(`Translation failed: ${reason}`);
+  }
+}
+
+/**
+ * One request for every paragraph of a rich text (lib/translate-document.ts),
+ * failing with a reason she can act on: a paragraph over the route's limit is
+ * `too_long`, anything else `failed`.
+ */
+export async function translateBlocks(texts: string[]): Promise<string[]> {
+  const token = await getAuthToken();
+  const res = await fetch("/api/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ texts, from: "ro", to: "en" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new TranslationFailed(data.code === "too_long" ? "too_long" : "failed");
+  return data.translations;
+}

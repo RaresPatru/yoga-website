@@ -38,7 +38,7 @@ export function FormBar({
 }) {
   const { t } = useAdminLocale();
   return (
-    <div className="sticky top-16 z-20 -mx-4 mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-sage/20 bg-cream/90 px-4 py-3 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:border sm:px-4">
+    <div className="sticky top-(--admin-header-h) z-20 -mx-4 mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-sage/20 bg-cream/90 px-4 py-3 backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:border sm:px-4">
       {bilingual && (
         <Segmented
           legend={t("admin.cms.language")}

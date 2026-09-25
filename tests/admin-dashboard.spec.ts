@@ -28,17 +28,29 @@ import {
  */
 
 test.describe("the dashboard's counts", () => {
-  test("active events are the published ones that have not ended", async () => {
+  /**
+   * "Evenimente" opens the admin list on its Upcoming tab, so it counts what
+   * that tab holds: events to come, events under way, and events that are over
+   * with a payment or refund still pending.
+   */
+  test("active events are the ones the Upcoming tab holds", async () => {
     const before = (await dashboardCounts()).active_events;
     const seeded = await Promise.all([
       seedEvent(), // upcoming: counts
       // Started yesterday, ends tomorrow: under way, so it counts.
       seedEvent({ date: bucharestDate(-1), time: "10:00", end_date: bucharestDate(1) }),
-      seedEvent({ date: bucharestDate(-3) }), // over: does not count
+      seedEvent({ date: bucharestDate(-3) }), // over, nothing pending: does not count
       seedEvent({ published: false }), // a draft: does not count
     ]);
+    // Over, with a checkout still inside its hour: it still needs her.
+    const endedPending = await seedEvent({ date: bucharestDate(-3), price: 100 });
+    seeded.push(endedPending);
+    await seedRegistrationFor(endedPending.id, { payment_status: "pending" });
     try {
-      expect((await dashboardCounts()).active_events).toBe(before + 2);
+      expect((await dashboardCounts()).active_events).toBe(before + 3);
+      expect((await eventOverview(endedPending.id)).status).toBe("ended_pending");
+      expect((await eventOverview(seeded[2].id)).status).toBe("archived");
+      expect((await eventOverview(seeded[1].id)).status).toBe("ongoing");
     } finally {
       await Promise.all(seeded.map((e) => deleteEventBySlug(e.slug)));
     }
@@ -204,13 +216,26 @@ test.describe("the dashboard page", () => {
     }
   });
 
+  test("the next event's title opens it in the editor", async ({ page }) => {
+    const event = await seedEvent({ title_ro: `Cel mai apropiat ${unique("t")}`, date: bucharestDate(0), time: "23:59" });
+    try {
+      await page.goto("/admin");
+      const panel = page.getByRole("region", { name: "Următorul eveniment" });
+      await expect(panel.getByRole("link", { name: /Cel mai apropiat/ })).toHaveAttribute(
+        "href",
+        `/admin/events/${event.id}`
+      );
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
   test("the quick actions open an empty event and an empty post", async ({ page }) => {
     await page.goto("/admin");
     await page.getByRole("link", { name: "Eveniment nou" }).click();
-    await expect(page.getByRole("heading", { name: "Eveniment nou" })).toBeVisible();
-    // The request is read once and taken out of the address, so a reload
-    // shows the list again.
-    await expect(page).toHaveURL(/\/admin\/events$/);
+    // Both editors have addresses of their own now.
+    await expect(page).toHaveURL(/\/admin\/events\/new$/);
+    await expect(page.getByLabel("Titlu (RO)", { exact: true })).toHaveValue("");
 
     await page.goto("/admin");
     await page.getByRole("link", { name: "Articol nou" }).click();

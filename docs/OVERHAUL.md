@@ -23,7 +23,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 1 | Admin shell (sticky collapsible sidebar) and the dashboard | done, 24 Sep |
 | 2 | Site content, one-switch bilingual editing, public copy and legal pages | done, 25 Sep |
 | 3 | Blog: toolbar, post list, editor, public cards and article | done, 25 Sep |
-| 4 | Events: admin list and editor, per-event numbers, public archive | not started |
+| 4 | Events: admin list and editor, per-event numbers, public archive | done, 25 Sep |
 | 5 | Registrations: one list with the waiting list, archive, notes, exports | not started |
 | 6 | Testimonials and verified reviews | not started |
 | 7 | Emails: editor, preview, test sends, announcements | not started |
@@ -80,7 +80,9 @@ Rares can overturn any of these.
   latest copy is also kept in the browser until the server confirms it.
 - **Editors get their own addresses**, such as `/admin/blog/…` and
   `/admin/events/…`, so the back button, refreshing and links all work.
-- **The dashboard's event count** covers published events that haven't ended.
+- **The dashboard's event count** is what the events list's Upcoming tab holds:
+  events to come, under way, or over with a payment or refund still pending
+  (phase 4; it first counted published events that had not ended).
 - **"Refund requested"** is something she marks for now. A self-service link
   comes with the Stripe phase.
 - **Toolbar tooltips stay below the buttons** but now paint above the text. The
@@ -628,24 +630,24 @@ passed in both engines (87 of 87).
 
 ### Phase 4: Events
 
-- [ ] **The registration lifecycle in the database.**
+- [x] **The registration lifecycle in the database.**
   - A booking records its language, the participant's note and consent, her
     note, the marketing opt-in, and the refund-request, removal and reason
     fields.
   - The waiting list records its language and removal.
-- [ ] **One definition of "holds a seat" (`holds_seat`)** used by both the
+- [x] **One definition of "holds a seat" (`holds_seat`)** used by both the
   public seat count and the booking function. Removed rows no longer hold
   one.
-- [ ] **Bookings close when an event starts.** The booking function (B4) and
+- [x] **Bookings close when an event starts.** The booking function (B4) and
   the booking, waiting-list and claim routes all refuse.
-- [ ] **A seat taken first.** The waitlisted person sees the apology and stays
+- [x] **A seat taken first.** The waitlisted person sees the apology and stays
   first in line until the event ends.
-- [ ] **An admin overview of each event:**
+- [x] **An admin overview of each event:**
   - its status: draft, upcoming, ongoing, ended-with-something-pending, or
     archived
   - seats taken out of capacity
   - the five numbers
-- [ ] **The admin list:**
+- [x] **The admin list:**
   - Tabs: *Upcoming* (which also holds ongoing events, and ended events with
     something still pending), *Drafts* and *Past*.
   - Search and sort.
@@ -657,7 +659,7 @@ passed in both engines (87 of 87).
   - The waitlist modal is removed.
   - *Upcoming* is the tab it opens on, which is what the dashboard's Evenimente
     row counts.
-- [ ] **The editor** uses the same frame as the blog editor, at
+- [x] **The editor** uses the same frame as the blog editor, at
   `/admin/events/new` and `/admin/events/[id]`. The dashboard's "Eveniment
   nou" and its next-event panel link there. Its sections:
   - basics
@@ -671,7 +673,7 @@ passed in both engines (87 of 87).
 
   Once an event has ended, its date, price and places lock. Publishing
   changes that add places notifies the waiting list.
-- [ ] **The public site.**
+- [x] **The public site.**
   - `/events` lists upcoming events. Ongoing ones are marked "În desfășurare"
     (in progress) and can't be booked.
   - A "Evenimente trecute" (past events) archive follows, 12 per page. She can
@@ -680,6 +682,29 @@ passed in both engines (87 of 87).
     that event's testimonials.
   - The share image no longer fails for events without a start time (B8):
     done early, in phase 0.
+
+**How it turned out** (25 September 2026)
+
+- **One migration**, `20260927000000_registration_lifecycle.sql`: the booking
+  and waiting-list columns, `holds_seat()`, the rebuilt booking function (it
+  refuses once the event has started and answers with a `code`), the seat
+  view, the overview with each event's status and five numbers, the
+  dashboard counting the Upcoming tab, and `publish_event_draft()`, which
+  leaves an ended event's date, price and places alone.
+- **Bookings close at the start**, and an event with no announced hour starts
+  at midnight on its day, as Postgres already computes `starts_at`.
+- **The editor shares the blog's autosave** (`lib/admin/use-autosave.ts`),
+  moved out of the post editor unchanged. A new event saves once it has a
+  title and a date. Preview is the real event page, with the booking panel
+  drawn inert.
+- **Registrations reads `?event=` and `?status=`**, so each number opens its
+  people, the waiting list included, until phase 5 rebuilds the page.
+- **Found along the way:** a claim that lost its seat told the person the link
+  was invalid, and their unanswered offer went on counting as a promised seat,
+  so the next seat was offered to nobody. They get an apology now, and first
+  place.
+- **Also done:** B6 for event descriptions (the rich editor) and I12's photo
+  picker.
 
 **New migrations**
 

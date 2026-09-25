@@ -246,8 +246,11 @@ export default function AdminDashboard() {
 
           {event && schedule && seats && pending ? (
             <>
+              {/* Opens the event in its editor, where its numbers are. */}
               <p className="mt-3 break-words font-serif text-2xl leading-snug text-charcoal">
-                {event.title_ro}
+                <Link href={`/admin/events/${event.id}`} className="rounded-sm hover:text-rose-deep">
+                  {event.title_ro}
+                </Link>
               </p>
               <p className="mt-1 text-sm text-charcoal-light">
                 {schedule.time ? `${schedule.date}, ${schedule.time}` : schedule.date}
@@ -309,7 +312,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <Link href="/admin/events?new=1" className={buttonClasses({ size: "sm" })}>
+        <Link href="/admin/events/new" className={buttonClasses({ size: "sm" })}>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           {t("admin.new_event")}
         </Link>

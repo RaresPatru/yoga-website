@@ -1030,8 +1030,22 @@ body {
    * Below 1024px there is no sidebar: the menu button in the top bar opens the
    * same links in a drawer.
    */
+  /*
+   * The top bar's height, 52px: what the public site's bar measures once it
+   * goes flush and full-width (components/layout/header.tsx), so both halves of
+   * the site stand at one height. Everything that sticks beneath the bar reads
+   * it from here (the editors' action bars and toolbars, the content menu),
+   * and so does the phone drawer's top row, which sits outside the shell.
+   */
+  .admin-shell,
+  .admin-drawer {
+    --admin-header-h: 3.25rem;
+  }
+
   .admin-shell {
     --admin-rail-width: 15rem;
+    /* How wide the page column grows before it centres itself instead. */
+    --admin-main-max: 72rem;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     min-height: 100dvh;
@@ -1090,6 +1104,28 @@ body {
      */
     .admin-shell[data-collapsed="true"]:not([data-peek="true"]) .admin-nav-label {
       opacity: 0;
+    }
+
+    /*
+     * "Conținut site"'s section menu, and the page title above it
+     * (components/admin/content/content-screen.tsx). The page column stops
+     * growing at --admin-main-max and centres itself, so on a wide screen the
+     * space it leaves opens up on the menu's far side while the menu stays
+     * pressed against the form. Moving both left by a quarter of that space
+     * puts the menu exactly half way between the sidebar and the form: the
+     * margin on its left shrinks by the quarter and the gap on its right grows
+     * by it, and the two started out equal (the column's padding and the gap
+     * to the form are both 2rem). Where the column is not at its widest the
+     * shift is zero and nothing moves.
+     *
+     * 100vw counts a desktop scrollbar, which the column does not have, so
+     * with one showing the menu sits a quarter of its width (about 4px) left
+     * of the exact middle.
+     */
+    .admin-content-menu {
+      translate: calc(max(0px, 100vw - var(--admin-rail-width) - var(--admin-main-max)) / -4) 0;
+      /* Follows the sidebar when it narrows or widens, at its pace. */
+      transition: translate 200ms ease;
     }
   }
 
@@ -1186,9 +1222,99 @@ body {
     .admin-shell,
     .admin-rail-panel,
     .admin-nav-label,
+    .admin-content-menu,
     .admin-drawer,
     .admin-drawer::backdrop {
       transition: none;
+    }
+  }
+
+  /*
+   * The admin's sort menus, open. A plain <select> opens a list the operating
+   * system draws, which on Windows is a square-cornered box in system grey:
+   * the one sharp shape in a panel of rounded ones. The customizable select
+   * (appearance: base-select) lets the page draw that list instead, so it
+   * takes the panel's corners and colours: sage on hover, rose on the chosen
+   * order, as in the sidebar.
+   *
+   * Only with a mouse. On a touch screen the phone's own picker is the better
+   * control (larger, familiar, and already rounded), and opting in would
+   * replace it. A browser that does not know base-select (Firefox, Safari
+   * before 27) keeps its own list; nothing breaks, it is only square.
+   *
+   * A base-select sizes itself to the chosen option rather than the longest
+   * one, so each page gives the closed control a width of its own; otherwise
+   * picking a shorter order would shrink it and move the search box.
+   */
+  @media (hover: hover) and (pointer: fine) {
+    @supports (appearance: base-select) {
+      .admin-select,
+      .admin-select::picker(select) {
+        appearance: base-select;
+      }
+
+      /* A base-select is a flex row that stretches its children, which
+         leaves the label at the top of the pill and the arrow at the bottom. */
+      .admin-select {
+        align-items: center;
+      }
+
+      /* The panel's chevron (lucide's chevron-down) in place of the browser's
+         filled triangle, drawn as a mask so it takes the text's colour. */
+      .admin-select::picker-icon {
+        content: "";
+        width: 1rem;
+        height: 1rem;
+        background-color: var(--color-charcoal-light);
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+          center / contain no-repeat;
+        transition: rotate 150ms ease;
+      }
+
+      .admin-select:open::picker-icon {
+        rotate: 180deg;
+      }
+
+      .admin-select::picker(select) {
+        margin-block: 0.375rem;
+        padding: 0.375rem;
+        border: 1px solid color-mix(in oklab, var(--color-sage) 30%, transparent);
+        border-radius: 1rem;
+        background-color: white;
+        box-shadow: 0 12px 32px rgb(45 45 45 / 0.12);
+      }
+
+      .admin-select option {
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.625rem;
+        color: var(--color-charcoal-light);
+        transition: background-color 150ms ease;
+      }
+
+      .admin-select option:hover {
+        background-color: color-mix(in oklab, var(--color-sage) 15%, transparent);
+        color: var(--color-charcoal);
+      }
+
+      .admin-select option:checked {
+        background-color: color-mix(in oklab, var(--color-rose) 15%, transparent);
+        color: var(--color-rose-deep);
+        font-weight: 500;
+      }
+
+      /* Arrow keys move focus through the list: the same rose ring as every
+         other focused control, drawn inside the row's rounded corners. */
+      .admin-select option:focus-visible {
+        outline: 2px solid var(--color-rose-deep);
+        outline-offset: -2px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .admin-select::picker-icon,
+      .admin-select option {
+        transition: none;
+      }
     }
   }
 

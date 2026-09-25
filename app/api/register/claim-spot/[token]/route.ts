@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
 import { createCheckoutSession, type CheckoutLocale } from "@/lib/stripe-checkout";
-import { registerForEvent } from "@/lib/register-for-event";
+import { hasStarted, registerForEvent } from "@/lib/register-for-event";
 
 /**
  * Claims a seat that opened up on a full event.
@@ -19,6 +19,14 @@ import { registerForEvent } from "@/lib/register-for-event";
  *   2. Is it still inside the 24-hour window? (`claim_expires_at`)
  *   3. Is the event free? A paid event must go through Stripe, not be handed
  *      over gratis.
+ *
+ * And two answers that are not errors:
+ *
+ *   - The event has started: bookings are closed, the link with them.
+ *   - Somebody booked the seat first. The seat was never reserved: a claim
+ *     link is a head start, not a hold. They see an apology, and their offer
+ *     is withdrawn rather than left running, which puts them back where they
+ *     were, at the front of the queue, for the next seat that opens.
  */
 export async function POST(
   req: Request,
@@ -48,9 +56,10 @@ export async function POST(
     // defeats that, leaving every field typed as an error object.
     const { data: entry, error: findError } = await supabase
       .from("waiting_list")
-      .select("id, event_id, full_name, email, phone, notified_at, claim_expires_at, events!inner(id, slug, title_ro, title_en, price, currency, published)")
+      .select("id, event_id, full_name, email, phone, locale, notified_at, claim_expires_at, events!inner(id, slug, title_ro, title_en, price, currency, published, starts_at)")
       .eq("id", token)
       .is("claimed_at", null)
+      .is("removed_at", null)
       .maybeSingle();
 
     if (findError || !entry) {
@@ -89,6 +98,10 @@ export async function POST(
       return NextResponse.json({ error: "Event not available" }, { status: 404 });
     }
 
+    if (hasStarted(event.starts_at)) {
+      return NextResponse.json({ error: "Event has started", code: "started" }, { status: 409 });
+    }
+
     const isPaid = event.price > 0;
 
     // Free events are confirmed outright. Paid events get a 'pending'
@@ -101,11 +114,27 @@ export async function POST(
       p_email: entry.email,
       p_phone: entry.phone,
       p_payment_status: isPaid ? "pending" : "free",
+      p_locale: entry.locale === "en" ? "en" : "ro",
     });
 
-    // Someone else took the seat first.
     if (!booking.ok) {
-      return NextResponse.json({ error: booking.reason }, { status: 409 });
+      /*
+       * Someone else took the seat first. Their offer is withdrawn rather than
+       * left to run: a live offer is counted as a promised seat by
+       * notifyWaitingList(), so leaving it would stop the next seat being
+       * offered to anyone, them included. With notified_at and
+       * claim_expires_at cleared they are simply waiting again, and the queue
+       * is in the order people joined, so they are first.
+       */
+      if (booking.code === "full") {
+        const { error: resetError } = await supabase
+          .from("waiting_list")
+          .update({ notified_at: null, claim_expires_at: null })
+          .eq("id", token);
+        if (resetError) console.error("Could not return the claim to the queue:", resetError);
+        return NextResponse.json({ error: booking.reason, code: "taken" }, { status: 409 });
+      }
+      return NextResponse.json({ error: booking.reason, code: booking.code }, { status: 409 });
     }
 
     const registration = { id: booking.id };

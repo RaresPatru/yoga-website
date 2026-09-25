@@ -1423,3 +1423,84 @@ saving, and the field says why.
 pictures can be pasted from anywhere, so one outside image broke both the
 article and `/blog` during phase 3. `canOptimise()` (`lib/image-src.ts`) sends
 those through `unoptimized`, which shows the file as it is.
+
+### Bookings close when an event starts
+
+`register_for_event()` refuses once `starts_at` has passed, and so do the
+booking, waiting-list, claim and checkout routes, answering with a `code` the
+page turns into a sentence in the visitor's language. An Instagram story lives
+forever, and before this an old one opened a past event with a working
+payment button (audit B4). An event with no announced hour starts at midnight
+on its day, which is how Postgres already computes `starts_at`, so it closes
+when its day begins rather than at an hour nobody was told. The event page
+follows the same rule (`lib/event-phase.ts`): the booking panel before the
+start, a notice once it has started, and the notice plus what participants
+said once it is over.
+
+### A lost claim goes back to the front of the queue
+
+A claim link is a head start, not a reservation: the seat stays free for
+anyone. When someone books it first, the waitlisted person sees an apology,
+and their offer is withdrawn (`notified_at` and `claim_expires_at` cleared)
+instead of being left to run. A live offer counts as a promised seat in
+`notifyWaitingList()`, so leaving it would stop the next seat being offered to
+anyone; cleared, they are simply waiting again, and the queue is in the order
+people joined, so they are first. This is Rares' rule: first come, first
+served, and the waitlisted person keeps first place until the event.
+
+### One definition of "holds a seat"
+
+`holds_seat(registrations)` decides whether a booking takes a seat, and the
+public count (`event_availability`), the booking gate and the admin overview
+all call it. Before, the rule was written out twice and had to be kept
+identical by hand. It takes the whole row, which also lets PostgREST offer it
+to the admin as a column. `anon` holds EXECUTE on it because Postgres checks a
+view's functions against the caller (the reason `pending_hold_interval()` is
+granted to anon too); it reads nothing but the row it is given, and
+`tests/rpc-exposure.spec.ts` lists it with that reason.
+
+### An event that has ended keeps its date, price and places
+
+Those are what people booked and paid for. The editor disables the fields,
+and `publish_event_draft()` ignores changes to them once the event has ended,
+so the rule holds even if the editor is bypassed. Drafts are never locked: an
+event nobody could book has nothing to protect.
+
+### The dashboard counts the Upcoming tab
+
+"Evenimente" on the dashboard opens the events list on its Upcoming tab, so it
+counts what that tab holds: events to come, under way, or over with a payment
+or refund still pending. Phase 1 counted published events that had not ended;
+the two numbers disagreed as soon as an event ended with a checkout open.
+
+### The editors share one autosave
+
+The post and event editors save through `lib/admin/use-autosave.ts`: the
+timers, one save at a time, the browser copy, private changes for a live
+document, the address rules and the leave guard. The logic was first written
+inside the post editor in phase 3 and moved out unchanged when the event
+editor needed it; the blog's tests passed before and after the move. What
+stays in each editor is what differs: the fields, when a new document may be
+created (a post with anything in it, an event with a title and a date), and
+what Publish checks.
+
+### The sort menus draw their own list, with a mouse only
+
+The Events and Blog lists' order menus use the customizable select
+(`appearance: base-select`, `.admin-select` in `app/globals.css`), so the list
+that opens has the panel's rounded corners and colours instead of the square
+grey box Windows draws. Only where the pointer is a mouse: on a phone the
+system picker is larger, familiar and already rounded, and opting in would
+replace it. Browsers without base-select keep their own list. Such a select
+sizes itself to the chosen option rather than the longest, which moved the
+search box every time the order changed, so the control has a fixed width
+from tablet size up (`sm:w-72`, room for "Data evenimentului,
+descrescător").
+
+### An event's row is one target, like a post's
+
+A post's row is a single link. An event's cannot be, because its numbers are
+links to Registrations, and links do not nest. The title's link is stretched
+over the row instead (`after:absolute after:inset-0`), and the numbers sit
+above it. The row lights up only while that link has the pointer, so over a
+number it is the number that answers.

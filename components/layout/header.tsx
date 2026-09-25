@@ -72,7 +72,9 @@ function isCurrent(href: string, pathname: string) {
  * An earlier pass squeezed this to 43px by shrinking the links and the
  * language switcher to `py-1`, and read as too thin — a strip rather than a
  * navigation bar. This one holds the row at `py-2` and the links at `py-1.5`,
- * which lands at 51px on a desktop and 53px on a phone against a 62px default.
+ * which lands at 52px on a desktop and 54px on a phone against a 62px default.
+ * The admin's top bar is set to the desktop figure (--admin-header-h in
+ * app/globals.css), so change both together.
  * The switcher keeps its own padding and is what sets the desktop figure; the
  * hamburger's 44px tap target sets the phone one and is deliberately never
  * shrunk.

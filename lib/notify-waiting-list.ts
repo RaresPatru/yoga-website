@@ -33,10 +33,22 @@ export const CLAIM_WINDOW_HOURS = 24;
  * register_for_event() is written to agree with, which is what makes a link
  * this function sends a link that route will honour. No free seats, no email.
  *
+ * Nobody is offered a seat once the event has started, because bookings
+ * close then (register_for_event() refuses), and nobody she removed from the
+ * list is offered one at all.
+ *
  * Returns how many people were emailed, which is 0 for most calls.
  */
 export async function notifyWaitingList(eventId: string): Promise<number> {
   const supabase = createAdminClient();
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("slug, title_ro, starts_at")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (!event || Date.parse(event.starts_at) <= Date.now()) return 0;
 
   /*
    * `maybeSingle()`: the view only covers published events, so an unpublished
@@ -79,6 +91,7 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
     .select("id", { count: "exact", head: true })
     .eq("event_id", eventId)
     .is("claimed_at", null)
+    .is("removed_at", null)
     .gt("claim_expires_at", new Date().toISOString());
 
   const offerable = freeSeats - (outstanding ?? 0);
@@ -89,6 +102,7 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
     .select("id, full_name, email")
     .eq("event_id", eventId)
     .is("claimed_at", null)
+    .is("removed_at", null)
     // Nobody is offered the same seat twice: an entry that already holds a live
     // claim link is skipped until that link lapses. This is also what keeps a
     // second save a minute after the first from emailing everybody again.
@@ -100,12 +114,6 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
 
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + CLAIM_WINDOW_HOURS);
-
-  const { data: event } = await supabase
-    .from("events")
-    .select("slug, title_ro")
-    .eq("id", eventId)
-    .single();
 
   // `.maybeSingle()` rather than `.single()`: the first time an event's waiting
   // list is notified there is no previous batch, and `.single()` treats "no

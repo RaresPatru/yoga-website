@@ -546,16 +546,25 @@ export async function dashboardCounts(): Promise<DashboardCounts> {
 }
 
 /** What is waiting on one event: the admin_event_overview row the dashboard reads. */
-export async function eventOverview(
-  eventId: string
-): Promise<{ waiting: number; pending_payments: number }> {
+export interface EventOverviewRow {
+  waiting: number;
+  pending_payments: number;
+  refund_requested: number;
+  offers_open: number;
+  refunded: number;
+  taken: number;
+  capacity: number | null;
+  status: string;
+}
+
+export async function eventOverview(eventId: string): Promise<EventOverviewRow> {
   const { data, error } = await (await adminScoped())
     .from("admin_event_overview")
-    .select("waiting, pending_payments")
+    .select("waiting, pending_payments, refund_requested, offers_open, refunded, taken, capacity, status")
     .eq("event_id", eventId)
     .single();
   if (error) throw new Error(`eventOverview failed: ${error.message}`);
-  return data as { waiting: number; pending_payments: number };
+  return data as EventOverviewRow;
 }
 
 /**
@@ -675,4 +684,87 @@ export async function postCount(): Promise<number> {
     .select("id", { count: "exact", head: true });
   if (error) throw new Error(`postCount failed: ${error.message}`);
   return count ?? 0;
+}
+
+/** Events whose Romanian title starts with a test's marker, newest first. */
+export async function eventsTitled(prefix: string) {
+  const { data, error } = await (await adminScoped())
+    .from("events")
+    .select("*")
+    .like("title_ro", `${prefix}%`)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`eventsTitled failed: ${error.message}`);
+  return (data ?? []) as Array<Record<string, unknown>>;
+}
+
+export async function deleteEventsTitled(prefix: string) {
+  const { error } = await (await adminScoped()).from("events").delete().like("title_ro", `${prefix}%`);
+  if (error) throw new Error(`deleteEventsTitled failed: ${error.message}`);
+}
+
+export async function eventById(id: string) {
+  const { data, error } = await (await adminScoped()).from("events").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`eventById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** An event's unpublished changes (content_drafts.data), or null. */
+export async function eventDraft(eventId: string) {
+  const { data, error } = await (await adminScoped())
+    .from("content_drafts")
+    .select("data")
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (error) throw new Error(`eventDraft failed: ${error.message}`);
+  return (data?.data as Record<string, unknown> | undefined) ?? null;
+}
+
+/** Saves private changes for a live event and publishes them, as the admin's editor does. */
+export async function publishEventDraftAs(eventId: string, changes: Record<string, unknown>) {
+  const client = await adminScoped();
+  const { error: draftError } = await client
+    .from("content_drafts")
+    .upsert({ event_id: eventId, data: changes }, { onConflict: "event_id" });
+  if (draftError) throw new Error(`publishEventDraftAs (draft) failed: ${draftError.message}`);
+  const { error } = await client.rpc("publish_event_draft", { p_event_id: eventId });
+  if (error) throw new Error(`publishEventDraftAs failed: ${error.message}`);
+}
+
+/** A waiting-list entry's offer state. */
+export async function waitingEntry(id: string) {
+  const { data, error } = await (await serviceClient())
+    .from("waiting_list")
+    .select("id, notified_at, claim_expires_at, claimed_at, removed_at")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(`waitingEntry failed: ${error.message}`);
+  return data as { id: string; notified_at: string | null; claim_expires_at: string | null; claimed_at: string | null; removed_at: string | null };
+}
+
+export async function deleteRegistration(id: string) {
+  const { error } = await (await serviceClient()).from("registrations").delete().eq("id", id);
+  if (error) throw new Error(`deleteRegistration failed: ${error.message}`);
+}
+
+/** A testimonial on a given event. Approved unless told otherwise. */
+export async function seedTestimonialOn(eventId: string, content: string, approved = true) {
+  const { data, error } = await (await adminScoped())
+    .from("testimonials")
+    .insert({ event_id: eventId, type: "text", content, approved, author_name: "Participantă E2E", rating: 5 })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedTestimonialOn failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+/** Calls the booking function directly, as the API does with the service key. */
+export async function registerDirectly(eventId: string) {
+  const { data, error } = await (await serviceClient()).rpc("register_for_event", {
+    p_event_id: eventId,
+    p_full_name: "Participant Direct",
+    p_email: `direct-${unique("m")}@example.com`,
+    p_phone: "+40721112233",
+  });
+  if (error) throw new Error(`registerDirectly failed: ${error.message}`);
+  return data as { success?: boolean; id?: string; error?: string; code?: string };
 }

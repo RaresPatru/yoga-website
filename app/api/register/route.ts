@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { registerForEvent } from "@/lib/register-for-event";
+import { hasStarted, localeFrom, registerForEvent } from "@/lib/register-for-event";
 import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
@@ -51,13 +51,19 @@ export async function POST(req: Request) {
     // a guessed ID.
     const { data: eventRow, error: eventLookupError } = await supabase
       .from("events")
-      .select("id, price")
+      .select("id, price, starts_at")
       .eq("id", eventId)
       .eq("published", true)
       .single();
 
     if (eventLookupError || !eventRow) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+      return NextResponse.json({ error: "Event not found", code: "not_found" }, { status: 404 });
+    }
+
+    // Bookings close when the event starts. register_for_event() refuses as
+    // well, and is the rule; this answers early and in the same terms.
+    if (hasStarted(eventRow.starts_at)) {
+      return NextResponse.json({ error: "Event has started", code: "started" }, { status: 409 });
     }
 
     const paymentStatus = eventRow.price > 0 ? "pending" : "free";
@@ -68,10 +74,13 @@ export async function POST(req: Request) {
       p_email: email,
       p_phone: phone,
       p_payment_status: paymentStatus,
+      p_locale: localeFrom(body.locale),
     });
 
+    // The code says why, so the page can say it in the visitor's language.
     if (!booking.ok) {
-      return NextResponse.json({ error: booking.reason }, { status: 409 });
+      const status = booking.code === "not_found" || booking.code === "unavailable" ? 404 : 409;
+      return NextResponse.json({ error: booking.reason, code: booking.code }, { status });
     }
 
     // Only free events are confirmed here. For a paid event the registration is

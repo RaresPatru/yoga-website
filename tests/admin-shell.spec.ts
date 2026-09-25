@@ -147,6 +147,26 @@ test.describe("the admin top bar", () => {
     await expect(viewSite).toHaveAttribute("target", "_blank");
   });
 
+  /**
+   * The two halves of the site stand at one height: the admin's bar is set
+   * (--admin-header-h in app/globals.css) to what the public bar measures
+   * once the page has scrolled and it goes flush and full-width. If the
+   * public bar changes height, this says so, and the admin's should follow.
+   */
+  test("is as tall as the public site's bar once that goes full-width", async ({ page }) => {
+    await page.goto("/ro");
+    await page.mouse.wheel(0, 40);
+    const publicBar = page.locator("header[data-compact]");
+    await expect(publicBar).toBeAttached();
+    // The bar eases into its compact shape over 200ms.
+    await page.waitForTimeout(400);
+    const publicHeight = (await publicBar.boundingBox())!.height;
+
+    await page.goto("/admin");
+    const adminHeight = (await page.getByRole("banner").boundingBox())!.height;
+    expect(adminHeight).toBe(publicHeight);
+  });
+
   test("the skip link takes the keyboard past the navigation", async ({ page }) => {
     await page.goto("/admin");
     await expect(page.getByRole("heading", { level: 1, name: "Panou de control" })).toBeVisible();

@@ -33,10 +33,11 @@ test.describe("the post list", () => {
   const ids: string[] = [];
 
   test.beforeAll(async () => {
+    // Published in March and May, so the two orders by publish date differ.
     const posts = await Promise.all([
-      seedPost({ title_ro: `${marker} Alfa publicat`, title_en: `${marker} Sunrise` }),
+      seedPost({ title_ro: `${marker} Alfa publicat`, title_en: `${marker} Sunrise`, published_at: "2026-03-01T09:00:00Z" }),
       seedPost({ title_ro: `${marker} Beta ciornă`, published: false }),
-      seedPost({ title_ro: `${marker} Gama ascuns`, hidden: true }),
+      seedPost({ title_ro: `${marker} Gama ascuns`, hidden: true, published_at: "2026-05-01T09:00:00Z" }),
     ]);
     ids.push(...posts.map((p) => p.id));
   });
@@ -90,6 +91,16 @@ test.describe("the post list", () => {
       `${marker} Beta ciornă`,
       `${marker} Gama ascuns`,
     ]);
+  });
+
+  test("sorts by publish date either way, with the never-published last", async ({ page }) => {
+    const titles = rows(page).locator(".font-serif");
+    await page.goto(`/admin/blog?q=${encodeURIComponent(marker)}&sort=published`);
+    await expect(titles).toHaveText([`${marker} Gama ascuns`, `${marker} Alfa publicat`, `${marker} Beta ciornă`]);
+
+    await page.getByLabel("Ordine").selectOption({ label: "Data publicării, crescător" });
+    await expect(page).toHaveURL(/sort=published_oldest/);
+    await expect(titles).toHaveText([`${marker} Alfa publicat`, `${marker} Gama ascuns`, `${marker} Beta ciornă`]);
   });
 
   test("a row opens the post in its own editor", async ({ page }) => {

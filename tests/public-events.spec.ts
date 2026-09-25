@@ -1,10 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
+  bucharestDate,
   seedEvent,
   deleteEventBySlug,
   seedRegistrationFor,
   registrationsFor,
+  registerDirectly,
+  seedTestimonialOn,
   tryInsertEvent,
+  unique,
 } from "./helpers";
 
 /**
@@ -55,7 +59,7 @@ test.describe("events", () => {
     const title = `Eveniment E2E ${event.slug}`;
     try {
       await page.goto("/ro/events");
-      await expect(page.getByRole("heading", { name: "Evenimente" })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Evenimente", exact: true })).toBeVisible();
       const card = page.getByRole("link", { name: title });
       await expect(card).toBeVisible();
       await expect(card).toContainText("Gratuit");
@@ -1375,5 +1379,119 @@ test.describe("the .ics is a valid RFC 5545 file", () => {
         await deleteEventBySlug(event.slug);
       }
     }
+  });
+});
+
+/**
+ * An event's life on the public site (lib/event-phase.ts): bookable before it
+ * starts, closed once it has, and in the archive once it is over. An old
+ * Instagram story must land on a page that says the event is over, not one
+ * that takes a payment (audit B4).
+ */
+test.describe("an event's life", () => {
+  const slugs: string[] = [];
+  test.afterEach(async () => {
+    while (slugs.length) await deleteEventBySlug(slugs.pop()!);
+  });
+  const track = <T extends { slug: string }>(event: T) => {
+    slugs.push(event.slug);
+    return event;
+  };
+
+  test("/events marks one under way and keeps past ones in the archive, unless hidden", async ({ page }) => {
+    const ongoing = track(
+      await seedEvent({ title_ro: `În desfășurare ${unique("t")}`, date: bucharestDate(-1), time: "10:00", end_date: bucharestDate(1) })
+    );
+    const past = track(await seedEvent({ title_ro: `Trecut ${unique("t")}`, date: bucharestDate(-5) }));
+    const hidden = track(
+      await seedEvent({ title_ro: `Ascuns din arhivă ${unique("t")}`, date: bucharestDate(-6), show_in_archive: false })
+    );
+
+    await page.goto("/ro/events");
+    const ongoingCard = page.locator(`a[href$="/events/${ongoing.slug}"]`);
+    await expect(ongoingCard).toContainText("În desfășurare");
+    // Not bookable, so no price and no seats on its card.
+    await expect(ongoingCard.getByText(/locuri/)).toHaveCount(0);
+
+    const archive = page.getByRole("region", { name: "Evenimente trecute" });
+    await expect(archive.locator(`a[href$="/events/${past.slug}"]`)).toBeVisible();
+    await expect(page.locator(`a[href$="/events/${hidden.slug}"]`)).toHaveCount(0);
+  });
+
+  test("the archive is split into pages of twelve", async ({ page }) => {
+    for (let i = 0; i < 13; i++) {
+      track(await seedEvent({ title_ro: `Arhivă ${unique("a")}`, date: bucharestDate(-20 - i) }));
+    }
+    await page.goto("/ro/events");
+    const pages = page.getByRole("navigation", { name: "Pagini" });
+    await pages.getByRole("link", { name: "Pagina 2" }).click();
+    await expect(page).toHaveURL(/\/ro\/events\?page=2/);
+    await expect(pages.getByRole("link", { name: "Pagina 2" })).toHaveAttribute("aria-current", "page");
+    // Page two is the archive alone.
+    await expect(page.getByRole("region", { name: "Evenimente trecute" })).toBeVisible();
+
+    const beyond = await page.goto("/ro/events?page=999");
+    expect(beyond?.status()).toBe(404);
+  });
+
+  test("an ended event's page says so, takes no booking, and shows what participants said", async ({ page }) => {
+    const event = track(await seedEvent({ date: bucharestDate(-4), max_participants: 10 }));
+    const quote = `A fost minunat ${unique("q")}`;
+    await seedTestimonialOn(event.id, quote);
+    await seedTestimonialOn(event.id, `Neaprobat ${unique("q")}`, false);
+
+    await page.goto(`/ro/events/${event.slug}`);
+    await expect(page.getByText("Încheiat", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Evenimentul s-a încheiat" })).toBeVisible();
+    await expect(page.getByLabel("Nume complet")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Înscrie-te/ })).toHaveCount(0);
+    await expect(page.getByText(/\d+\/\d+ locuri/)).toHaveCount(0);
+
+    const said = page.getByRole("region", { name: "Ce au spus participanții" });
+    await expect(said.getByText(quote)).toBeVisible();
+    await expect(said.getByText(/^Neaprobat/)).toHaveCount(0);
+    await page.getByRole("link", { name: "Vezi evenimentele următoare" }).click();
+    await expect(page).toHaveURL(/\/ro\/events$/);
+  });
+
+  test("an event under way takes no booking", async ({ page }) => {
+    const event = track(await seedEvent({ date: bucharestDate(-1), time: "10:00", end_date: bucharestDate(1) }));
+    await page.goto(`/ro/events/${event.slug}`);
+    await expect(page.getByRole("heading", { name: "Evenimentul este în desfășurare" })).toBeVisible();
+    await expect(page.getByLabel("Nume complet")).toHaveCount(0);
+  });
+
+  test("the booking, the waiting list and the database all refuse once an event has started", async ({ request }) => {
+    const event = track(
+      await seedEvent({ date: bucharestDate(-1), time: "10:00", end_date: bucharestDate(1), price: 0, max_participants: 10 })
+    );
+    const attendee = (kind: string) => ({
+      eventId: event.id,
+      fullName: "Test Început",
+      email: `${kind}-${unique("m")}@example.com`,
+      phone: "+40721112233",
+      // .env.test uses Cloudflare's always-pass keys.
+      captchaToken: "XXXX.DUMMY.TOKEN.XXXX",
+    });
+
+    const booking = await request.post("/api/register", { data: attendee("started") });
+    expect(booking.status()).toBe(409);
+    expect((await booking.json()).code).toBe("started");
+
+    const waiting = await request.post("/api/register/waiting-list", { data: attendee("started-wait") });
+    expect(waiting.status()).toBe(409);
+    expect((await waiting.json()).code).toBe("started");
+
+    // The rule itself, below the routes.
+    const direct = await registerDirectly(event.id);
+    expect(direct.code).toBe("started");
+    expect(await registrationsFor(event.id)).toHaveLength(0);
+  });
+
+  test("an event with no announced hour closes when its day begins", async () => {
+    const today = track(await seedEvent({ date: bucharestDate(0), time: null, max_participants: 10 }));
+    expect((await registerDirectly(today.id)).code).toBe("started");
+    const tomorrow = track(await seedEvent({ date: bucharestDate(1), time: null, max_participants: 10 }));
+    expect((await registerDirectly(tomorrow.id)).success).toBe(true);
   });
 });

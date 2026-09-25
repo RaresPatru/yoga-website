@@ -207,7 +207,7 @@ export function RichTextEditor({
   labelId,
   spellcheck,
   busy = false,
-  stickyTop = "4rem",
+  stickyTop = "var(--admin-header-h)",
 }: {
   editor: Editor | null;
   label: string;

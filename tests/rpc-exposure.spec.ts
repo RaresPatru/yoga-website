@@ -126,17 +126,19 @@ test.describe("the anonymous surface of the database", () => {
   ];
 
   /**
-   * Functions anon may execute. Both are deliberate and both are covered
-   * individually above: `is_admin` because RLS policies evaluate it with the
-   * caller's privileges, `pending_hold_interval` because the availability view
-   * calls it.
+   * Functions anon may execute. All three are deliberate: `is_admin` because
+   * RLS policies evaluate it with the caller's privileges, and
+   * `pending_hold_interval` and `holds_seat` because the availability view
+   * calls them, and Postgres checks a view's functions against the caller.
+   * `holds_seat` computes from the row it is handed and reads no table, so
+   * calling it directly reveals nothing.
    *
    * `register_for_event` must never appear here. It did once — reachable
    * through the PUBLIC grant Postgres adds at creation, which `pg_dump` does
    * not print — and booking a 350 RON retreat without paying was one HTTP
    * request.
    */
-  const PUBLIC_FUNCTIONS = ["is_admin", "pending_hold_interval"];
+  const PUBLIC_FUNCTIONS = ["holds_seat", "is_admin", "pending_hold_interval"];
 
   async function anonymousSurface() {
     // Runs the non-local database guard in helpers.ts before anything else

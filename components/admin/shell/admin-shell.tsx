@@ -231,7 +231,7 @@ export function AdminShell({
               }
             }}
           >
-            <div className="flex h-16 shrink-0 items-center px-3">
+            <div className="flex h-(--admin-header-h) shrink-0 items-center px-3">
               {/*
                 A toggle button with a name that stays put, "Narrow sidebar",
                 and `aria-pressed` for which way it is set: a screen reader
@@ -267,7 +267,7 @@ export function AdminShell({
         </aside>
 
         <div className="min-w-0">
-          <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-sage/20 bg-cream/85 px-4 backdrop-blur-md sm:px-6">
+          <header className="sticky top-0 z-30 flex h-(--admin-header-h) items-center gap-2 border-b border-sage/20 bg-cream/85 px-4 backdrop-blur-md sm:px-6">
             <button
               type="button"
               onClick={() => drawerRef.current?.showModal()}
@@ -299,7 +299,7 @@ export function AdminShell({
           <main
             id="admin-main"
             tabIndex={-1}
-            className="mx-auto w-full max-w-6xl px-4 py-6 focus:outline-none sm:px-6 lg:px-8 lg:py-8"
+            className="mx-auto w-full max-w-(--admin-main-max) px-4 py-6 focus:outline-none sm:px-6 lg:px-8 lg:py-8"
           >
             {children}
           </main>
@@ -317,7 +317,7 @@ export function AdminShell({
         }}
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-16 shrink-0 items-center justify-between border-b border-sage/20 px-4">
+          <div className="flex h-(--admin-header-h) shrink-0 items-center justify-between border-b border-sage/20 px-4">
             <span className="truncate font-serif text-lg text-charcoal">{label}</span>
             <button
               type="button"

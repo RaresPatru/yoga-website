@@ -1,10 +1,14 @@
 import { test, expect } from "@playwright/test";
 import {
+  adminAccessToken,
+  bucharestDate,
   seedEvent,
   deleteEventBySlug,
+  deleteRegistration,
   seedWaitingEntry,
   seedRegistrationFor,
   registrationsFor,
+  waitingEntry,
 } from "./helpers";
 
 /**
@@ -61,17 +65,56 @@ test.describe("waiting-list claim", () => {
     }
   });
 
-  test("claiming a seat on a full event is refused", async ({ page }) => {
+  /**
+   * Somebody booked the seat before the waitlisted person pressed their link.
+   * First come, first served (Rares' rule): they are told so with an apology,
+   * not an "invalid link", and their offer is withdrawn so they are waiting
+   * again, in the order they joined, which makes them first for the next seat.
+   */
+  test("a seat someone else booked first gets an apology, and they stay first in line", async ({ page, request }) => {
     const event = await seedEvent({ price: 0, max_participants: 1 });
     try {
-      // Someone else took the last seat between the email going out and the
-      // link being followed.
-      await seedRegistrationFor(event.id);
-      const entryId = await seedWaitingEntry(event.id, "open");
+      const stranger = await seedRegistrationFor(event.id);
+      const first = await seedWaitingEntry(event.id, "open");
+      const second = await seedWaitingEntry(event.id, "none");
 
-      await page.goto(`/ro/events/${event.slug}?claim=${entryId}`);
-
+      await page.goto(`/ro/events/${event.slug}?claim=${first}`);
+      await expect(page.getByRole("heading", { name: "Ne pare rău, locul a fost ocupat" })).toBeVisible();
+      await expect(page.getByText(/Îți păstrezi locul în fruntea listei/)).toBeVisible();
       await expect(page.getByRole("heading", { name: "Loc revendicat!" })).toBeHidden();
+
+      const after = await waitingEntry(first);
+      expect(after.claimed_at).toBeNull();
+      expect(after.claim_expires_at, "the lost offer no longer holds a place").toBeNull();
+
+      // The seat comes back; the next offer is theirs, not the one behind them.
+      await deleteRegistration(stranger);
+      const token = await adminAccessToken();
+      const res = await request.post("/api/admin/events/notify-waiting-list", {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { eventId: event.id },
+      });
+      expect((await res.json()).notified).toBe(1);
+      expect((await waitingEntry(first)).notified_at).not.toBeNull();
+      expect((await waitingEntry(second)).notified_at).toBeNull();
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  test("a link is refused once the event has started", async ({ page }) => {
+    const event = await seedEvent({
+      price: 0,
+      max_participants: 5,
+      date: bucharestDate(-1),
+      time: "10:00",
+      end_date: bucharestDate(1),
+    });
+    try {
+      const entryId = await seedWaitingEntry(event.id, "open");
+      await page.goto(`/ro/events/${event.slug}?claim=${entryId}`);
+      await expect(page.getByRole("heading", { name: "Loc revendicat!" })).toBeHidden();
+      expect(await registrationsFor(event.id)).toHaveLength(0);
     } finally {
       await deleteEventBySlug(event.slug);
     }

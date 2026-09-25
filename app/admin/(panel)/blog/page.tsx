@@ -26,7 +26,7 @@ import { Pagination } from "@/components/ui/pagination";
 const PER_PAGE = 25;
 const TABS = ["all", "published", "drafts", "hidden"] as const;
 type Tab = (typeof TABS)[number];
-const SORTS = ["edited", "edited_oldest", "published", "title"] as const;
+const SORTS = ["edited", "edited_oldest", "published", "published_oldest", "title"] as const;
 type Sort = (typeof SORTS)[number];
 
 const TAB_STATUS: Record<Exclude<Tab, "all">, PostStatus> = {
@@ -132,6 +132,10 @@ function PostList() {
         case "published":
           // Never-published posts last, newest publication first.
           return (b.published_at ?? "").localeCompare(a.published_at ?? "");
+        case "published_oldest":
+          // Never-published posts last here too: they have no date to order by.
+          if (!a.published_at || !b.published_at) return Number(!a.published_at) - Number(!b.published_at);
+          return a.published_at.localeCompare(b.published_at);
         case "title":
           // Untitled posts last.
           if (!a.title_ro.trim() || !b.title_ro.trim()) return Number(!a.title_ro.trim()) - Number(!b.title_ro.trim());
@@ -199,7 +203,7 @@ function PostList() {
             <select
               value={sort}
               onChange={(e) => router.replace(hrefWith({ sort: e.target.value }), { scroll: false })}
-              className="h-11 min-w-0 rounded-full border border-sage/30 bg-white px-4 text-base text-charcoal sm:text-sm"
+              className="admin-select h-11 min-w-0 rounded-full sm:w-72 border border-sage/30 bg-white px-4 text-base text-charcoal sm:text-sm"
             >
               {SORTS.map((value) => (
                 <option key={value} value={value}>
@@ -262,7 +266,7 @@ function PostRow({ post, locale }: { post: ListedPost; locale: string }) {
     <li>
       <Link
         href={`/admin/blog/${post.id}`}
-        className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-rose/5 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto]"
+        className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-rose/5 focus-visible:-outline-offset-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto]"
       >
         <span className="relative row-span-2 aspect-[4/3] overflow-hidden rounded-lg bg-sage/10 sm:row-span-1">
           {picture ? (
