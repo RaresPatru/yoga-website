@@ -37,6 +37,7 @@ export function MenuButton({
   triggerClassName,
   menuLabel,
   align = "start",
+  side = "bottom",
 }: {
   /** The button's accessible name. */
   label: string;
@@ -47,6 +48,8 @@ export function MenuButton({
   /** Names the menu itself; defaults to `label`. */
   menuLabel?: string;
   align?: "start" | "end";
+  /** Opens upwards, for a button near the bottom of the screen. */
+  side?: "top" | "bottom";
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -121,8 +124,9 @@ export function MenuButton({
           aria-label={menuLabel ?? label}
           onKeyDown={onMenuKey}
           className={cn(
-            "absolute top-full z-50 mt-1.5 min-w-48 rounded-xl border border-sage/25 bg-warm-white p-1 shadow-[0_16px_32px_-12px_rgb(0_0_0/0.25)]",
-            align === "end" ? "right-0" : "left-0"
+            "absolute z-50 min-w-48 rounded-xl border border-sage/25 bg-warm-white p-1 shadow-[0_16px_32px_-12px_rgb(0_0_0/0.25)]",
+            align === "end" ? "right-0" : "left-0",
+            side === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5"
           )}
         >
           {items.map((item) => {

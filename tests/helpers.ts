@@ -768,3 +768,125 @@ export async function registerDirectly(eventId: string) {
   if (error) throw new Error(`registerDirectly failed: ${error.message}`);
   return data as { success?: boolean; id?: string; error?: string; code?: string };
 }
+
+/** An email as the local mailbox holds it. */
+export interface MailboxMessage {
+  ID: string;
+  Subject: string;
+  HTML: string;
+  Text: string;
+  Attachments: Array<{ FileName: string; ContentType: string }>;
+}
+
+/**
+ * The emails the site sent to an address, newest first, waiting up to
+ * `timeoutMs` for at least `atLeast` of them to arrive. Against the local
+ * database the site sends to this mailbox rather than to Resend
+ * (lib/email.ts), so this is where a test reads what somebody received.
+ */
+export async function emailsTo(address: string, atLeast = 1, timeoutMs = 15_000): Promise<MailboxMessage[]> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const search = await fetch(
+      `${MAILBOX_URL}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`
+    ).then((r) => r.json());
+    const summaries: Array<{ ID: string }> = search.messages ?? [];
+    if (summaries.length >= atLeast || Date.now() > deadline) {
+      return Promise.all(
+        summaries.map((s) => fetch(`${MAILBOX_URL}/api/v1/message/${s.ID}`).then((r) => r.json()))
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+}
+
+/** A participant row as the admin sees it in admin_participants. */
+export async function participantRow(id: string) {
+  const { data, error } = await (await adminScoped())
+    .from("admin_participants")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`participantRow failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** A booking's stored columns, read with the service key. */
+export async function registrationById(id: string) {
+  const { data, error } = await (await serviceClient()).from("registrations").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`registrationById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** Waiting-list rows for an event, every column. */
+export async function waitingListFor(eventId: string) {
+  const { data, error } = await (await serviceClient()).from("waiting_list").select("*").eq("event_id", eventId);
+  if (error) throw new Error(`waitingListFor failed: ${error.message}`);
+  return (data ?? []) as Array<Record<string, unknown>>;
+}
+
+/** Adds a waiting-list entry with any columns set, for states seedWaitingEntry does not cover. */
+export async function seedWaitingRow(eventId: string, overrides: Record<string, unknown> = {}) {
+  const { data, error } = await (await serviceClient())
+    .from("waiting_list")
+    .insert({
+      event_id: eventId,
+      full_name: `Așteptare E2E ${unique("w")}`,
+      email: `wait-${unique("m")}@example.com`,
+      phone: "+40721112233",
+      ...overrides,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedWaitingRow failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+/** Testimonials whose text is this, with the event columns a deletion keeps. */
+export async function testimonialsWithContent(content: string) {
+  const { data, error } = await (await adminScoped())
+    .from("testimonials")
+    .select("id, event_id, event_title_ro, event_title_en, event_date")
+    .eq("content", content);
+  if (error) throw new Error(`testimonialsWithContent failed: ${error.message}`);
+  return (data ?? []) as Array<{ id: string; event_id: string | null; event_title_ro: string | null; event_title_en: string | null; event_date: string | null }>;
+}
+
+export async function deleteTestimonialById(id: string) {
+  const { error } = await (await adminScoped()).from("testimonials").delete().eq("id", id);
+  if (error) throw new Error(`deleteTestimonialById failed: ${error.message}`);
+}
+
+/** Runs the daily clean-up function directly, as the cron route does. */
+export async function runDailyCleanup() {
+  const { data, error } = await (await serviceClient()).rpc("daily_cleanup");
+  if (error) throw new Error(`runDailyCleanup failed: ${error.message}`);
+  return data as { notes_cleared: number; abandoned_removed: number };
+}
+
+/** The booking made with this email, or null: how a test finds what a form created. */
+export async function registrationByEmail(email: string) {
+  const { data, error } = await (await serviceClient()).from("registrations").select("*").eq("email", email).maybeSingle();
+  if (error) throw new Error(`registrationByEmail failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** Many bookings on one event at once, for paging and "select all". */
+export async function seedManyRegistrations(eventId: string, count: number, prefix: string) {
+  const rows = Array.from({ length: count }, (_, i) => ({
+    event_id: eventId,
+    full_name: `${prefix} ${String(i + 1).padStart(3, "0")}`,
+    email: `${prefix.toLowerCase().replace(/\W+/g, "-")}-${i + 1}@example.com`,
+    phone: "+40721112233",
+    payment_status: "free",
+  }));
+  const { error } = await (await serviceClient()).from("registrations").insert(rows);
+  if (error) throw new Error(`seedManyRegistrations failed: ${error.message}`);
+}
+
+/** Calls the archive's permanent delete as the admin, the way the page does. */
+export async function deleteParticipantsAsAdmin(ids: string[]): Promise<number> {
+  const { data, error } = await (await adminScoped()).rpc("admin_delete_participants", { p_ids: ids });
+  if (error) throw new Error(`deleteParticipantsAsAdmin failed: ${error.message}`);
+  return data as number;
+}

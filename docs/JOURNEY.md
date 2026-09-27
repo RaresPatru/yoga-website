@@ -1501,6 +1501,41 @@ height, measured at 52 pixels (the comment there said 51), and on a wide
 screen the content page's menu moved into the middle of the empty space
 instead of hugging the form.
 
+### Phase 5: everyone on one list
+
+**Two lists became one.** Bookings and the waiting list lived in separate
+tables and, in the panel, on separate screens, though to her they are all
+people coming, or hoping to come, to an event. They are one list now, with an
+Active tab and an Archive, searchable by name, email, phone or event, and
+filtered from the address so the dashboard and each number on an event open
+it already narrowed. Deciding what is archived took the longest to phrase and
+the least code: a view in the database says it, once, for the list, its counts
+and the delete that works only on the archive.
+
+**A panel for one person.** Their contact details (with WhatsApp, which is how
+she actually reaches people), their note and when they agreed to it being
+kept, her own note that saves itself, every event under the same email, and
+what she can do: mark a refund asked for or made, or cancel the booking with a
+reason and, if she ticks it, an email in the language they booked in.
+
+**The booking form asks what she needs to know.** An optional note, often
+about health, kept only with its own tick and cleared 30 days after the event
+by a daily job; a box for news about future events, unticked; one line
+pointing to the privacy policy. The free and paid bookings had near-identical
+code paths in the form; there is one now, with the waiting list on it too.
+
+**Emails learnt the reader's language, and to say when they fail.** They used
+to go in Romanian with the date as "2026-10-10", and a failed send was
+indistinguishable from a sent one. Against the local database they now land in
+the local mailbox instead of the live Resend account, which is also how the
+tests read them.
+
+**Two findings.** Phase 4 made event descriptions rich text and nobody told
+the calendar: every entry, emailed or downloaded, carried the HTML tags. And an
+Excel library that compresses in a background worker would have been refused
+by the site's own security policy on the first large export, so the workbook
+is written by hand, a few dozen lines over a small zip library.
+
 ---
 
 ## Decisions worth defending

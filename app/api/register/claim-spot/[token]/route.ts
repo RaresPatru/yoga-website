@@ -56,7 +56,7 @@ export async function POST(
     // defeats that, leaving every field typed as an error object.
     const { data: entry, error: findError } = await supabase
       .from("waiting_list")
-      .select("id, event_id, full_name, email, phone, locale, notified_at, claim_expires_at, events!inner(id, slug, title_ro, title_en, price, currency, published, starts_at)")
+      .select("id, event_id, full_name, email, phone, locale, participant_note, note_consent_at, marketing_consent_at, admin_note, notified_at, claim_expires_at, events!inner(id, slug, title_ro, title_en, price, currency, published, starts_at)")
       .eq("id", token)
       .is("claimed_at", null)
       .is("removed_at", null)
@@ -103,6 +103,7 @@ export async function POST(
     }
 
     const isPaid = event.price > 0;
+    const entryLocale = entry.locale === "en" ? "en" : "ro";
 
     // Free events are confirmed outright. Paid events get a 'pending'
     // registration and a trip to Stripe — the old code created a 'free'
@@ -114,7 +115,12 @@ export async function POST(
       p_email: entry.email,
       p_phone: entry.phone,
       p_payment_status: isPaid ? "pending" : "free",
-      p_locale: entry.locale === "en" ? "en" : "ro",
+      p_locale: entryLocale,
+      // What they wrote and ticked on the waiting-list form comes with them,
+      // with the moment they consented rather than the moment they claimed.
+      p_participant_note: entry.participant_note ?? undefined,
+      p_marketing_opt_in: entry.marketing_consent_at !== null,
+      p_consented_at: entry.note_consent_at ?? entry.marketing_consent_at ?? undefined,
     });
 
     if (!booking.ok) {
@@ -138,6 +144,16 @@ export async function POST(
     }
 
     const registration = { id: booking.id };
+
+    // Her note about them, written while they waited, belongs on the booking
+    // now: the waiting-list entry is hidden once it is claimed.
+    if (entry.admin_note) {
+      const { error: noteError } = await supabase
+        .from("registrations")
+        .update({ admin_note: entry.admin_note })
+        .eq("id", registration.id);
+      if (noteError) console.error("Could not carry the admin note to the booking:", noteError);
+    }
 
     /**
      * Marks the waiting-list entry as used. Deliberately NOT called until the
@@ -168,6 +184,7 @@ export async function POST(
         eventId: entry.event_id,
         fullName: entry.full_name,
         email: entry.email,
+        locale: entryLocale,
         templateType: "registration_confirmation",
       });
       return NextResponse.json({ success: true });

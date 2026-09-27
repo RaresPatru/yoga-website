@@ -908,7 +908,11 @@ export function EventEditor({
                   return (
                     <li key={n.filter}>
                       <Link
-                        href={participantsHref(eventId, n.filter)}
+                        href={participantsHref(
+                          eventId,
+                          n.filter,
+                          n.filter === "refunded" && (status === "archived" || status === "ended_pending")
+                        )}
                         className={cn(
                           "flex min-h-9 items-center rounded-lg px-2 text-sm transition-colors hover:bg-rose/5",
                           value > 0 ? "text-charcoal" : "text-charcoal-light/70"
@@ -921,7 +925,7 @@ export function EventEditor({
                 })}
               </ul>
               <Link
-                href={participantsHref(eventId)}
+                href={participantsHref(eventId, undefined, status === "archived")}
                 className="mt-2 inline-block text-sm text-rose-deep underline underline-offset-2"
               >
                 {t("admin.event_editor.all_participants")}

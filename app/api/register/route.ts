@@ -4,7 +4,7 @@ import { hasStarted, localeFrom, registerForEvent } from "@/lib/register-for-eve
 import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { validateAttendee } from "@/lib/validate-attendee";
+import { validateAttendee, validateBookingExtras } from "@/lib/validate-attendee";
 
 export async function POST(req: Request) {
   try {
@@ -42,6 +42,14 @@ export async function POST(req: Request) {
     }
     const { eventId, fullName, email, phone } = validation.value;
 
+    // The note, its consent, and the marketing opt-in. A note arrives only
+    // with its consent, or not at all.
+    const extras = validateBookingExtras(body);
+    if (!extras.ok) {
+      return NextResponse.json({ error: extras.error, code: extras.code }, { status: 400 });
+    }
+    const locale = localeFrom(body.locale);
+
     const supabase = createAdminClient();
 
     // Look up the event to decide what this registration costs. A free event
@@ -74,7 +82,9 @@ export async function POST(req: Request) {
       p_email: email,
       p_phone: phone,
       p_payment_status: paymentStatus,
-      p_locale: localeFrom(body.locale),
+      p_locale: locale,
+      p_participant_note: extras.value.note ?? undefined,
+      p_marketing_opt_in: extras.value.marketing,
     });
 
     // The code says why, so the page can say it in the visitor's language.
@@ -92,6 +102,7 @@ export async function POST(req: Request) {
         eventId,
         fullName,
         email,
+        locale,
         templateType: "registration_confirmation",
       });
     }

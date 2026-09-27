@@ -1,6 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getResend } from "@/lib/resend";
-import { fillEmailTemplate } from "@/lib/send-confirmation-email";
+import { emailLocale, eventTitle, fillEmailTemplate, loadTemplate, sendEmail, type EmailLocale } from "@/lib/email";
 import { absoluteUrl } from "@/lib/site-config";
 import { EVENT_TIME_ZONE } from "@/lib/utils";
 
@@ -37,6 +36,10 @@ export const CLAIM_WINDOW_HOURS = 24;
  * close then (register_for_event() refuses), and nobody she removed from the
  * list is offered one at all.
  *
+ * Each offer goes out in the language the person joined the list in. An offer
+ * whose email could not be sent is withdrawn again, so a seat is never held
+ * for somebody who was never told about it (audit B9).
+ *
  * Returns how many people were emailed, which is 0 for most calls.
  */
 export async function notifyWaitingList(eventId: string): Promise<number> {
@@ -44,7 +47,7 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
 
   const { data: event } = await supabase
     .from("events")
-    .select("slug, title_ro, starts_at")
+    .select("slug, title_ro, title_en, starts_at")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -62,6 +65,16 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
     .maybeSingle();
 
   if (!availability) return 0;
+
+  // The template before anything is stamped: without it no email can go, and
+  // an offer nobody is told about only holds a seat back from everyone.
+  const templates: Partial<Record<EmailLocale, { subject: string; body: string }>> = {};
+  const template = async (locale: EmailLocale) =>
+    (templates[locale] ??= (await loadTemplate(supabase, "spot_available", locale)) ?? undefined);
+  if (!(await template("ro"))) {
+    console.error("No 'spot_available' email template; nobody was offered a seat.");
+    return 0;
+  }
 
   // NULL and 0 both mean sold out. Neither has a seat to offer, and `taken`
   // being 0 does not change that.
@@ -99,7 +112,7 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
 
   const { data: nextBatch } = await supabase
     .from("waiting_list")
-    .select("id, full_name, email")
+    .select("id, full_name, email, locale")
     .eq("event_id", eventId)
     .is("claimed_at", null)
     .is("removed_at", null)
@@ -128,7 +141,7 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
 
   const batchNumber = (lastNotification?.batch_number || 0) + 1;
 
-  await supabase.from("waiting_list_notifications").insert({
+  const { error: logError } = await supabase.from("waiting_list_notifications").insert({
     event_id: eventId,
     batch_number: batchNumber,
     expires_at: expiresAt.toISOString(),
@@ -136,62 +149,71 @@ export async function notifyWaitingList(eventId: string): Promise<number> {
     // how many links went out, and the list can be shorter than the seats.
     spots_opened: nextBatch.length,
   });
+  if (logError) console.error("Could not record the waiting-list batch:", logError);
 
   // Stamp the window onto the entries themselves. This is what makes the claim
   // link checkable — without it the route has no way to know whether a token
   // was ever issued, or when it lapses.
-  await supabase
+  const { error: stampError } = await supabase
     .from("waiting_list")
     .update({
       notified_at: new Date().toISOString(),
       claim_expires_at: expiresAt.toISOString(),
     })
     .in("id", nextBatch.map((entry) => entry.id));
-
-  const { data: template } = await supabase
-    .from("email_templates")
-    .select("subject_ro, body_ro")
-    .eq("type", "spot_available")
-    .maybeSingle();
-
-  if (!template) {
-    console.error("No 'spot_available' email template; claim links were not sent.");
+  // An unstamped link is one the claim route refuses: better to send nothing.
+  if (stampError) {
+    console.error("Could not stamp the claim windows; no offers were sent:", stampError);
     return 0;
   }
 
-  const eventSlug = event?.slug || eventId;
+  const eventSlug = event.slug || eventId;
 
-  // Sent in parallel rather than one after another. allSettled means one
-  // bounced address cannot stop the rest of the batch going out.
-  await Promise.allSettled(
-    nextBatch.map((entry) => {
+  // Sent in parallel rather than one after another. Each send reports its own
+  // outcome, so one bounced address cannot stop the rest of the batch.
+  const outcomes = await Promise.all(
+    nextBatch.map(async (entry) => {
+      const locale = emailLocale(entry.locale);
+      const text = (await template(locale)) ?? (await template("ro"))!;
       const vars: Record<string, string> = {
         user_name: entry.full_name,
-        event_name: event?.title_ro || "",
+        event_name: eventTitle(event, locale),
         // absoluteUrl(), not the raw environment variable. NEXT_PUBLIC_SITE_URL
         // is frequently unset, and reading it directly is what produced claim
         // links beginning "undefined/ro/events/..."; the helper falls back to
         // Vercel's own production URL.
-        claim_url: absoluteUrl(`/ro/events/${eventSlug}?claim=${entry.id}`),
+        claim_url: absoluteUrl(`/${locale}/events/${eventSlug}?claim=${entry.id}`),
         // Formatted in Romania's timezone, not the server's. Vercel runs in
         // UTC, so this told people their link expired two or three hours before
         // the claim route actually stops accepting it — they would give up on a
         // seat that was still theirs.
-        expires_at: expiresAt.toLocaleString("ro-RO", { timeZone: EVENT_TIME_ZONE }),
+        expires_at: expiresAt.toLocaleString(locale === "en" ? "en-GB" : "ro-RO", {
+          timeZone: EVENT_TIME_ZONE,
+          dateStyle: "long",
+          timeStyle: "short",
+        }),
       };
 
-      return getResend()
-        .emails.send({
-          from: process.env.RESEND_FROM_EMAIL!,
-          to: entry.email,
-          subject: fillEmailTemplate(template.subject_ro, vars),
-          html: fillEmailTemplate(template.body_ro, vars),
-        })
-        .catch((error) => {
-          console.error(`Claim link email failed for ${entry.email}:`, error);
-        });
+      const result = await sendEmail({
+        to: entry.email,
+        subject: fillEmailTemplate(text.subject, vars),
+        html: fillEmailTemplate(text.body, vars),
+      });
+      if (!result.ok) console.error(`Claim link email failed for entry ${entry.id}:`, result.error);
+      return { id: entry.id, sent: result.ok };
     })
   );
 
-  return nextBatch.length;
+  // Offers whose email did not go are withdrawn: those people are simply
+  // waiting again, first in line for the next call.
+  const unsent = outcomes.filter((o) => !o.sent).map((o) => o.id);
+  if (unsent.length > 0) {
+    const { error: undoError } = await supabase
+      .from("waiting_list")
+      .update({ notified_at: null, claim_expires_at: null })
+      .in("id", unsent);
+    if (undoError) console.error("Could not withdraw the unsent offers:", undoError);
+  }
+
+  return outcomes.length - unsent.length;
 }

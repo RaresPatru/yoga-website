@@ -25,6 +25,11 @@ loadEnvFile(".env.test");
 loadEnvFile(".env.local");
 loadEnvFile(".env");
 
+// The daily job's secret, for tests/cron.spec.ts: set here, before the server
+// starts, so the server and the tests agree on it. A fixed test value, like the
+// Turnstile test keys; production's lives only in Vercel.
+process.env.CRON_SECRET ??= "local-test-cron-secret-not-for-production";
+
 // Tests run against a production build by default. Dev mode behaves differently
 // in ways that have already hidden a real bug: notFound() returns HTTP 200 in
 // dev but 404 in production, so a test written against dev asserted the wrong
@@ -107,6 +112,7 @@ export default defineConfig({
       RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL!,
       NEXT_PUBLIC_SITE_URL: "http://localhost:3100",
       RATE_LIMIT_MULTIPLIER: process.env.RATE_LIMIT_MULTIPLIER ?? "200",
+      CRON_SECRET: process.env.CRON_SECRET,
     },
   },
   projects: [
@@ -195,6 +201,10 @@ export default defineConfig({
         /checkout-params\.spec\.ts/,
         /updated-at\.spec\.ts/,
         /plural\.spec\.ts/,
+        // Server routes and the database, not pages.
+        /cron\.spec\.ts/,
+        /email-language\.spec\.ts/,
+        /plain-text\.spec\.ts/,
       ],
     },
   ],

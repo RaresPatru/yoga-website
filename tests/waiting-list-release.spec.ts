@@ -27,9 +27,9 @@ import {
  * same view the booking gate agrees with — so a link it sends is a link the
  * claim route will honour.
  *
- * The emails themselves go nowhere here: .env.test points Resend at a
- * placeholder key and each send is caught individually, so what these assert is
- * who *would* be written to, which is the part that has been wrong.
+ * The emails go to the local stack's mailbox, as every email does against the
+ * local database (lib/email.ts), so what these assert is who is written to,
+ * which is the part that has been wrong.
  */
 test.describe("releasing a waiting list from the admin panel", () => {
   /** POST as the logged-in administrator, the way the panel does after a save. */

@@ -286,6 +286,11 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   is the only way to reach live data; everything you do there is live.
   The test suite is separate again: `playwright.config.ts` loads `.env.test`
   first and `tests/helpers.ts` hard-crashes on a non-local URL.
+- **Against the local database, emails go to Mailpit, not Resend** (`lib/email.ts`):
+  read them at http://127.0.0.1:54324, and in tests with `emailsTo()` from
+  `tests/helpers.ts`. `npm run dev:prod` sends real email. The daily job
+  (`/api/cron/daily`) refuses to run without `CRON_SECRET`; the test server
+  gets one from `playwright.config.ts`.
 - **Local content comes from `supabase/seed.sql`,** which `npx supabase db reset`
   replays: six upcoming events and one six weeks past, five posts, six
   testimonials, five FAQs and her copy, all invented except the business name.
@@ -293,7 +298,8 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   something to do, one is closed at capacity 0 with a waiting list, one has no
   start time yet, and the lead event deliberately has no photograph. The past
   one (`yoga-la-rasarit`) has an approved testimonial, so the events archive
-  and an ended event's page have something to show. None has a WhatsApp link, so anything that
+  and an ended event's page have something to show. The paid retreat has one
+  participant in each state the Registrations page shows. None has a WhatsApp link, so anything that
   renders one is invisible locally until you add it in `/admin`. Pictures live in `/public/mock`, built from the gitignored
   `mock-images/` by `npm run mock:images`.
 - **Tailwind v4 compiles `scale-*` to the individual `scale` property**, which

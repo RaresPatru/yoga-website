@@ -45,7 +45,7 @@ because only one of the two was done.
 |---|---|---|---|
 | `events` | Classes, workshops, retreats. The central table. | `select` where `published` | `app/[locale]/events/*`, `app/admin/(panel)/events` |
 | `blog_posts` | Articles. | `select` where `published and not hidden` | `app/[locale]/blog/*`, `app/admin/(panel)/blog` |
-| `testimonials` | Attendee feedback. | `select` where `approved` | home + testimonials pages, `/api/testimonials` |
+| `testimonials` | Attendee feedback. Outlives its event: `event_id` becomes NULL and `event_title_ro` / `_en` / `event_date` keep which event it was. | `select` where `approved` | home + testimonials pages, `/api/testimonials` |
 | `site_content` | Key/value page copy the instructor edits. | `select` (all) | `lib/site-content.ts`, `app/admin/(panel)/content` |
 | `faqs` | Questions on the home page. | `select` where `published` | home page, `app/admin/(panel)/content` |
 | `event_availability` | **View.** `(event_id, capacity, taken)`. | `select` | every page showing seat counts |
@@ -65,6 +65,7 @@ because only one of the two was done.
 | `content_drafts` | Unpublished changes to a live post or event. | Work in progress | the post and event editors' autosave |
 | `admin_dashboard` | **View.** One row: the dashboard's five counts. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
+| `admin_participants` | **View.** Every booking and every unclaimed waiting-list entry, with its event, a status, `archived` and a search text. | `security_invoker`; `select` for `authenticated` only | `/admin/registrations` (reads) |
 
 `whatsapp_links` is the only table on this schema that is admin-only for
 *reading* as well as writing. Anyone holding a WhatsApp invite URL can join the
@@ -140,6 +141,9 @@ same set as the post list's Ciorne tab.
 | `holds_seat(registrations)` | stable, reads only its argument | `anon`, `authenticated`, `service_role` |
 | `register_for_event(...)` | definer, `search_path` pinned | **`service_role` only** |
 | `publish_post_draft(id)`, `publish_event_draft(id)` | invoker | `authenticated` (RLS makes it the admin) |
+| `admin_delete_participants(ids)` | invoker; skips anyone not archived | `authenticated` (RLS makes it the admin) |
+| `daily_cleanup()` | invoker | **`service_role` only** (`/api/cron/daily`) |
+| `keep_event_on_testimonials()` | trigger function, before an event is deleted | nobody; only its trigger runs it |
 | `set_updated_at()` | trigger function, `search_path` pinned | nobody; only its triggers run it |
 
 `set_updated_at()` runs before every UPDATE on `events`, `blog_posts`,
@@ -208,6 +212,21 @@ against the caller; it reads nothing but its argument.
 booking keeps its history and frees its seat. The waiting list gained
 `locale`, `removed_at` and `removal_reason`; a removed entry is never offered
 a seat, and nobody is offered one once the event has started.
+
+**Participants** (`20260928000000_participants.sql`). The waiting list records
+what a booking records: the note with its consent time, the opt-in and her
+note. `register_for_event()` gained `p_consented_at`, so a note written on
+the waiting list keeps its consent time when the seat is claimed.
+`admin_participants` gives each row a `status` (`removed`, `refunded`,
+`refund_requested`, `pending`, `abandoned` for a checkout past its hour,
+`paid`, `free`, `offers`, `waitlist`) and `archived`: a booking once removed or
+once its event has ended with nothing pending on it, a waiting-list entry once
+removed or once its event has ended. `search_text` is lowercased without
+accents, the phone as bare digits. `admin_delete_participants()` deletes only
+archived rows, and the claimed waiting-list entry behind a booking with it.
+`daily_cleanup()` clears participants' and her notes 30 days after the event,
+and deletes pending bookings older than seven days. Two email templates,
+`booking_cancelled` and `waitlist_removed`, joined the type CHECK.
 
 **`admin_event_overview`** gives each event a `status` (`draft`, `upcoming`,
 `ongoing`, `ended_pending` when it is over with a payment or refund still

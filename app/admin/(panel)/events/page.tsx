@@ -4,10 +4,12 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Plus, Search } from "lucide-react";
-import { adminErrorKey } from "@/lib/admin/db";
+import { CalendarDays, Plus, Search, Trash2 } from "lucide-react";
+import { adminErrorKey, toAdminError } from "@/lib/admin/db";
+import { useSelection } from "@/lib/admin/use-selection";
 import { useAdminData } from "@/lib/admin/use-admin-data";
 import {
+  deleteEvents,
   eventStatus,
   listEvents,
   participantsHref,
@@ -24,6 +26,10 @@ import { useAdminLocale } from "@/components/admin/locale-provider";
 import { useDocumentTitle } from "@/components/admin/shell/admin-site";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
+import { useToast } from "@/components/admin/ui/toaster";
+import { SelectionBar, selectionButton } from "@/components/admin/ui/selection-bar";
 
 /**
  * The events list: three tabs, searchable and sortable, 25 to a page, with the
@@ -41,6 +47,11 @@ import { Pagination } from "@/components/ui/pagination";
  * filtered to that event and group. A number that is zero is not shown, and
  * once an event is over its waiting list and offers are not either: nobody
  * can be offered a seat any more.
+ *
+ * In Trecute she can tick events, or every one that matches the search, and
+ * delete them for good, as in the Registrations archive. Their bookings and
+ * waiting lists go with them; their testimonials stay and keep the title
+ * (20260928000100_testimonial_event_link.sql).
  */
 
 const PER_PAGE = 25;
@@ -131,7 +142,11 @@ function EventList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typed]);
 
-  const { data: events = [], loading, error } = useAdminData(listEvents);
+  const { data: events = [], loading, error, reload } = useAdminData(listEvents);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const selection = useSelection(`${tab}|${typed.trim()}`);
+  const [deleting, setDeleting] = useState(false);
 
   const counts = useMemo(() => {
     const c: Record<Tab, number> = { upcoming: 0, drafts: 0, past: 0 };
@@ -167,6 +182,31 @@ function EventList() {
   const pageCount = Math.max(1, Math.ceil(shown.length / PER_PAGE));
   const page = Math.min(requestedPage, pageCount);
   const visible = shown.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const selectable = tab === "past";
+  const visibleIds = visible.map((e) => e.id);
+  const pageSelected = visibleIds.filter((id) => selection.ids.has(id)).length;
+  const selectedIds = selection.allMatching ? shown.map((e) => e.id) : [...selection.ids];
+
+  const deleteSelected = async () => {
+    const { confirmed } = await confirm({
+      title: countSentence(t, lang, "admin.selection.delete_events_title", selectedIds.length),
+      body: t("admin.selection.delete_events_body"),
+      confirmLabel: t("admin.participants.delete_forever"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteEvents(selectedIds);
+      toast.success(t("admin.selection.events_deleted").replace("{count}", String(selectedIds.length)));
+      selection.clear();
+      reload();
+    } catch (failure) {
+      toast.error(t(adminErrorKey(toAdminError(failure))));
+    } finally {
+      setDeleting(false);
+    }
+  };
   const tabLabel = (value: Tab) => t(`admin.events_list.tab_${value}`);
 
   return (
@@ -251,11 +291,53 @@ function EventList() {
               : t("admin.events_list.empty_tab").replace("{tab}", tabLabel(tab))}
         </p>
       ) : (
-        <ul className="divide-y divide-sage/20 overflow-hidden rounded-2xl border border-sage/25 bg-warm-white">
-          {visible.map((event) => (
-            <EventRow key={event.id} event={event} lang={lang} />
-          ))}
-        </ul>
+        <div className="overflow-hidden rounded-2xl border border-sage/25 bg-warm-white">
+          {selectable && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-sage/20 px-4 py-2.5 text-sm text-charcoal-light">
+              <Checkbox
+                label={t("admin.participants.select_page")}
+                checked={pageSelected === visibleIds.length}
+                indeterminate={pageSelected > 0 && pageSelected < visibleIds.length}
+                onChange={(e) => selection.setMany(visibleIds, e.target.checked)}
+              />
+              {pageSelected === visibleIds.length && shown.length > visible.length && (
+                <p>
+                  {selection.allMatching ? (
+                    t("admin.selection.all_selected").replace("{count}", String(shown.length))
+                  ) : (
+                    <>
+                      {t("admin.selection.all_on_page").replace("{count}", String(visible.length))}{" "}
+                      <button
+                        type="button"
+                        onClick={() => selection.setAllMatching(true)}
+                        className="font-medium text-rose-deep underline underline-offset-2"
+                      >
+                        {t("admin.selection.select_all").replace("{count}", String(shown.length))}
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          <ul className="divide-y divide-sage/20">
+            {visible.map((event) => (
+              <EventRow
+                key={event.id}
+                event={event}
+                lang={lang}
+                select={
+                  selectable
+                    ? {
+                        checked: selection.allMatching || selection.ids.has(event.id),
+                        onChange: (on) => selection.toggle(event.id, on),
+                      }
+                    : null
+                }
+              />
+            ))}
+          </ul>
+        </div>
       )}
 
       <Pagination
@@ -270,11 +352,27 @@ function EventList() {
           page: (p) => t("pagination.page").replace("{page}", String(p)),
         }}
       />
+
+      <SelectionBar count={selectable ? selectedIds.length : 0} onClear={selection.clear}>
+        <button type="button" disabled={deleting} onClick={deleteSelected} className={selectionButton(true)}>
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          {t("admin.participants.delete_forever")}
+        </button>
+      </SelectionBar>
     </div>
   );
 }
 
-function EventRow({ event, lang }: { event: ListedEvent; lang: "ro" | "en" }) {
+function EventRow({
+  event,
+  lang,
+  select,
+}: {
+  event: ListedEvent;
+  lang: "ro" | "en";
+  /** In Trecute: the row's checkbox. */
+  select: { checked: boolean; onChange: (on: boolean) => void } | null;
+}) {
   const { t } = useAdminLocale();
   const status = eventStatus(event);
   const schedule = formatEventSchedule(event, lang);
@@ -311,8 +409,21 @@ function EventRow({ event, lang }: { event: ListedEvent; lang: "ro" | "en" }) {
   // only while that link has the pointer or the keyboard: over a number, it is
   // the number that answers.
   return (
-    <li className="relative px-4 py-3 transition-colors has-[[data-row-link]:hover]:bg-rose/5 has-[[data-row-link]:focus-visible]:outline-2 has-[[data-row-link]:focus-visible]:-outline-offset-2 has-[[data-row-link]:focus-visible]:outline-rose-deep">
+    <li
+      className={cn(
+        "relative px-4 py-3 transition-colors has-[[data-row-link]:hover]:bg-rose/5 has-[[data-row-link]:focus-visible]:outline-2 has-[[data-row-link]:focus-visible]:-outline-offset-2 has-[[data-row-link]:focus-visible]:outline-rose-deep",
+        select?.checked && "bg-rose/5"
+      )}
+    >
       <div className="flex items-start gap-4">
+        {select && (
+          <Checkbox
+            className="relative z-10 mt-5"
+            aria-label={t("admin.participants.select").replace("{name}", event.title_ro)}
+            checked={select.checked}
+            onChange={(e) => select.onChange(e.target.checked)}
+          />
+        )}
         <Link
           href={`/admin/events/${event.id}`}
           data-row-link
@@ -357,7 +468,7 @@ function EventRow({ event, lang }: { event: ListedEvent; lang: "ro" | "en" }) {
           {numbers.map((n) => (
             <li key={n.filter}>
               <Link
-                href={participantsHref(event.id, n.filter)}
+                href={participantsHref(event.id, n.filter, ended && n.filter === "refunded")}
                 className={cn(
                   "relative z-10 inline-flex min-h-8 items-center rounded-full px-2.5 text-xs font-medium transition-colors",
                   n.pending

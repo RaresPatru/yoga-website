@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { validateAttendee } from "@/lib/validate-attendee";
+import { validateAttendee, validateBookingExtras } from "@/lib/validate-attendee";
 import { hasStarted, localeFrom } from "@/lib/register-for-event";
 
 /**
@@ -44,6 +44,13 @@ export async function POST(req: Request) {
     }
     const { eventId, fullName, email, phone } = validation.value;
 
+    // The same note, consent and opt-in as the booking form. They travel to
+    // the booking if this person later claims a seat.
+    const extras = validateBookingExtras(body);
+    if (!extras.ok) {
+      return NextResponse.json({ error: extras.error, code: extras.code }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
 
     // Only published events have a waiting list worth joining.
@@ -80,17 +87,22 @@ export async function POST(req: Request) {
         {
           error: "Ești deja pe lista de așteptare pentru acest eveniment.",
           info: "You are already on the waiting list for this event.",
+          code: "already_waiting",
         },
         { status: 409 }
       );
     }
 
+    const now = new Date().toISOString();
     const { error } = await supabase.from("waiting_list").insert({
       event_id: eventId,
       full_name: fullName,
       email,
       phone,
       locale: localeFrom(body.locale),
+      participant_note: extras.value.note,
+      note_consent_at: extras.value.note ? now : null,
+      marketing_consent_at: extras.value.marketing ? now : null,
     });
 
     if (error) throw error;

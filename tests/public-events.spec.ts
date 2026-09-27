@@ -256,7 +256,7 @@ test.describe("events", () => {
       await expect(page.getByText("0/10 locuri ocupate")).toBeVisible();
 
       await expect(page.getByLabel("Nume complet")).toBeVisible();
-      await expect(page.getByLabel("Email")).toBeVisible();
+      await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
       await expect(page.getByLabel("Telefon")).toBeVisible();
 
       /*
@@ -297,7 +297,7 @@ test.describe("events", () => {
       ).toContain(hour);
 
       await page.getByLabel("Nume complet").fill("Test E2E");
-      await page.getByLabel("Email").fill("e2e@example.com");
+      await page.getByLabel("Email", { exact: true }).fill("e2e@example.com");
       await page.getByLabel("Telefon").fill("07221112233");
 
       // Regression guard: the Turnstile widget used to be torn down and
@@ -347,7 +347,7 @@ test.describe("events", () => {
       await expect(page.locator('[data-verified="true"]')).toBeAttached();
 
       await page.getByLabel("Nume complet").fill("Ana Popescu");
-      await page.getByLabel("Email").fill(`ana-${Date.now()}@example.com`);
+      await page.getByLabel("Email", { exact: true }).fill(`ana-${Date.now()}@example.com`);
       await page.getByLabel("Telefon").fill("0722111222");
 
       await page.getByRole("button", { name: "Înscrie-te gratuit" }).click();
@@ -398,7 +398,7 @@ test.describe("events", () => {
 
       await expect(page.locator('[data-verified="true"]')).toBeAttached();
       await page.getByLabel("Nume complet").fill("Maria Ionescu");
-      await page.getByLabel("Email").fill(`maria-${Date.now()}@example.com`);
+      await page.getByLabel("Email", { exact: true }).fill(`maria-${Date.now()}@example.com`);
       await page.getByLabel("Telefon").fill("0722333444");
       await page.getByRole("button", { name: "Înscrie-te pe lista de așteptare" }).click();
 
@@ -413,7 +413,7 @@ test.describe("events", () => {
     try {
       await page.goto(`/ro/events/${event.slug}`);
       await page.getByLabel("Nume complet").fill("Test E2E");
-      await page.getByLabel("Email").fill("e2e@example.com");
+      await page.getByLabel("Email", { exact: true }).fill("e2e@example.com");
       await page.getByLabel("Telefon").fill("0722");
       await expect(page.getByText("Număr de telefon invalid / Invalid phone number")).toBeVisible();
     } finally {

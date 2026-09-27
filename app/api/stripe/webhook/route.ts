@@ -39,7 +39,7 @@ export async function POST(req: Request) {
           .update({ payment_status: "completed", stripe_session_id: session.id })
           .eq("id", registrationId)
           .eq("payment_status", "pending")
-          .select("event_id, full_name, email")
+          .select("event_id, full_name, email, locale")
           .maybeSingle();
 
         if (updated) {
@@ -49,6 +49,7 @@ export async function POST(req: Request) {
             eventId: updated.event_id,
             fullName: updated.full_name,
             email: updated.email,
+            locale: updated.locale === "en" ? "en" : "ro",
             templateType: "payment_confirmation",
           });
         }

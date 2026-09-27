@@ -1504,3 +1504,80 @@ links to Registrations, and links do not nest. The title's link is stretched
 over the row instead (`after:absolute after:inset-0`), and the numbers sit
 above it. The row lights up only while that link has the pointer, so over a
 number it is the number that answers.
+
+### Bookings and the waiting list are one list, read from one view
+
+`/admin/registrations` shows everyone who booked or is waiting, because to her
+they are all people coming (or hoping to come) to an event. The view
+`admin_participants` puts both tables side by side and decides, in SQL, each
+row's status and whether it is archived, so the list, its counts and the
+permanent delete all use the same rule. A waiting-list entry that claimed its
+seat is left out: its booking stands for that person. The list is filtered and
+paged in the database rather than in the browser, unlike the events list,
+because it only grows: every person who ever booked is in it.
+
+### Only archived participants can be deleted for good
+
+Delete is offered only in the Archive tab, and `admin_delete_participants()`
+skips any id that is not archived, whatever the page sends. A booking is
+archived once removed, or once its event has ended with nothing pending on it;
+a waiting-list entry once removed or once its event has ended. Deleting a
+booking also deletes the claimed waiting-list entry behind it, so nothing of
+the person is left on that event.
+
+### Removing someone keeps the row, and her reason stays hers
+
+"Anulează înscrierea" sets `removed_at` and a required reason; the row stays,
+frees its seat, and moves to the archive. The optional email says the booking
+was cancelled, in the language they booked in, and does not include her
+reason, which may be written for herself. If the event has not started, the
+freed seat is offered to the waiting list straight away.
+
+### A note is kept only with its own consent, and for 30 days
+
+The booking form's "Ceva ce ar trebui să știu?" is often about health, which
+GDPR treats as special: it is kept only with an explicit tick, which appears
+once there is a note, and the database refuses a note without a consent time.
+The daily job clears it, and her own note about the person, 30 days after the
+event; the consent time stays as the record that it was given. A note written
+on the waiting list travels to the booking with its original consent time.
+
+### Emails to test data go to the local mailbox
+
+Against the local database every email goes to the stack's Mailpit
+(`http://127.0.0.1:54324`) instead of Resend (`lib/email.ts`). The address of
+the database decides, not `NODE_ENV`, because it is what makes the data real:
+`npm run dev` and the tests read the local one, `npm run dev:prod` and every
+deployment read production. It also lets tests read what someone received.
+
+### Exports: a real Excel workbook, and a CSV for everything else
+
+The Excel file is written by `lib/admin/xlsx.ts` over fflate, every cell as
+text, so a phone number keeps its "+" and a name typed as a formula stays a
+name. The libraries that do this compress in a Web Worker started from a
+`blob:` address, which the Content-Security-Policy refuses. The CSV has a
+byte-order mark, semicolons (Excel's separator under Romanian regional
+settings) and an apostrophe in front of any cell starting with = + - @; Excel
+shows that apostrophe, which is why phone numbers look odd in the CSV and fine
+in the workbook. Participants' notes are in neither.
+
+### An unfinished checkout is deleted after a week, not an hour
+
+A pending booking stops holding its seat after an hour, but it is only
+deleted by the daily job after seven days: Stripe retries a webhook it could
+not deliver for up to three days, and a late "paid" must still find the booking
+to mark. Whoever had claimed that seat from the waiting list goes back in line.
+
+### The daily job is one database function behind a secret
+
+Vercel calls `/api/cron/daily` (vercel.json) with `CRON_SECRET`; without the
+variable, or with a wrong header, the route refuses (`lib/cron.ts`). All the
+work is `daily_cleanup()`, one transaction, callable only with the service
+key.
+
+### A testimonial outlives its event
+
+Deleting an event used to delete its testimonials. Now the foreign key sets
+`event_id` to NULL, and a trigger copies the event's titles and date onto the
+testimonial first, so what people said stays, still saying which event it was
+about.

@@ -274,6 +274,18 @@ export async function deleteEvent(id: string): Promise<void> {
   must(await createClient().from("events").delete().eq("id", id));
 }
 
+/**
+ * Deletes past events for good, with their bookings and waiting lists (the
+ * foreign keys cascade). Their testimonials stay, with the title copied onto
+ * them as each event goes.
+ */
+export async function deleteEvents(ids: string[]): Promise<void> {
+  const supabase = createClient();
+  for (let i = 0; i < ids.length; i += 100) {
+    must(await supabase.from("events").delete().in("id", ids.slice(i, i + 100)));
+  }
+}
+
 /** Whether another event already has this address (for a live event's private changes). */
 export async function eventSlugInUse(slug: string, exceptId: string): Promise<boolean> {
   const rows = must(await createClient().from("events").select("id").eq("slug", slug).neq("id", exceptId).limit(1));
@@ -282,12 +294,14 @@ export async function eventSlugInUse(slug: string, exceptId: string): Promise<bo
 
 /**
  * Where each of the five numbers leads: Registrations, filtered to this event
- * and that group.
+ * and that group. `archived` opens the Archive tab, where a group lives once
+ * the event is over and nothing on it is pending (the refunds made).
  */
 export type ParticipantFilter = "waitlist" | "pending" | "refund_requested" | "offers" | "refunded";
 
-export function participantsHref(eventId: string, filter?: ParticipantFilter): string {
+export function participantsHref(eventId: string, filter?: ParticipantFilter, archived = false): string {
   const params = new URLSearchParams({ event: eventId });
+  if (archived) params.set("tab", "archive");
   if (filter) params.set("status", filter);
   return `/admin/registrations?${params}`;
 }

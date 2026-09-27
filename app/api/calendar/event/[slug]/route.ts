@@ -1,6 +1,7 @@
 import { createPublicClient } from "@/lib/supabase/public";
 import { generateICS } from "@/lib/calendar";
 import { absoluteUrl } from "@/lib/site-config";
+import { toPlainParagraphs } from "@/lib/plain-text";
 
 /**
  * The slug, reduced to something that cannot break the header it goes in.
@@ -77,10 +78,11 @@ export async function GET(
 
   const ics = generateICS({
     title,
-    // The description is plain text from a textarea, so it goes in as-is. The
-    // page link goes with it: a calendar entry with no way back to the event is
-    // a dead end three weeks later when somebody wants to check the address.
-    description,
+    // Her description is rich text; a calendar shows plain text, so it goes in
+    // without the markup and with its paragraphs. The page link goes with it: a
+    // calendar entry with no way back to the event is a dead end three weeks
+    // later when somebody wants to check the address.
+    description: toPlainParagraphs(description),
     date: event.date,
     time: event.time,
     location: event.location || "",

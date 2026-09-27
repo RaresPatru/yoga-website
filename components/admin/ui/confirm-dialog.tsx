@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 /**
  * A confirmation question in the admin's own style, replacing
@@ -32,6 +33,8 @@ import { cn } from "@/lib/utils";
  *
  * `note` adds a text box to the question (the reason for removing a
  * participant, for example); what was typed comes back with the answer.
+ * `checkbox` adds one box to tick ("email them"), unticked unless it says
+ * otherwise; whether it was ticked comes back too.
  */
 
 export interface ConfirmOptions {
@@ -42,11 +45,13 @@ export interface ConfirmOptions {
   /** "danger" colours the confirm button red and focuses Cancel first. */
   tone?: "danger" | "default";
   note?: { label: string; placeholder?: string; required?: boolean; maxLength?: number };
+  checkbox?: { label: string; defaultChecked?: boolean };
 }
 
 export interface ConfirmResult {
   confirmed: boolean;
   note: string;
+  checked: boolean;
 }
 
 type Confirm = (options: ConfirmOptions) => Promise<ConfirmResult>;
@@ -62,6 +67,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const { t } = useAdminLocale();
   const [pending, setPending] = useState<Pending | null>(null);
   const [note, setNote] = useState("");
+  const [checked, setChecked] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const bodyId = useId();
@@ -71,6 +77,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
     (options) =>
       new Promise<ConfirmResult>((resolve) => {
         setNote("");
+        setChecked(Boolean(options.checkbox?.defaultChecked));
         setPending({ options, resolve });
       }),
     []
@@ -87,7 +94,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const handleClose = () => {
     const dialog = dialogRef.current;
     if (!pending || !dialog) return;
-    pending.resolve({ confirmed: dialog.returnValue === "confirm", note: note.trim() });
+    pending.resolve({ confirmed: dialog.returnValue === "confirm", note: note.trim(), checked });
     dialog.returnValue = "";
     setPending(null);
   };
@@ -140,6 +147,15 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   className="mt-1 w-full rounded-xl border border-sage/30 bg-white px-3 py-2 text-base text-charcoal focus:border-rose-deep focus:outline-none"
                 />
               </div>
+            )}
+
+            {options.checkbox && (
+              <Checkbox
+                className="mt-4"
+                label={options.checkbox.label}
+                checked={checked}
+                onChange={(event) => setChecked(event.target.checked)}
+              />
             )}
 
             <div className="mt-6 flex flex-wrap justify-end gap-2">

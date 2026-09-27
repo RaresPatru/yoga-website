@@ -25,12 +25,16 @@ every page's footer. Each shows the date it was last saved.
 |---|---|---|
 | Booking an event | name, email, phone | to hold the place and send the details (contract) |
 | Joining a waiting list | name, email, phone | to offer a freed place (contract) |
+| Either form, if they write one | a note, often about health | so she knows at the event (explicit consent, a separate tick) |
+| Either form, if they tick it | the wish to hear about future events | announcements (consent) |
 | Paying | nothing; the card goes to Stripe | Stripe confirms the payment |
 | The contact form | name, email, message | to reply (legitimate interest) |
 | Browsing | page views, without cookies | to see what is useful (legitimate interest) |
 
-Phase 5 adds an optional note about health, with its own consent, and a
-marketing opt-in. The privacy policy must gain both then.
+Since phase 5 (26 September 2026) the forms ask for both, and the policy
+draft says so: `20260928000000_participants.sql` added its paragraphs where
+the draft still had its original sentences. Notes, hers included, are deleted
+30 days after the event by the daily job.
 
 ## Cookies, and why there is no banner
 
@@ -78,7 +82,10 @@ they are business decisions rather than facts:
 - **Cancellation**: a full refund when cancelled at least 7 days before; later,
   no refund, but the place can be given to someone else. A full refund when she
   cancels.
-- **How long bookings are kept**: 3 years from the event. Payment records: as
+- **How long bookings are kept**: 3 years from the event. Waiting lists the
+  same since phase 5 (the draft first said until the event ends, but the
+  admin archive keeps them). Nothing deletes old bookings yet; once she
+  confirms a period, the daily job can. Payment records: as
   long as accounting law requires.
 - **Contact messages**: until the conversation ends, at most one year.
 

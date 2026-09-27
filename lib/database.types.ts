@@ -503,7 +503,10 @@ export type Database = {
           author_name: string | null
           content: string
           created_at: string
-          event_id: string
+          event_date: string | null
+          event_id: string | null
+          event_title_en: string | null
+          event_title_ro: string | null
           id: string
           rating: number | null
           type: string
@@ -515,7 +518,10 @@ export type Database = {
           author_name?: string | null
           content: string
           created_at?: string
-          event_id: string
+          event_date?: string | null
+          event_id?: string | null
+          event_title_en?: string | null
+          event_title_ro?: string | null
           id?: string
           rating?: number | null
           type: string
@@ -527,7 +533,10 @@ export type Database = {
           author_name?: string | null
           content?: string
           created_at?: string
-          event_id?: string
+          event_date?: string | null
+          event_id?: string | null
+          event_title_en?: string | null
+          event_title_ro?: string | null
           id?: string
           rating?: number | null
           type?: string
@@ -567,6 +576,7 @@ export type Database = {
       }
       waiting_list: {
         Row: {
+          admin_note: string | null
           claim_expires_at: string | null
           claimed_at: string | null
           claimed_registration_id: string | null
@@ -576,12 +586,16 @@ export type Database = {
           full_name: string
           id: string
           locale: string
+          marketing_consent_at: string | null
+          note_consent_at: string | null
           notified_at: string | null
+          participant_note: string | null
           phone: string
           removal_reason: string | null
           removed_at: string | null
         }
         Insert: {
+          admin_note?: string | null
           claim_expires_at?: string | null
           claimed_at?: string | null
           claimed_registration_id?: string | null
@@ -591,12 +605,16 @@ export type Database = {
           full_name: string
           id?: string
           locale?: string
+          marketing_consent_at?: string | null
+          note_consent_at?: string | null
           notified_at?: string | null
+          participant_note?: string | null
           phone: string
           removal_reason?: string | null
           removed_at?: string | null
         }
         Update: {
+          admin_note?: string | null
           claim_expires_at?: string | null
           claimed_at?: string | null
           claimed_registration_id?: string | null
@@ -606,7 +624,10 @@ export type Database = {
           full_name?: string
           id?: string
           locale?: string
+          marketing_consent_at?: string | null
+          note_consent_at?: string | null
           notified_at?: string | null
+          participant_note?: string | null
           phone?: string
           removal_reason?: string | null
           removed_at?: string | null
@@ -741,6 +762,36 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_participants: {
+        Row: {
+          admin_note: string | null
+          archived: boolean | null
+          created_at: string | null
+          email: string | null
+          email_key: string | null
+          event_date: string | null
+          event_ends_at: string | null
+          event_id: string | null
+          event_starts_at: string | null
+          event_title: string | null
+          full_name: string | null
+          id: string | null
+          kind: string | null
+          locale: string | null
+          marketing_consent_at: string | null
+          note_consent_at: string | null
+          offer_expires_at: string | null
+          participant_note: string | null
+          payment_status: string | null
+          phone: string | null
+          refund_requested_at: string | null
+          removal_reason: string | null
+          removed_at: string | null
+          search_text: string | null
+          status: string | null
+        }
+        Relationships: []
+      }
       event_availability: {
         Row: {
           capacity: number | null
@@ -751,6 +802,8 @@ export type Database = {
       }
     }
     Functions: {
+      admin_delete_participants: { Args: { p_ids: string[] }; Returns: number }
+      daily_cleanup: { Args: never; Returns: Json }
       holds_seat: {
         Args: { r: Database["public"]["Tables"]["registrations"]["Row"] }
         Returns: boolean
@@ -761,6 +814,7 @@ export type Database = {
       publish_post_draft: { Args: { p_post_id: string }; Returns: undefined }
       register_for_event: {
         Args: {
+          p_consented_at?: string
           p_email: string
           p_event_id: string
           p_full_name: string

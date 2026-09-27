@@ -14,6 +14,10 @@ import {
   seedPost,
   seedRegistrationFor,
   seedWaitingEntry,
+  seedTestimonialOn,
+  registrationById,
+  testimonialsWithContent,
+  deleteTestimonialById,
   tryInsertEvent,
   unique,
   anonStorageClient,
@@ -271,8 +275,50 @@ test.describe("the events list", () => {
     const waitlist = rows.filter({ hasText: `${marker} Urmează` }).getByRole("link", { name: "1 pe lista de așteptare" });
     await expect(waitlist).toHaveAttribute("href", `/admin/registrations?event=${upcoming.id}&status=waitlist`);
     await waitlist.click();
-    await expect(page.getByText("Eveniment: " + `${marker} Urmează`)).toBeVisible();
-    await expect(page.getByText(/^Așteptare E2E/)).toHaveCount(1);
+    await expect(page.getByLabel("Eveniment", { exact: true })).toHaveValue(upcoming.id);
+    await expect(page.getByLabel("Stare")).toHaveValue("waitlist");
+    const people = page.getByRole("list", { name: "Participanți" }).getByRole("listitem");
+    await expect(people).toHaveCount(1);
+    await expect(people.first()).toContainText("Așteptare E2E");
+  });
+
+  /**
+   * Past events can be ticked and deleted for good, as in the Registrations
+   * archive. Their bookings go with them; a testimonial stays and keeps the
+   * event's title and date (20260928000100_testimonial_event_link.sql).
+   */
+  test("Trecute deletes events for good, and their testimonials stay with the title", async ({ page }) => {
+    const past = await seedEvent({ title_ro: `${marker} De șters`, title_en: `${marker} To delete`, date: bucharestDate(-10) });
+    slugs.push(past.slug);
+    const booking = await seedRegistrationFor(past.id);
+    const words = `Testimonial păstrat ${unique("t")}`;
+    await seedTestimonialOn(past.id, words);
+
+    await page.goto(`/admin/events?tab=past&q=${encodeURIComponent(`${marker} De șters`)}`);
+    const rows = page.locator("main li").filter({ has: page.locator("a[href^='/admin/events/']") });
+    await expect(rows).toHaveCount(1);
+    await rows.first().getByRole("checkbox").check();
+    await page.getByRole("toolbar").getByRole("button", { name: "Șterge definitiv" }).click();
+    const dialog = page.getByRole("dialog", { name: "Ștergi definitiv un eveniment?" });
+    await expect(dialog).toContainText("Testimonialele rămân");
+    await dialog.getByRole("button", { name: "Șterge definitiv" }).click();
+    await expect(page.getByRole("region", { name: "Notificări" })).toContainText("Evenimente șterse: 1.");
+    await expect(rows).toHaveCount(0);
+
+    expect(await eventById(past.id)).toBeNull();
+    expect(await registrationById(booking)).toBeNull();
+    const [kept] = await testimonialsWithContent(words);
+    expect(kept.event_id).toBeNull();
+    expect(kept.event_title_ro).toBe(`${marker} De șters`);
+    expect(kept.event_title_en).toBe(`${marker} To delete`);
+    expect(kept.event_date).toBe(bucharestDate(-10));
+    await deleteTestimonialById(kept.id);
+  });
+
+  test("only Trecute offers deleting", async ({ page }) => {
+    await page.goto("/admin/events");
+    await expect(page.getByRole("heading", { level: 1, name: "Evenimente" })).toBeVisible();
+    await expect(page.getByLabel("Selectează toți de pe pagină")).toHaveCount(0);
   });
 
   /**

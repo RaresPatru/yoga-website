@@ -20,6 +20,8 @@ const typeLabelKey: Record<string, string> = {
   payment_confirmation: "admin.payment_confirmation",
   testimonial_request: "admin.testimonial_request",
   spot_available: "admin.spot_available",
+  booking_cancelled: "admin.booking_cancelled",
+  waitlist_removed: "admin.waitlist_removed",
 };
 
 /**

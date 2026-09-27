@@ -24,7 +24,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 2 | Site content, one-switch bilingual editing, public copy and legal pages | done, 25 Sep |
 | 3 | Blog: toolbar, post list, editor, public cards and article | done, 25 Sep |
 | 4 | Events: admin list and editor, per-event numbers, public archive | done, 25 Sep |
-| 5 | Registrations: one list with the waiting list, archive, notes, exports | not started |
+| 5 | Registrations: one list with the waiting list, archive, notes, exports | done, 26 Sep |
 | 6 | Testimonials and verified reviews | not started |
 | 7 | Emails: editor, preview, test sends, announcements | not started |
 | 8 | Messages: unread, starred, archive, letter view | not started |
@@ -722,7 +722,7 @@ passed in both engines (87 of 87).
 
 ### Phase 5: Registrations
 
-- [ ] **One participants list** at `/admin/registrations`, joining bookings and
+- [x] **One participants list** at `/admin/registrations`, joining bookings and
   the waiting list:
   - Tabs: *Active* and *Archive*.
   - Search by name, email, phone or event.
@@ -734,7 +734,7 @@ passed in both engines (87 of 87).
   - **Archiving rule.** A participant is archived when removed, or once their
     event has ended with nothing pending. Waiting-list entries archive when
     the event ends.
-- [ ] **The participant panel:**
+- [x] **The participant panel:**
   - contact details
   - status
   - the participant's note, with the date they consented
@@ -745,15 +745,15 @@ passed in both engines (87 of 87).
     - **Remove participant.** The confirmation dialog shows the name and
       status, asks for a reason, and can email the participant. The seat is
       freed and the waiting list told if the event hasn't started.
-- [ ] **The archive.**
+- [x] **The archive.**
   - Select rows or everything matching the filters, then permanently delete
     after a yes/no confirmation.
   - The Events *Past* tab works the same way. Testimonials survive an event's
     deletion and keep its title.
-- [ ] **Export** to CSV (opens correctly in Excel, with Romanian letters intact
+- [x] **Export** to CSV (opens correctly in Excel, with Romanian letters intact
   and formula tricks disarmed) or Excel `.xlsx`. The library loads only when
   used. Health notes are never exported.
-- [ ] **The booking and waiting-list forms** gain:
+- [x] **The booking and waiting-list forms** gain:
   - an optional "Ceva ce ar trebui să știu?" (anything I should know?), with
     consent
   - an unticked marketing opt-in
@@ -761,27 +761,72 @@ passed in both engines (87 of 87).
   - the page language, now stored
 
   The duplicated free/paid code in the form is merged (R4).
-- [ ] **Emails go out in the booking's language** with readable dates (B15),
+- [x] **Emails go out in the booking's language** with readable dates (B15),
   and every send checks for errors (B9).
   - Locally and in tests, mail goes to the local mailbox instead of Resend
     (S6, email half).
-- [ ] **A daily job** (`vercel.json` cron calling `/api/cron/daily`, guarded by
+- [x] **A daily job** (`vercel.json` cron calling `/api/cron/daily`, guarded by
   a secret):
   - clears notes 30 days after an event
   - removes abandoned unpaid bookings
-  - expires old review links
+  - expires old review links: **moved to phase 6**, which creates the links.
+
+**How it turned out** (26 September 2026)
+
+- **Two migrations.** `20260928000000_participants.sql`: the waiting list
+  records the note, its consent, the opt-in and her note, like a booking;
+  `register_for_event()` takes the moment of consent, so a note written on
+  the waiting list keeps its date when the seat is claimed; the view
+  `admin_participants` (one row per booking and per unclaimed waiting-list
+  entry, with a status, `archived` and a search text); `admin_delete_participants()`,
+  which skips anyone not archived; `daily_cleanup()`; two new email templates;
+  and the privacy draft's new paragraphs. `20260928000100_testimonial_event_link.sql`
+  keeps a testimonial when its event is deleted, with the title and date.
+- **The list is filtered and paged by the database**, because it only grows.
+  Search ignores accents, and a phone number is found however it is typed
+  ("0722 111 222" finds "+40 722 111 222").
+- **The panel has its own address** (`?p=<id>`): the back button closes it and
+  a refresh keeps it open. On a phone it is the whole screen. Contact has a
+  WhatsApp link beside email and phone.
+- **Removing is "Anulează înscrierea"** for a booking and "Scoate de pe lista de
+  așteptare" for a waiting-list entry; the reason is required and stays with
+  her; the email (`booking_cancelled` / `waitlist_removed`, editable at
+  /admin/emails) does not include it.
+- **Excel export is a real workbook**, written by hand over fflate
+  (`lib/admin/xlsx.ts`), because the libraries that wrap it compress in a
+  Web Worker started from a `blob:` address, which the site's CSP refuses.
+  Every cell is text. The CSV uses semicolons and a byte-order mark, and
+  disarms formulas with an apostrophe.
+- **Abandoned checkouts go after seven days**, not one hour: Stripe retries a
+  webhook for up to three days, and a late "paid" must still find its booking.
+- **Offers whose email failed are withdrawn**, so a seat is never held for
+  someone who was not told. Recording offers only for sent emails in one
+  locked step stays with B16 in phase 7.
+- **Found along the way:** since phase 4 made event descriptions rich text,
+  calendar entries carried the HTML tags; they are plain text with paragraphs
+  now. Meta descriptions decoded only `&amp;` and `&nbsp;` (B28), fixed in the
+  same function.
+- **The privacy draft now keeps waiting lists as long as bookings** (it said
+  until the event ends), because the archive keeps them. A retention period,
+  hers to confirm.
 
 **New migrations**
 
-- `…_testimonial_event_link.sql`: deleting an event no longer deletes its
-  testimonials, which keep the event's title.
+- `…_participants.sql` and `…_testimonial_event_link.sql`, above.
 
 **Tests**
 
-- `admin-registrations.spec.ts` is rewritten.
-- `booking-form.spec.ts` (new).
-- `email-language.spec.ts`: an English booking gets an English email.
-- `cron.spec.ts`: notes are cleared, and a call without the secret is refused.
+- `admin-registrations.spec.ts` is rewritten: search, filters from the
+  address, the archive rule and its delete, select-all across pages, the
+  panel, cancelling with an email, refunds, CSV and Excel.
+- `booking-form.spec.ts` (new): the note needs consent, the opt-in and the
+  language are stored, on both forms.
+- `email-language.spec.ts` (new): English and Romanian confirmations, with
+  readable dates, read from the local mailbox.
+- `cron.spec.ts` (new): the secret, notes at 30 days and not before, and
+  abandoned checkouts.
+- `admin-events.spec.ts`: the Past tab's delete keeps the testimonial.
+- `plain-text.spec.ts` (new): B28 and the calendar paragraphs.
 
 ### Phase 6: Testimonials and verified reviews
 
@@ -828,6 +873,7 @@ passed in both engines (87 of 87).
   - a line saying testimonials come from verified participants (Omnibus)
 - [ ] **Security.**
   - Links are stored hashed, work once and expire after 60 days.
+  - The daily job (`daily_cleanup()`, phase 5) deletes expired links.
   - Participants' text passes a strict sanitizer that allows paragraphs, bold
     and italic only. This closes S15 for public input.
   - `/api/testimonials` is deleted (R5).
@@ -987,7 +1033,8 @@ passed in both engines (87 of 87).
 
   If they differ, pages wait longer than they need to.
 - **Vercel settings:**
-  - Phase 5: add a `CRON_SECRET` environment variable.
+  - Phase 5: add a `CRON_SECRET` environment variable (a random string of at
+    least 16 characters). Until it is set, the daily job refuses to run.
   - Phase 7: a verified sending domain and From address in Resend.
 - **Before merging to `main`:** run `npx supabase migration list --linked`,
   then `npx supabase db push` for the new migrations.

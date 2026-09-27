@@ -561,6 +561,58 @@ where e.slug = 'yoga-la-rasarit'
 
 
 -- ---------------------------------------------------------------------------
+-- Participants in every state, for the Registrations page
+-- ---------------------------------------------------------------------------
+-- The paid retreat has one person in each state the page shows: paid with a
+-- note (and her own note about them), a refund asked for, refunded, booked in
+-- English, cancelled, and a checkout still inside its hour. Ana Popescu also
+-- came to the past sunrise class, so her panel has a history. The past
+-- class's bookings sit in the Archive tab.
+insert into public.registrations (
+  event_id, full_name, email, phone, payment_status, locale,
+  participant_note, note_consent_at, admin_note, marketing_consent_at,
+  refund_requested_at, removed_at, removal_reason, created_at
+)
+select e.id, v.full_name, v.email, v.phone, v.payment_status, v.locale,
+       v.note, case when v.note is not null then now() - v.ago end, v.admin_note,
+       case when v.marketing then now() - v.ago end,
+       case when v.refund_asked then now() - interval '1 day' end,
+       case when v.removal_reason is not null then now() - interval '2 days' end,
+       v.removal_reason, now() - v.ago
+from (values
+  ('retreat-de-weekend', 'Ana Popescu', 'ana.popescu@example.test', '+40724111222', 'completed', 'ro',
+   'Am o accidentare veche la genunchiul stâng, așa că evit îngenuncherile.', 'Îi pregătesc o saltea mai groasă.', true, false, null::text, interval '5 days'),
+  ('retreat-de-weekend', 'Laura Stan', 'laura.stan@example.test', '+40724111333', 'completed', 'ro',
+   null, null, false, true, null, interval '8 days'),
+  ('retreat-de-weekend', 'Mihai Ene', 'mihai.ene@example.test', '+40724111444', 'refunded', 'ro',
+   null, null, false, false, null, interval '10 days'),
+  ('retreat-de-weekend', 'Sophie Martin', 'sophie.martin@example.test', '+33612345678', 'completed', 'en',
+   null, null, true, false, null, interval '3 days'),
+  ('retreat-de-weekend', 'Radu Ionescu', 'radu.ionescu@example.test', '+40724111555', 'completed', 'ro',
+   null, null, false, false, 'A cerut să se retragă; locul a fost dat mai departe.', interval '9 days'),
+  ('retreat-de-weekend', 'Irina Vlad', 'irina.vlad@example.test', '+40724111666', 'pending', 'ro',
+   null, null, false, false, null, interval '10 minutes'),
+  ('yoga-la-rasarit', 'Ana Popescu', 'ana.popescu@example.test', '+40724111222', 'completed', 'ro',
+   null, null, true, false, null, interval '50 days'),
+  ('yoga-la-rasarit', 'Dan Georgescu', 'dan.georgescu@example.test', '+40724111777', 'completed', 'ro',
+   null, null, false, false, null, interval '45 days')
+) as v(slug, full_name, email, phone, payment_status, locale, note, admin_note, marketing, refund_asked, removal_reason, ago)
+join public.events e on e.slug = v.slug
+where not exists (select 1 from public.registrations r where r.email = 'ana.popescu@example.test');
+
+-- Someone waiting for the full morning class, with a note.
+insert into public.waiting_list (
+  event_id, full_name, email, phone, locale, participant_note, note_consent_at, created_at
+)
+select e.id, 'Cristina Pavel', 'cristina.pavel@example.test', '+40725222333', 'ro',
+       'Sunt însărcinată în luna a patra.', now() - interval '3 days',
+       now() - interval '3 days'
+from public.events e
+where e.slug = 'respiratie-de-dimineata'
+  and not exists (select 1 from public.waiting_list w where w.email = 'cristina.pavel@example.test');
+
+
+-- ---------------------------------------------------------------------------
 -- Frequently asked questions
 -- ---------------------------------------------------------------------------
 -- These answer what actually stalls a booking. The home page renders them as a
