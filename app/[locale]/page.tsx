@@ -1,9 +1,7 @@
 import Image from "next/image";
-import { ArrowRight, Quote } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { buttonClasses } from "@/lib/button-styles";
-import { GlassCard } from "@/components/ui/glass-card";
-import { Rating } from "@/components/ui/rating";
 import { EventCarousel } from "@/components/events/event-carousel";
 import {
   EventFeatureCard,
@@ -20,6 +18,11 @@ import { getTranslations } from "next-intl/server";
 import { CARD_COLUMNS } from "@/lib/blog";
 import { TEXT_TYPOGRAPHY } from "@/lib/article-typography";
 import { PostCard } from "@/components/blog/post-card";
+import {
+  PUBLIC_TESTIMONIAL_COLUMNS,
+  TestimonialCard,
+  type PublicTestimonial,
+} from "@/components/testimonials/testimonial-card";
 import { eventAvailability } from "@/lib/event-availability";
 
 /**
@@ -93,6 +96,9 @@ const HOME_EVENT_COUNT = 6;
  */
 const EVENT_WINDOW = 24;
 
+/** The most the home page shows of her testimonial selection: two rows of three. */
+const HOME_TESTIMONIALS = 6;
+
 export default async function HomePage({
   params,
 }: {
@@ -119,7 +125,7 @@ export default async function HomePage({
   const text = (key: SiteContentKey) => contentText(content, key, locale) ?? "";
   const placeholder = (key: SiteContentKey) => placeholderName(key, locale);
 
-  const [{ data: upcoming }, { data: testimonials }, { data: posts }] = await Promise.all([
+  const [{ data: upcoming }, { data: selected }, { data: posts }] = await Promise.all([
     supabase
       .from("events")
       // One literal, never concatenated — see the note in CLAUDE.md about what
@@ -130,12 +136,13 @@ export default async function HomePage({
       .order("date", { ascending: true })
       .order("time", { ascending: true })
       .limit(EVENT_WINDOW),
+    // Her selection, in her order (Testimoniale, "Pe pagina principală").
     supabase
       .from("testimonials")
-      .select("id, content, type, rating, author_name")
-      .eq("approved", true)
-      .order("created_at", { ascending: false })
-      .limit(3),
+      .select(PUBLIC_TESTIMONIAL_COLUMNS)
+      .eq("on_home", true)
+      .order("home_order", { ascending: true, nullsFirst: false })
+      .limit(HOME_TESTIMONIALS),
     supabase
       .from("blog_posts")
       .select(CARD_COLUMNS)
@@ -147,6 +154,20 @@ export default async function HomePage({
   ]);
 
   const candidates = (upcoming ?? []) as FeaturedEvent[];
+
+  // Until she has chosen any for the home page, the three newest stand in, so
+  // the section does not disappear the day testimonials start arriving.
+  const testimonials = (
+    selected?.length
+      ? selected
+      : (
+          await supabase
+            .from("testimonials")
+            .select(PUBLIC_TESTIMONIAL_COLUMNS)
+            .order("created_at", { ascending: false })
+            .limit(3)
+        ).data ?? []
+  ) as unknown as PublicTestimonial[];
 
   // Seat counts, which decide the ordering below as well as what each card
   // says. Why they come from a view and not from `registrations` is in
@@ -398,31 +419,18 @@ export default async function HomePage({
               {text("home.testimonials_title")}
             </h2>
             <div className="mt-8 grid gap-5 md:grid-cols-3">
-              {/* Not a link, so it does not lift — see the note on the same
-                  card in app/[locale]/testimonials/page.tsx. */}
               {testimonials.map((item) => (
-                <GlassCard key={item.id} hover={false} className="flex h-full flex-col">
-                  <Quote className="h-6 w-6 text-rose-deep/40" aria-hidden="true" />
-                  {/* Nothing is drawn when the rating is null — see the note in
-                      components/ui/rating.tsx. A quote with no stars beside it
-                      is honest; five default stars are not. */}
-                  <Rating value={item.rating} locale={locale} className="mt-3" />
-                  {/* `flex-1` pushes the attribution to the bottom, so the rule
-                      above it lines up across a row of cards whose quotes are
-                      different lengths. */}
-                  <p className="mt-3 flex-1 text-charcoal">{item.content}</p>
-                  <p className="mt-4 border-t border-sage/20 pt-3 text-sm font-medium text-charcoal">
-                    {item.author_name ||
-                      (locale === "ro" ? "Participantă" : "Participant")}
-                  </p>
-                </GlassCard>
+                <TestimonialCard key={item.id} item={item} locale={locale} />
               ))}
             </div>
-            <div className="mt-8 text-center">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link href="/testimonials" className={buttonClasses({ variant: "secondary" })}>
-                  {text("home.testimonials_button")}
-                  <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-                </Link>
+                {text("home.testimonials_button")}
+                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Link>
+              <Link href="/testimonials/share" className={buttonClasses({ variant: "ghost" })}>
+                {text("home.testimonials_share")}
+              </Link>
             </div>
           </div>
         </section>

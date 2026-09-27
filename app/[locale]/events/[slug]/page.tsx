@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Quote } from "lucide-react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { sanitizeArticleHtml } from "@/lib/sanitize";
 import { getTranslations } from "next-intl/server";
@@ -12,9 +11,12 @@ import { mapTarget } from "@/lib/map-link";
 import { eventPhase } from "@/lib/event-phase";
 import { buttonClasses } from "@/lib/button-styles";
 import { Link } from "@/i18n/navigation";
-import { GlassCard } from "@/components/ui/glass-card";
-import { Rating } from "@/components/ui/rating";
 import { EventRegistration } from "@/components/events/event-registration";
+import {
+  PUBLIC_TESTIMONIAL_COLUMNS,
+  TestimonialCard,
+  type PublicTestimonial,
+} from "@/components/testimonials/testimonial-card";
 import { BookingClosed, EventView } from "@/components/events/event-view";
 import type { Metadata } from "next";
 
@@ -134,15 +136,14 @@ export default async function EventDetailPage({
    */
   const isFull = !event.max_participants || taken >= event.max_participants;
 
-  // Once it is over, what the people who came said about it: approved only,
-  // which is all the read policy returns anyway.
+  // Once it is over, what the people who came said about it. The read policy
+  // returns only the approved ones she has not hidden.
   const { data: testimonials } =
     phase === "ended"
       ? await supabase
           .from("testimonials")
-          .select("id, content, rating, author_name")
+          .select(PUBLIC_TESTIMONIAL_COLUMNS)
           .eq("event_id", event.id)
-          .eq("approved", true)
           .order("created_at", { ascending: false })
       : { data: null };
 
@@ -286,16 +287,9 @@ export default async function EventDetailPage({
               {t("Ce au spus participanții", "What participants said")}
             </h2>
             <ul className="mt-6 space-y-4">
-              {testimonials.map((item) => (
+              {(testimonials as unknown as PublicTestimonial[]).map((item) => (
                 <li key={item.id}>
-                  <GlassCard hover={false}>
-                    <Quote className="mb-3 h-6 w-6 text-rose-deep/40" aria-hidden="true" />
-                    <Rating value={item.rating} locale={locale} />
-                    <p className="mt-3 break-words text-charcoal">{item.content}</p>
-                    <p className="mt-4 border-t border-sage/20 pt-3 text-sm font-medium text-charcoal">
-                      {item.author_name || t("Participantă", "Participant")}
-                    </p>
-                  </GlassCard>
+                  <TestimonialCard item={item} locale={locale} showEvent={false} />
                 </li>
               ))}
             </ul>

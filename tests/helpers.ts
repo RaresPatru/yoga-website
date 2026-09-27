@@ -327,8 +327,19 @@ export async function deleteWhatsappLink(label: string) {
   await (await adminScoped()).from("whatsapp_links").delete().eq("label", label);
 }
 
+/**
+ * Deletes a test's event and what it left on it. Testimonials outlive their
+ * event since 20260928000100_testimonial_event_link.sql, so a test that wrote
+ * one would otherwise leave it on /testimonials under the event's old title.
+ */
 export async function deleteEventBySlug(slug: string) {
-  const { error } = await (await adminScoped()).from("events").delete().eq("slug", slug);
+  const client = await adminScoped();
+  const { data: event } = await client.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (event) {
+    const { error: testimonialsError } = await client.from("testimonials").delete().eq("event_id", event.id);
+    if (testimonialsError) throw new Error(`deleteEventBySlug (testimonials) failed: ${testimonialsError.message}`);
+  }
+  const { error } = await client.from("events").delete().eq("slug", slug);
   if (error) throw new Error(`deleteEventBySlug failed: ${error.message}`);
 }
 
@@ -889,4 +900,52 @@ export async function deleteParticipantsAsAdmin(ids: string[]): Promise<number> 
   const { data, error } = await (await adminScoped()).rpc("admin_delete_participants", { p_ids: ids });
   if (error) throw new Error(`deleteParticipantsAsAdmin failed: ${error.message}`);
   return data as number;
+}
+
+/** The personal link to write a testimonial, from the newest email to this address. */
+export async function reviewLinkFor(email: string): Promise<string> {
+  const messages = await emailsTo(email);
+  for (const message of messages) {
+    const link = message.HTML.match(/https?:\/\/[^"'<>\s]*\/testimonials\/write\?token=[\w-]+/)?.[0];
+    if (link) return link;
+  }
+  throw new Error(`no testimonial link arrived for ${email}`);
+}
+
+/** The testimonial written from a booking, every column, or null. */
+export async function testimonialForBooking(registrationId: string) {
+  const { data, error } = await (await adminScoped())
+    .from("testimonials")
+    .select("*")
+    .eq("registration_id", registrationId)
+    .maybeSingle();
+  if (error) throw new Error(`testimonialForBooking failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** Changes a testimonial as the admin does. */
+export async function updateTestimonial(id: string, patch: Record<string, unknown>) {
+  const { error } = await (await adminScoped()).from("testimonials").update(patch).eq("id", id);
+  if (error) throw new Error(`updateTestimonial failed: ${error.message}`);
+}
+
+/** A link for a booking with a token the test knows, as lib/reviews.ts stores one (only its hash). */
+export async function insertReviewLink(registrationId: string, token: string, expiresAt: Date) {
+  const { createHash } = await import("node:crypto");
+  const { error } = await (await serviceClient()).from("review_invitations").insert({
+    registration_id: registrationId,
+    token_hash: createHash("sha256").update(token).digest("hex"),
+    expires_at: expiresAt.toISOString(),
+  });
+  if (error) throw new Error(`insertReviewLink failed: ${error.message}`);
+}
+
+/** The links a booking holds. */
+export async function reviewLinksFor(registrationId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("review_invitations")
+    .select("id, used_at, expires_at")
+    .eq("registration_id", registrationId);
+  if (error) throw new Error(`reviewLinksFor failed: ${error.message}`);
+  return (data ?? []) as Array<{ id: string; used_at: string | null; expires_at: string }>;
 }

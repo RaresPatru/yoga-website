@@ -24,6 +24,26 @@ import { PostHogProvider as PHProvider } from "posthog-js/react";
  * completion before anything is sent, so `notFound()` can still set the status.
  * Analytics loses nothing: this renders null and only fires an effect.
  */
+/**
+ * The query parameters that are keys, not places: a waiting-list claim
+ * (?claim=) and a link to write a testimonial (?token=). Whoever holds one can
+ * use it, so none leaves this site in an analytics event.
+ */
+const SECRET_PARAMS = ["claim", "token"];
+
+function withoutSecrets(url: string): string {
+  return url.replace(new RegExp(`([?&])(${SECRET_PARAMS.join("|")})=[^&#]*`, "g"), "$1$2=redacted");
+}
+
+/** Every address PostHog attaches to an event, with the keys taken out. */
+function sanitizeProperties(properties: Record<string, unknown>): Record<string, unknown> {
+  for (const key of ["$current_url", "$referrer", "$initial_current_url", "$initial_referrer", "$pathname"]) {
+    const value = properties[key];
+    if (typeof value === "string") properties[key] = withoutSecrets(value);
+  }
+  return properties;
+}
+
 function PageviewTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -32,7 +52,7 @@ function PageviewTracker() {
     if (posthog.__loaded) {
       const query = searchParams?.toString();
       posthog.capture("$pageview", {
-        $current_url: `${pathname}${query ? `?${query}` : ""}`,
+        $current_url: withoutSecrets(`${pathname}${query ? `?${query}` : ""}`),
       });
     }
   }, [pathname, searchParams]);
@@ -52,6 +72,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
         // The cookie policy (legal.cookies) says the statistics run without
         // cookies, which is what lets the site go without a consent banner.
         persistence: "memory",
+        sanitize_properties: sanitizeProperties,
       });
     }
   }, []);

@@ -132,3 +132,39 @@ export function sanitizeArticleHtml(html: string, labels: EmbedLabels): string {
   holder.append(fragment);
   return holder.innerHTML;
 }
+
+/**
+ * What a participant may format in a testimonial: paragraphs, line breaks,
+ * bold and italics. Nothing else survives, and no attribute at all, so a
+ * link, an image, a style or a script typed or pasted into the form is gone
+ * before it is stored (audit S15, for public input). The same rule runs again
+ * when a testimonial is drawn.
+ */
+const REVIEW_OPTIONS = {
+  ALLOWED_TAGS: ["p", "br", "strong", "em"],
+  ALLOWED_ATTR: [] as string[],
+  KEEP_CONTENT: true,
+};
+
+export function sanitizeReviewHtml(html: string): string {
+  return DOMPurify.sanitize(html, REVIEW_OPTIONS).trim();
+}
+
+function escapeText(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * A testimonial's words as HTML to draw. Written through the form they are
+ * HTML already and go through the strict rule above; the older, imported ones
+ * are plain text, whose line breaks become paragraphs.
+ */
+export function reviewHtml(content: string): string {
+  if (/<\/?(p|br|strong|em)\b/i.test(content)) return sanitizeReviewHtml(content);
+  return content
+    .split(/\n\s*\n|\r\n\s*\r\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeText(paragraph).replace(/\r?\n/g, "<br>")}</p>`)
+    .join("");
+}

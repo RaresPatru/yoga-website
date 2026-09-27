@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { anonStorageClient, deleteEventBySlug, seedEvent } from "./helpers";
+import { anonStorageClient, deleteEventBySlug, deleteTestimonial, seedEvent, seedTestimonial } from "./helpers";
 
 /**
  * What PostgREST exposes to a caller holding only the publishable key.
@@ -220,5 +220,33 @@ test.describe("the anonymous surface of the database", () => {
       after?.value_ro,
       `anon must not be able to update (error was ${updateError?.message ?? "none"})`
     ).not.toBe("overwritten by an anonymous caller");
+  });
+});
+
+/**
+ * Testimonials are public, but not all of them and not every column: a visitor
+ * sees the approved ones she has not hidden, and none of what links a
+ * testimonial to a booking (20260929000000_reviews.sql). The personal links
+ * to write one are not reachable at all.
+ */
+test.describe("what visitors see of testimonials", () => {
+  test("only approved, shown ones, without the booking behind them", async () => {
+    const anon = await anonStorageClient();
+    const hidden = await seedTestimonial(true, { hidden: true });
+    const pending = await seedTestimonial(false);
+    try {
+      for (const column of ["registration_id", "consent_at", "approved", "hidden"]) {
+        const { error } = await anon.from("testimonials").select(column).limit(1);
+        expect(error, `anon must not read testimonials.${column}`).not.toBeNull();
+      }
+      const { data } = await anon.from("testimonials").select("id").in("id", [hidden.id, pending.id]);
+      expect(data ?? []).toHaveLength(0);
+
+      const { data: links, error: linksError } = await anon.from("review_invitations").select("id").limit(1);
+      expect(linksError !== null || (links ?? []).length === 0, "review links are never readable").toBe(true);
+    } finally {
+      await deleteTestimonial(hidden);
+      await deleteTestimonial(pending);
+    }
   });
 });

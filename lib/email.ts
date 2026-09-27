@@ -147,7 +147,8 @@ export type TemplateType =
   | "testimonial_request"
   | "spot_available"
   | "booking_cancelled"
-  | "waitlist_removed";
+  | "waitlist_removed"
+  | "review_too_early";
 
 /**
  * A stored template in the person's language. An English subject or body left

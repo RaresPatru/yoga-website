@@ -1,6 +1,13 @@
 import { test, expect } from "@playwright/test";
 import {
   bucharestDate,
+  contentSnapshot,
+  emailsTo,
+  insertReviewLink,
+  putContent,
+  restoreContent,
+  reviewLinksFor,
+  unique,
   deleteEventBySlug,
   registrationById,
   seedEvent,
@@ -98,6 +105,71 @@ test.describe("the daily job", () => {
       expect(back.claimed_at).toBeNull();
       expect(back.notified_at).toBeNull();
       expect(back.claim_expires_at).toBeNull();
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+});
+
+test.describe("the daily job and testimonials", () => {
+  const run = (request: import("@playwright/test").APIRequestContext) =>
+    request.get("/api/cron/daily", { headers: { Authorization: `Bearer ${secret()}` } });
+
+  test("the morning after, the people who came get a link, once", async ({ request }) => {
+    const ended = await seedEvent({ date: bucharestDate(-1), time: "10:00" });
+    const longAgo = await seedEvent({ date: bucharestDate(-10), time: "10:00" });
+    const came = `${unique("came")}@example.com`;
+    const refunded = `${unique("refunded")}@example.com`;
+    const earlier = `${unique("earlier")}@example.com`;
+    try {
+      await seedRegistrationFor(ended.id, { email: came, full_name: "Maria Venită" });
+      await seedRegistrationFor(ended.id, { email: refunded, payment_status: "refunded" });
+      await seedRegistrationFor(longAgo.id, { email: earlier });
+
+      const response = await run(request);
+      expect(response.status()).toBe(200);
+      expect((await response.json()).review_invitations.invited).toBeGreaterThanOrEqual(1);
+
+      const [invitation] = await emailsTo(came);
+      expect(invitation.HTML).toContain("/ro/testimonials/write?token=");
+      expect(await emailsTo(refunded, 1, 1500), "a refunded booking is not invited").toHaveLength(0);
+      expect(await emailsTo(earlier, 1, 1500), "an event over a week ago is not").toHaveLength(0);
+
+      // A second morning sends nobody a second link.
+      await run(request);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(await emailsTo(came)).toHaveLength(1);
+    } finally {
+      await deleteEventBySlug(ended.slug);
+      await deleteEventBySlug(longAgo.slug);
+    }
+  });
+
+  test("sends nothing when she has turned invitations off", async ({ request }) => {
+    const before = await contentSnapshot("testimonials.invitations");
+    const ended = await seedEvent({ date: bucharestDate(-1), time: "10:00" });
+    const email = `${unique("off")}@example.com`;
+    try {
+      await putContent("testimonials.invitations", "off");
+      await seedRegistrationFor(ended.id, { email });
+      const response = await run(request);
+      expect((await response.json()).review_invitations).toMatchObject({ invited: 0, off: true });
+      expect(await emailsTo(email, 1, 1500)).toHaveLength(0);
+    } finally {
+      await restoreContent("testimonials.invitations", before);
+      await deleteEventBySlug(ended.slug);
+    }
+  });
+
+  test("deletes links once they have lapsed", async ({ request }) => {
+    const event = await seedEvent({ date: bucharestDate(-5), time: "10:00" });
+    try {
+      const booking = await seedRegistrationFor(event.id);
+      await insertReviewLink(booking, unique("lapsed-link-0123456789"), new Date(Date.now() - 1000));
+      await insertReviewLink(booking, unique("live-link-0123456789"), new Date(Date.now() + 86_400_000));
+      const response = await run(request);
+      expect((await response.json()).review_links_expired).toBeGreaterThanOrEqual(1);
+      expect(await reviewLinksFor(booking)).toHaveLength(1);
     } finally {
       await deleteEventBySlug(event.slug);
     }

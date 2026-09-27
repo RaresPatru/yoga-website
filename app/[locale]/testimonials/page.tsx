@@ -1,107 +1,105 @@
+import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
+import type { Metadata } from "next";
+import { Link } from "@/i18n/navigation";
 import { createPublicClient } from "@/lib/supabase/public";
-import { GlassCard } from "@/components/ui/glass-card";
-import { getLocale, getTranslations } from "next-intl/server";
-import { formatDate } from "@/lib/utils";
 import { buildPageMetadata } from "@/lib/metadata";
 import { absoluteUrl } from "@/lib/site-config";
-import { Quote } from "lucide-react";
-import { Rating } from "@/components/ui/rating";
-import type { Metadata } from "next";
+import { pageFrom } from "@/lib/blog";
+import { buttonClasses } from "@/lib/button-styles";
+import { Pagination } from "@/components/ui/pagination";
+import {
+  PUBLIC_TESTIMONIAL_COLUMNS,
+  TestimonialCard,
+  type PublicTestimonial,
+} from "@/components/testimonials/testimonial-card";
 
-export async function generateMetadata({
-  params,
-}: {
+/** Twelve fills one, two or three columns evenly, as on the blog and the events archive. */
+const PER_PAGE = 12;
+
+type Props = {
   params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
+  searchParams: Promise<{ page?: string | string[] }>;
+};
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { locale } = await params;
+  const page = pageFrom((await searchParams).page);
+  const t = await getTranslations({ locale, namespace: "testimonials" });
   return buildPageMetadata({
-    title: locale === "ro" ? "Testimoniale" : "Testimonials",
+    title: page > 1 ? t("page_title", { page }) : t("title"),
     description:
       locale === "ro"
-        ? "Ce spun participantele despre ateliere și retreaturi."
-        : "What participants say about the workshops and retreats.",
-    path: "/testimonials",
+        ? "Ce spun participanții despre evenimente, scris de ei, după ce au fost acolo."
+        : "What participants say about the events, written by them after they were there.",
+    // Each page of the list is its own address, so its own canonical URL.
+    path: page > 1 ? `/testimonials?page=${page}` : "/testimonials",
     locale,
     image: absoluteUrl(`/api/og/default?locale=${locale}`),
   });
 }
 
-interface TestimonialRow {
-  id: string;
-  content: string;
-  type: string;
-  rating: number | null;
-  author_name: string | null;
-  video_url: string | null;
-  created_at: string;
-}
+/**
+ * Every testimonial she has approved and not hidden, newest first, twelve to
+ * a page with the page number in the address. The read policy decides which
+ * rows a visitor sees, so the query asks only for the page.
+ *
+ * Under the heading, how testimonials are checked, which the EU's Omnibus
+ * rules ask any site showing reviews to say, and the way to write one.
+ */
+export default async function TestimonialsPage({ params, searchParams }: Props) {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "testimonials" });
+  const tp = await getTranslations({ locale, namespace: "pagination" });
+  const page = pageFrom((await searchParams).page);
+  const from = (page - 1) * PER_PAGE;
 
-export default async function TestimonialsPage() {
-  const locale = await getLocale();
-  const t = await getTranslations("testimonials");
-  const supabase = createPublicClient();
-
-  const { data } = await supabase
+  const { data, count } = await createPublicClient()
     .from("testimonials")
-    .select("id, content, type, rating, author_name, video_url, created_at")
-    .eq("approved", true)
-    .order("created_at", { ascending: false });
+    .select(PUBLIC_TESTIMONIAL_COLUMNS, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, from + PER_PAGE - 1);
 
-  const testimonials = (data ?? []) as TestimonialRow[];
+  const testimonials = (data ?? []) as unknown as PublicTestimonial[];
+  const pageCount = Math.max(1, Math.ceil((count ?? 0) / PER_PAGE));
+  // A page past the end of the list is a missing page, not an empty one.
+  if (page > pageCount) notFound();
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
-      <p className="mt-2 text-charcoal-light">{t("subtitle")}</p>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="max-w-2xl">
+          <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
+          <p className="mt-2 text-charcoal-light">{t("subtitle")}</p>
+        </div>
+        <Link href="/testimonials/share" className={buttonClasses({ variant: "secondary" })}>
+          {t("share")}
+        </Link>
+      </div>
+      <p className="mt-4 max-w-2xl text-sm text-charcoal-light">{t("how_we_check")}</p>
 
       {!testimonials.length ? (
         <p className="mt-8 text-charcoal-light">{t("no_testimonials")}</p>
       ) : (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {/*
-            A quote is not a link, so it does not lift. The lift means "this is
-            clickable" everywhere else on the site, and it only keeps meaning
-            that if nothing else borrows it.
-          */}
           {testimonials.map((item) => (
-            <GlassCard key={item.id} hover={false} className="flex h-full flex-col">
-              {/* Video testimonials previously rendered their URL as a line of
-                  quoted text. They are the highest-converting form of social
-                  proof for this kind of business, so they now actually play. */}
-              {item.type === "video" && item.video_url ? (
-                <video
-                  src={item.video_url}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="mb-4 w-full rounded-xl bg-charcoal/5"
-                >
-                  {locale === "ro"
-                    ? "Browserul tău nu poate reda acest videoclip."
-                    : "Your browser cannot play this video."}
-                </video>
-              ) : (
-                <Quote className="mb-3 h-6 w-6 text-rose-deep/40" aria-hidden="true" />
-              )}
-
-              <Rating value={item.rating} locale={locale} />
-
-              {item.content && (
-                <p className="mt-3 flex-1 text-charcoal">{item.content}</p>
-              )}
-
-              <div className="mt-4 border-t border-sage/20 pt-3 text-sm text-charcoal-light">
-                <span className="font-medium text-charcoal">
-                  {item.author_name ||
-                    (locale === "ro" ? "Participantă" : "Participant")}
-                </span>
-                <span aria-hidden="true"> · </span>
-                {formatDate(item.created_at, locale)}
-              </div>
-            </GlassCard>
+            <TestimonialCard key={item.id} item={item} locale={locale} />
           ))}
         </div>
       )}
+
+      <Pagination
+        className="mt-10"
+        page={page}
+        pageCount={pageCount}
+        href={(p) => (p === 1 ? `/${locale}/testimonials` : `/${locale}/testimonials?page=${p}`)}
+        labels={{
+          label: tp("label"),
+          previous: tp("previous"),
+          next: tp("next"),
+          page: (p) => tp("page", { page: p }),
+        }}
+      />
     </div>
   );
 }

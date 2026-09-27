@@ -613,6 +613,36 @@ where e.slug = 'respiratie-de-dimineata'
 
 
 -- ---------------------------------------------------------------------------
+-- Testimonials: her home page selection, and one written through a link
+-- ---------------------------------------------------------------------------
+-- Three of the approved ones are on the home page, in her order. Dan
+-- Georgescu wrote about the sunrise class through his personal link, so his is
+-- verified and waits in "De aprobat". Ana Popescu came to the same class and
+-- has not written: ask for her link on /ro/testimonials/share with
+-- ana.popescu@example.test (the CAPTCHA passes with the Turnstile test keys in
+-- .env.test.example) and it arrives in the local mailbox.
+update public.testimonials t
+   set on_home = true, home_order = v.home_order
+  from (values
+    ('Două zile fără telefon și cu oameni cumsecade. M-am întors alt om luni dimineața.', 1),
+    ('Am plecat mai ușoară decât am venit. Nu știu cum altfel să spun.', 2),
+    ('Am prins răsăritul de pe saltea și nu mi-a mai fost frig după primele zece minute.', 3)
+  ) as v(content, home_order)
+ where t.content = v.content;
+
+insert into public.testimonials (
+  event_id, registration_id, type, content, author_name, rating, approved,
+  source, consent_at, locale
+)
+select r.event_id, r.id, 'text',
+       '<p>Am venit fără să fi făcut vreodată yoga și m-am simțit binevenit din <strong>primul minut</strong>.</p><p>Răsăritul peste deal a fost bonusul.</p>',
+       'Dan G.', 5, false, 'participant', now() - interval '40 days', 'ro'
+from public.registrations r
+where r.email = 'dan.georgescu@example.test'
+  and not exists (select 1 from public.testimonials t where t.registration_id = r.id);
+
+
+-- ---------------------------------------------------------------------------
 -- Frequently asked questions
 -- ---------------------------------------------------------------------------
 -- These answer what actually stalls a booking. The home page renders them as a

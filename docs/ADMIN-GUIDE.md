@@ -343,20 +343,32 @@ nou din română** înlocuiește textul în engleză cu o traducere nouă, după
 
 **Meniu: Testimoniale**
 
-Testimonialele trimise de participante apar aici ca **Neaprobat** și **nu se
-văd pe site** până le aprobi tu (bifa verde). Butonul X le șterge definitiv.
+Testimonialele le scriu participanții, printr-un **link personal** primit pe
+emailul cu care s-au înscris:
 
-Pentru fiecare poți completa:
+- **automat, în dimineața de după eveniment** (poți opri asta din Conținut site
+  → Testimoniale);
+- când apeși **Trimite invitațiile la testimonial** pe pagina unui eveniment
+  încheiat;
+- sau când îl cer ei, de pe pagina „Împărtășește-ți experiența" a site-ului.
 
-- **Nume** — un testimonial cu nume convinge mult mai mult decât unul anonim.
-  Dacă îl lași gol, se afișează „Participantă".
-- **Rating** (1–5) — **opțional**. Dacă îl lași pe „Fără", nu se afișează stele
-  deloc. Asta e intenționat: mai bine fără stele decât cu stele inventate.
-- **Link video** — dacă testimonialul e o filmare.
+Linkul e valabil 60 de zile și merge o singură dată. Nu primesc link cei care
+și-au anulat înscrierea sau au cerut banii înapoi.
 
-> **Testimonialele video merită cerute.** Sunt cea mai convingătoare formă de
-> recomandare pentru ateliere și retreaturi. Un clip de 20–30 de secunde filmat
-> cu telefonul e suficient. Îl încarci în Biblioteca Media și lipești linkul aici.
+Ce scriu ajunge în tab-ul **De aprobat** și **nu apare pe site** până apeși
+**Aprobă**. Pe fiecare vezi numele întreg, numele ales pentru site, evenimentul,
+stelele, textul și fotografia.
+
+- **Ascunde** îl scoate de pe site fără să-l ștergi; îl găsești în **Ascunse**.
+- **Pe pagina principală** îl pune pe pagina de start. În **Aprobate**, cele
+  alese stau primele; cu săgețile le schimbi ordinea. Dacă nu alegi niciunul,
+  pagina de start arată cele mai noi trei.
+- **Link video**: un link de pe YouTube, Instagram, Vimeo sau TikTok, care
+  apare sub text.
+- **Șterge** îl șterge definitiv, cu fotografia lui.
+
+Textul, stelele și numele sunt ale participantului, așa că nu se pot modifica.
+Așa rămâne un testimonial verificat.
 
 ---
 
@@ -381,7 +393,9 @@ acolo se completează automat datele reale.
 |---|---|
 | Confirmare înscriere | Imediat, la evenimente gratuite. |
 | Confirmare plată | După ce plata a intrat, la evenimentele cu preț. |
-| Cerere testimonial | Deocamdată nu pleacă niciodată: site-ul nu are încă butonul care să-l trimită. |
+| Cerere testimonial | În dimineața de după un eveniment, când apeși „Trimite invitațiile" sau când participantul îl cere de pe site. Conține linkul personal. |
+| Testimonial: prea devreme | Când cineva cere linkul înainte să se încheie evenimentul: îi spune de când poate scrie. |
+| Înscriere anulată, Scoatere de pe lista de așteptare | Doar când bifezi „Trimite-i un email" la anulare. |
 
 Fiecare confirmare are atașată invitația pentru calendar, cu ora corectă a
 României.

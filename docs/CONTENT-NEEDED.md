@@ -59,8 +59,9 @@ also what people type into Google. A starting set:
 - Ce se întâmplă dacă nu pot ajunge?
 - Este nevoie de saltea proprie?
 
-**Testimonials** in the admin's Testimoniale section. Phase 6 of the overhaul
-replaces this with verified reviews from participants.
+**Testimonials** are written by participants now, through the personal link
+emailed after each event (phase 6). Nothing to supply; she approves them in
+Testimoniale.
 
 ---
 

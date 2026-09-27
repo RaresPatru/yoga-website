@@ -1536,6 +1536,34 @@ Excel library that compresses in a background worker would have been refused
 by the site's own security policy on the first large export, so the workbook
 is written by hand, a few dozen lines over a small zip library.
 
+### Phase 6: testimonials from the people who came
+
+**Nothing could write a testimonial.** There was a route that accepted them and
+no form that used it, and the admin could only approve what was already in the
+table, so testimonials had to be typed into the database by hand, with a name
+and a star rating she made up for them. Now the people who came write their
+own, through a personal link sent to the email they booked with: the morning
+after an event, or when they ask for it on the site. What arrives waits for
+her approval, and carries a mark saying it came from someone who booked.
+
+**The link had to be something a leaked database could not replay.** Only its
+hash is stored, it works once, and it lapses after two months. The page that
+sends it answers the same thing whatever email is typed into it, so it cannot
+be used to find out who went where.
+
+**A photo from a phone knows where it was taken.** The browser shrinks it and
+the server re-saves it, which is what leaves the location behind; the test
+writes a GPS position into a photo and checks it is gone.
+
+**Her part got smaller, on purpose.** She approves, hides, picks the ones for
+the home page and puts them in order. She no longer sets the name or the
+stars: those are the writer's now.
+
+**One thing turned up in the tests.** Since phase 5 a testimonial outlives its
+event, and the tests that tidied up by deleting their event had been leaving
+their testimonials behind on the testimonials page, a dozen of them by the time
+anyone looked.
+
 ---
 
 ## Decisions worth defending

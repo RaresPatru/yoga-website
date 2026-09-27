@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "rea
 import NextImage from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Info, Loader2, Lock } from "lucide-react";
+import { ImagePlus, Info, Loader2, Lock, MessageSquareHeart } from "lucide-react";
 import type { Editor } from "@tiptap/core";
 import { adminErrorKey, toAdminError } from "@/lib/admin/db";
 import {
@@ -371,6 +371,31 @@ export function EventEditor({
    * publish: the route counts the seats itself, so a publish that opened none
    * emails nobody, and one that did emails the front of the queue, in order.
    */
+  /**
+   * "Trimite invitațiile": a link to write a testimonial for everyone on the
+   * ended event who may write and has none that works (lib/reviews.ts). She is
+   * told how many went, since they go in her name.
+   */
+  const [inviting, setInviting] = useState(false);
+  const inviteReviews = async (id: string) => {
+    setInviting(true);
+    try {
+      const response = await fetch(`/api/admin/events/${id}/review-invitations`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${await getAuthToken()}` },
+      });
+      if (!response.ok) throw new Error(`Invitations answered ${response.status}`);
+      const { invited, failed } = (await response.json()) as { invited: number; failed: number };
+      if (invited > 0) toast.success(t("admin.reviews.invite_done").replace("{count}", String(invited)));
+      else if (!failed) toast.info(t("admin.reviews.invite_none"));
+      if (failed > 0) toast.error(t("admin.reviews.invite_failed").replace("{count}", String(failed)));
+    } catch (error) {
+      toast.error(t(adminErrorKey(toAdminError(error))));
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const offerSeats = async (id: string) => {
     try {
       const response = await fetch("/api/admin/events/notify-waiting-list", {
@@ -930,6 +955,24 @@ export function EventEditor({
               >
                 {t("admin.event_editor.all_participants")}
               </Link>
+            </div>
+          )}
+
+          {eventId && (status === "ended_pending" || status === "archived") && (
+            <div className="space-y-1.5 border-t border-sage/20 pt-4">
+              <button
+                type="button"
+                disabled={inviting}
+                onClick={() => void inviteReviews(eventId)}
+                aria-describedby={`${ids}-invite-hint`}
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-sage/30 bg-white px-4 text-sm font-medium text-charcoal hover:bg-sage/10 disabled:opacity-50"
+              >
+                <MessageSquareHeart className="h-4 w-4 text-rose-deep" aria-hidden="true" />
+                {t("admin.reviews.invite")}
+              </button>
+              <p id={`${ids}-invite-hint`} className="text-xs leading-relaxed text-charcoal-light">
+                {t("admin.reviews.invite_hint")}
+              </p>
             </div>
           )}
 

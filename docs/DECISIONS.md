@@ -1581,3 +1581,70 @@ Deleting an event used to delete its testimonials. Now the foreign key sets
 `event_id` to NULL, and a trigger copies the event's titles and date onto the
 testimonial first, so what people said stays, still saying which event it was
 about.
+
+### A testimonial is written through a personal link, and the page says so
+
+Only someone who booked can write one: a link is emailed to the address they
+booked with (the morning after the event, when she presses "Trimite
+invitațiile", or when they ask on /testimonials/share), and whoever holds it is
+taken to be that person. A booking cancelled, refunded, or with a refund asked
+for gets no link. Those testimonials carry "Participare verificată", and
+/testimonials says what that means, which the EU's Omnibus rules ask of any
+site showing reviews. Older testimonials are "imported" and make no claim.
+
+### Links are stored as a hash, work once, and lapse after 60 days
+
+`review_invitations` keeps the SHA-256 of each link's token, never the token,
+so a copy of the table hands out no working links. A booking may hold several
+at once (the morning email, a request, her button); writing through any of them
+uses the one testimonial a booking may have. The link is marked used in the
+same conditional update that claims it, so two presses of Send cannot store
+two. The daily job deletes lapsed links.
+
+### The share page gives one answer to every email
+
+"Verifică-ți emailul", whether or not the address ever booked, so the form
+cannot be used to learn who took part in what. What happens next reaches only
+that inbox: a link per ended event, or a note saying when they can write. It is
+behind the CAPTCHA, and limited per visitor and to three requests a day per
+address, so nobody can fill a stranger's inbox with links.
+
+### A participant's photo is re-saved by the server, not trusted
+
+The browser shrinks it to 1600 pixels first, which keeps the request under the
+4.5 MB Vercel accepts and the upload quick on a phone. The server then decodes
+it, turns it the right way up and re-saves it as WebP with sharp, which writes
+no metadata: the camera's EXIF, and with it the GPS position, goes. Anything
+that does not decode is refused. It is stored in the public `media` bucket
+under a random name and linked from a page only once she approves the
+testimonial.
+
+### Her part in a testimonial is small
+
+She approves, hides, chooses and orders the home page's selection, attaches a
+video link, or deletes. She cannot edit the words, the stars or the name: they
+are the participant's, and a verified testimonial she could rewrite would not
+be one. Before phase 6 she filled in the name and the rating herself, because
+nothing collected them.
+
+### Visitors read testimonials through named columns
+
+The row policy shows visitors approved testimonials she has not hidden, and
+the column grant lets them read only what a page draws. Who wrote one from
+which booking, and when they consented, are not among those columns, so a
+public query that asks for them is refused rather than answered. Public pages
+therefore list their columns (`PUBLIC_TESTIMONIAL_COLUMNS`), and none filters
+on `approved`, which the policy already does.
+
+### With nothing chosen, the home page shows the three newest
+
+Her selection is empty until she picks, and a home page without the section
+would hide the first testimonials the day they arrive. The newest three stand
+in until then; once she picks any, only her picks show, in her order.
+
+### Link tokens never reach analytics
+
+PostHog records the address of every page. A testimonial link (`?token=`) and
+a waiting-list claim (`?claim=`) are keys: whoever holds one can use it. The
+provider replaces both with "redacted" in every event before it leaves the
+browser.

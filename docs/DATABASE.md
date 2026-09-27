@@ -45,7 +45,7 @@ because only one of the two was done.
 |---|---|---|---|
 | `events` | Classes, workshops, retreats. The central table. | `select` where `published` | `app/[locale]/events/*`, `app/admin/(panel)/events` |
 | `blog_posts` | Articles. | `select` where `published and not hidden` | `app/[locale]/blog/*`, `app/admin/(panel)/blog` |
-| `testimonials` | Attendee feedback. Outlives its event: `event_id` becomes NULL and `event_title_ro` / `_en` / `event_date` keep which event it was. | `select` where `approved` | home + testimonials pages, `/api/testimonials` |
+| `testimonials` | Attendee feedback, written through a personal link (`source = 'participant'`, linked to its booking) or imported. Outlives its event: `event_id` becomes NULL and `event_title_ro` / `_en` / `event_date` keep which event it was. | `select` of named columns only, where `approved and not hidden` | home, /testimonials and past event pages; `/api/reviews` writes |
 | `site_content` | Key/value page copy the instructor edits. | `select` (all) | `lib/site-content.ts`, `app/admin/(panel)/content` |
 | `faqs` | Questions on the home page. | `select` where `published` | home page, `app/admin/(panel)/content` |
 | `event_availability` | **View.** `(event_id, capacity, taken)`. | `select` | every page showing seat counts |
@@ -63,6 +63,7 @@ because only one of the two was done.
 | `admins` | Who may enter `/admin`. | Revoked from everyone; read only by `is_admin()` | by hand |
 | `profiles` | Extra auth fields. | Vestigial — see below | nothing |
 | `content_drafts` | Unpublished changes to a live post or event. | Work in progress | the post and event editors' autosave |
+| `review_invitations` | Personal links to write a testimonial: the token's SHA-256, `expires_at`, `used_at`. | A link is a credential; RLS on, no policy, `service_role` only | `lib/reviews.ts` |
 | `admin_dashboard` | **View.** One row: the dashboard's five counts. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_participants` | **View.** Every booking and every unclaimed waiting-list entry, with its event, a status, `archived` and a search text. | `security_invoker`; `select` for `authenticated` only | `/admin/registrations` (reads) |
@@ -142,7 +143,7 @@ same set as the post list's Ciorne tab.
 | `register_for_event(...)` | definer, `search_path` pinned | **`service_role` only** |
 | `publish_post_draft(id)`, `publish_event_draft(id)` | invoker | `authenticated` (RLS makes it the admin) |
 | `admin_delete_participants(ids)` | invoker; skips anyone not archived | `authenticated` (RLS makes it the admin) |
-| `daily_cleanup()` | invoker | **`service_role` only** (`/api/cron/daily`) |
+| `daily_cleanup()` | invoker; also deletes lapsed testimonial links | **`service_role` only** (`/api/cron/daily`) |
 | `keep_event_on_testimonials()` | trigger function, before an event is deleted | nobody; only its trigger runs it |
 | `set_updated_at()` | trigger function, `search_path` pinned | nobody; only its triggers run it |
 
@@ -227,6 +228,15 @@ archived rows, and the claimed waiting-list entry behind a booking with it.
 `daily_cleanup()` clears participants' and her notes 30 days after the event,
 and deletes pending bookings older than seven days. Two email templates,
 `booking_cancelled` and `waitlist_removed`, joined the type CHECK.
+
+**Verified reviews** (`20260929000000_reviews.sql`). A testimonial records
+the booking it was written from (`registration_id`, one testimonial per
+booking, set to NULL if the booking is deleted), `photo_url`, `consent_at`
+(required when `source = 'participant'`), `locale`, `hidden`, and her home
+page selection (`on_home`, `home_order`). Visitors see approved rows that are
+not hidden, and only through a grant on named columns, which leaves out the
+booking and the consent: a public query naming another column is refused. The
+dashboard's `pending_testimonials` no longer counts hidden ones.
 
 **`admin_event_overview`** gives each event a `status` (`draft`, `upcoming`,
 `ongoing`, `ended_pending` when it is over with a payment or refund still

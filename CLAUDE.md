@@ -299,7 +299,8 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   start time yet, and the lead event deliberately has no photograph. The past
   one (`yoga-la-rasarit`) has an approved testimonial, so the events archive
   and an ended event's page have something to show. The paid retreat has one
-  participant in each state the Registrations page shows. None has a WhatsApp link, so anything that
+  participant in each state the Registrations page shows. Three testimonials are
+  on the home page, and one written through a link waits for approval. None has a WhatsApp link, so anything that
   renders one is invisible locally until you add it in `/admin`. Pictures live in `/public/mock`, built from the gitignored
   `mock-images/` by `npm run mock:images`.
 - **Tailwind v4 compiles `scale-*` to the individual `scale` property**, which

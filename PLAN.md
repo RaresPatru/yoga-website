@@ -285,12 +285,6 @@ scheduled job, or a "notify next" button in the admin waiting-list modal.
 Currently per-instance and in-memory, which is documented but weak. Vercel KV or
 Upstash if abuse ever becomes real. Not urgent while the CAPTCHA holds.
 
-### Testimonial requests
-
-An email template exists (`testimonial_request`) and nothing sends it. Obvious
-follow-up: a button on a past event that emails attendees asking for one —
-ideally video, which is the highest-converting format.
-
 ---
 
 ## Someday

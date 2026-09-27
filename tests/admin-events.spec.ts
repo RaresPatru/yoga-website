@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
   bucharestDate,
+  emailsTo,
   deleteEventBySlug,
   deleteEventsTitled,
   deletePostById,
@@ -570,5 +571,41 @@ test.describe("saved WhatsApp links", () => {
     // result is indistinguishable from "there is nothing here".
     expect(error, "anon must be refused outright").not.toBeNull();
     expect(data).toBeNull();
+  });
+});
+
+/**
+ * An ended event's "Trimite invitațiile la testimonial": a personal link for
+ * everyone on it who may write and holds no working link (lib/reviews.ts).
+ */
+test.describe("testimonial invitations from an ended event", () => {
+  test("invites the people who came, once", async ({ page }) => {
+    const event = await seedEvent({ title_ro: `${unique("invitatii")} Trecut`, date: bucharestDate(-4) });
+    const email = `${unique("invited")}@example.com`;
+    try {
+      await seedRegistrationFor(event.id, { email, full_name: "Elena Invitată" });
+      await openEditor(page, `/admin/events/${event.id}`);
+      const button = page.getByRole("button", { name: "Trimite invitațiile la testimonial" });
+      await button.click();
+      await expect(page.getByRole("region", { name: "Notificări" })).toContainText("Invitații trimise: 1.");
+      const [message] = await emailsTo(email);
+      expect(message.HTML).toContain("/ro/testimonials/write?token=");
+
+      await button.click();
+      await expect(page.getByRole("region", { name: "Notificări" })).toContainText("Nu e nimeni de invitat");
+      expect(await emailsTo(email)).toHaveLength(1);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  test("an event still to come has no such button", async ({ page }) => {
+    const event = await seedEvent({ title_ro: `${unique("invitatii")} Viitor` });
+    try {
+      await openEditor(page, `/admin/events/${event.id}`);
+      await expect(page.getByRole("button", { name: "Trimite invitațiile la testimonial" })).toHaveCount(0);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
   });
 });

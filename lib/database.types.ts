@@ -464,6 +464,41 @@ export type Database = {
           },
         ]
       }
+      review_invitations: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          registration_id: string
+          token_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          registration_id: string
+          token_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          registration_id?: string
+          token_hash?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_invitations_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_content: {
         Row: {
           field_type: string
@@ -501,14 +536,22 @@ export type Database = {
         Row: {
           approved: boolean
           author_name: string | null
+          consent_at: string | null
           content: string
           created_at: string
           event_date: string | null
           event_id: string | null
           event_title_en: string | null
           event_title_ro: string | null
+          hidden: boolean
+          home_order: number | null
           id: string
+          locale: string | null
+          on_home: boolean
+          photo_url: string | null
           rating: number | null
+          registration_id: string | null
+          source: string
           type: string
           user_id: string | null
           video_url: string | null
@@ -516,14 +559,22 @@ export type Database = {
         Insert: {
           approved?: boolean
           author_name?: string | null
+          consent_at?: string | null
           content: string
           created_at?: string
           event_date?: string | null
           event_id?: string | null
           event_title_en?: string | null
           event_title_ro?: string | null
+          hidden?: boolean
+          home_order?: number | null
           id?: string
+          locale?: string | null
+          on_home?: boolean
+          photo_url?: string | null
           rating?: number | null
+          registration_id?: string | null
+          source?: string
           type: string
           user_id?: string | null
           video_url?: string | null
@@ -531,14 +582,22 @@ export type Database = {
         Update: {
           approved?: boolean
           author_name?: string | null
+          consent_at?: string | null
           content?: string
           created_at?: string
           event_date?: string | null
           event_id?: string | null
           event_title_en?: string | null
           event_title_ro?: string | null
+          hidden?: boolean
+          home_order?: number | null
           id?: string
+          locale?: string | null
+          on_home?: boolean
+          photo_url?: string | null
           rating?: number | null
+          registration_id?: string | null
+          source?: string
           type?: string
           user_id?: string | null
           video_url?: string | null
@@ -563,6 +622,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "testimonials_registration_id_fkey"
+            columns: ["registration_id"]
+            isOneToOne: false
+            referencedRelation: "registrations"
             referencedColumns: ["id"]
           },
           {

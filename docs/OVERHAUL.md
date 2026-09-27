@@ -25,7 +25,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 3 | Blog: toolbar, post list, editor, public cards and article | done, 25 Sep |
 | 4 | Events: admin list and editor, per-event numbers, public archive | done, 25 Sep |
 | 5 | Registrations: one list with the waiting list, archive, notes, exports | done, 26 Sep |
-| 6 | Testimonials and verified reviews | not started |
+| 6 | Testimonials and verified reviews | done, 28 Sep |
 | 7 | Emails: editor, preview, test sends, announcements | not started |
 | 8 | Messages: unread, starred, archive, letter view | not started |
 | 9 | Public polish and speed: loader, transitions, FAQ, blur, back to top | not started |
@@ -830,7 +830,7 @@ passed in both engines (87 of 87).
 
 ### Phase 6: Testimonials and verified reviews
 
-- [ ] **The admin section.**
+- [x] **The admin section.**
   - Tabs: *To approve*, *Approved*, *Hidden*, opened on *To approve* by the
     dashboard's `?tab=pending`.
   - Each card shows:
@@ -846,13 +846,13 @@ passed in both engines (87 of 87).
       buttons)
     - Delete with confirmation
   - The admin rating control is removed.
-- [ ] **Invitations.**
+- [x] **Invitations.**
   - The morning after an event ends, eligible participants receive a personal
     link. Eligible means free or paid, not removed, and no refund requested
     or given.
   - An off switch lives in Site content, and ended events get a Send
     invitations button.
-- [ ] **The public site.**
+- [x] **The public site.**
   - The home page shows her selection in her order, with "Împărtășește-ți
     experiența" next to "Vezi toate testimonialele".
   - `/[locale]/testimonials/share` asks only for the booking email. It is
@@ -866,17 +866,51 @@ passed in both engines (87 of 87).
     - an optional photo, compressed as described above
     - an optional video link
     - consent to publish
-- [ ] **`/testimonials`:**
+- [x] **`/testimonials`:**
   - 12 per page
   - each testimonial shows its event title and photo
   - videos play only on click
   - a line saying testimonials come from verified participants (Omnibus)
-- [ ] **Security.**
+- [x] **Security.**
   - Links are stored hashed, work once and expire after 60 days.
   - The daily job (`daily_cleanup()`, phase 5) deletes expired links.
   - Participants' text passes a strict sanitizer that allows paragraphs, bold
     and italic only. This closes S15 for public input.
   - `/api/testimonials` is deleted (R5).
+
+**How it turned out** (28 September 2026)
+
+- **One migration**, `20260929000000_reviews.sql`: the testimonial columns
+  (the booking, photo, consent, language, hidden, the home page's selection
+  and order, source), one testimonial per booking, the visitors' policy
+  (approved and not hidden) and a grant on named columns only, the
+  `review_invitations` table (the link's SHA-256, never the link), the daily
+  job deleting lapsed links, the dashboard no longer counting hidden ones, a
+  `review_too_early` email, and a paragraph on testimonials in the privacy
+  draft.
+- **A booking may hold several working links** (the morning email, her button,
+  a request on the share page), and any of them writes the one testimonial the
+  booking may have; the others then say it has been written.
+- **The morning after** is the daily job: events that ended in the last three
+  days, so a missed run is made up, and nobody is sent a second link.
+- **Photos** are shrunk in the browser to 1600 pixels (a request over 4.5 MB
+  never reaches Vercel's functions) and re-saved by the server as WebP with
+  sharp, which drops all metadata, GPS included. `sharp` moved to the
+  production dependencies.
+- **Her controls are small on purpose:** approve, hide, the home page with
+  arrows to order it, a video link, delete. The words, the stars and the name
+  are the participant's, and a verified testimonial she could edit would not
+  be one.
+- **"Participare verificată"** marks only testimonials written through a link;
+  older ones are "imported" and claim nothing. /testimonials says what the mark
+  means (Omnibus).
+- **With nothing chosen for the home page**, it shows the three newest, so the
+  section does not vanish on the day testimonials start arriving.
+- **Found along the way:** since phase 5 a testimonial outlives its event, and
+  the tests that cleaned up by deleting their event were leaving testimonials
+  on /testimonials. Their cleanup now deletes them.
+- **Also:** analytics events no longer carry a link's token (`?token=`,
+  `?claim=`); part of S10, ahead of phase 11.
 
 **New migrations**
 
@@ -892,6 +926,12 @@ passed in both engines (87 of 87).
   who aren't eligible get no link; a reused link is refused; script injection
   is neutralised; the photo arrives as WebP without location data.
 - `admin-testimonials.spec.ts` is rewritten.
+- `cron.spec.ts`: invitations the morning after, once, and none when switched
+  off; lapsed links deleted.
+- `admin-events.spec.ts`: an ended event's invitations button.
+- `public-testimonials.spec.ts` and `rpc-exposure.spec.ts`: hidden and pending
+  ones stay private, and so do the columns that link a testimonial to a
+  booking.
 
 ### Phase 7: Emails
 

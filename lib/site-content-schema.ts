@@ -281,6 +281,16 @@ export const FIELDS = {
     label: { ro: "Buton", en: "Button" },
     fallback: { ro: "Vezi toate testimonialele", en: "See all testimonials" },
   },
+  "home.testimonials_share": {
+    kind: "text",
+    translatable: true,
+    label: { ro: "Butonul pentru un testimonial nou", en: "Button for a new testimonial" },
+    fallback: { ro: "Împărtășește-ți experiența", en: "Share your experience" },
+    help: {
+      ro: "Duce la pagina unde participanții își cer linkul pentru testimonial.",
+      en: "Leads to the page where participants ask for their testimonial link.",
+    },
+  },
   "home.faq_title": {
     kind: "text",
     translatable: true,
@@ -363,6 +373,21 @@ export const FIELDS = {
   },
 
   // Blog ------------------------------------------------------------------
+  "testimonials.invitations": {
+    kind: "choice",
+    translatable: false,
+    label: { ro: "Invitațiile după eveniment", en: "Invitations after an event" },
+    choices: [
+      { value: "on", label: { ro: "Trimise automat", en: "Sent automatically" } },
+      { value: "off", label: { ro: "Oprite", en: "Off" } },
+    ],
+    defaultChoice: "on",
+    help: {
+      ro: "În dimineața de după un eveniment, fiecare participant care nu și-a anulat înscrierea și nu a cerut banii înapoi primește pe email un link personal ca să scrie un testimonial. Oprite, nu pleacă nimic singur; tot poți trimite invitațiile din pagina unui eveniment încheiat.",
+      en: "The morning after an event, everyone who came (not cancelled, no refund asked) is emailed a personal link to write a testimonial. When off, nothing goes out on its own; you can still send invitations from an ended event's page.",
+    },
+  },
+
   "blog.default_author": {
     kind: "text",
     translatable: false,
@@ -609,7 +634,7 @@ export const CONTENT_SECTIONS: readonly ContentSection[] = [
       },
       {
         title: { ro: "Testimoniale", en: "Testimonials" },
-        keys: ["home.testimonials_title", "home.testimonials_button"],
+        keys: ["home.testimonials_title", "home.testimonials_button", "home.testimonials_share"],
       },
       {
         title: { ro: "Întrebări frecvente", en: "Frequently asked questions" },
@@ -653,6 +678,16 @@ export const CONTENT_SECTIONS: readonly ContentSection[] = [
       en: "The questions on the home page. A new question stays hidden until you publish it.",
     },
     groups: [],
+  },
+  {
+    id: "testimonials",
+    kind: "fields",
+    title: { ro: "Testimoniale", en: "Testimonials" },
+    description: {
+      ro: "Cum ajung participanții să scrie un testimonial.",
+      en: "How participants come to write a testimonial.",
+    },
+    groups: [{ keys: ["testimonials.invitations"] }],
   },
   {
     id: "blog",

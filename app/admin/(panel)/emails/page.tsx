@@ -22,6 +22,7 @@ const typeLabelKey: Record<string, string> = {
   spot_available: "admin.spot_available",
   booking_cancelled: "admin.booking_cancelled",
   waitlist_removed: "admin.waitlist_removed",
+  review_too_early: "admin.review_too_early",
 };
 
 /**

@@ -28,6 +28,7 @@ every page's footer. Each shows the date it was last saved.
 | Either form, if they write one | a note, often about health | so she knows at the event (explicit consent, a separate tick) |
 | Either form, if they tick it | the wish to hear about future events | announcements (consent) |
 | Paying | nothing; the card goes to Stripe | Stripe confirms the payment |
+| Writing a testimonial | the text, rating, chosen name, and a photo or video link if added | published with their consent, once she approves it (consent) |
 | The contact form | name, email, message | to reply (legitimate interest) |
 | Browsing | page views, without cookies | to see what is useful (legitimate interest) |
 
