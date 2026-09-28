@@ -43,7 +43,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "resend": "^6.28.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "stripe": "^22.6.2",
     "uuid": "^14.0.2"
   },
@@ -76,11 +76,11 @@
     "core-js": false,
     "unrs-resolver@1.12.2": true,
     "@swc/core": true,
-    "sharp@0.35.4": true
+    "sharp@0.35.5": true
   },
   "overrides": {
     "next": {
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
     },
     "minimatch": "10.2.6",
     "brace-expansion": "5.0.9",
