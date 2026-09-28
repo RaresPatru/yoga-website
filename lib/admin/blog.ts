@@ -75,10 +75,7 @@ export function slugify(title: string): string {
 
 export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-/** Lowercase and without diacritics, so "respiratie" finds "Respirație". */
-export function searchable(text: string | null | undefined): string {
-  return (text ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-}
+export { searchable } from "@/lib/search-text";
 
 /** A list row: the post without its text, plus when its private changes were last saved. */
 export type ListedPost = Pick<

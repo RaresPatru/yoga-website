@@ -1,15 +1,9 @@
-import { createHash, randomBytes } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { absoluteUrl } from "@/lib/site-config";
-import { EVENT_TIME_ZONE, formatDate } from "@/lib/utils";
-import {
-  emailLocale,
-  eventEmailVars,
-  fillEmailTemplate,
-  loadTemplate,
-  sendEmail,
-  type EmailLocale,
-} from "@/lib/email";
+import { hashToken, newToken, plausibleToken } from "@/lib/tokens";
+import { absoluteUrl, siteUrl } from "@/lib/site-config";
+import { formatDate } from "@/lib/utils";
+import { emailLocale, emailMoment, eventEmailVars, firstName, type EmailLocale } from "@/lib/email-content";
+import { sendTemplateEmail } from "@/lib/email";
 
 /**
  * Verified reviews: who may write a testimonial, and the personal links that
@@ -43,9 +37,7 @@ const INVITE_WINDOW_DAYS = 3;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
+export { hashToken };
 
 /** A booking's fields that decide whether it may leave a testimonial. */
 export interface BookingState {
@@ -71,9 +63,7 @@ export function displayNames(fullName: string): { full: string; short: string } 
   return { full, short };
 }
 
-export function firstName(fullName: string): string {
-  return fullName.trim().split(/\s+/)[0] ?? "";
-}
+export { firstName };
 
 /** The event columns an invitation needs. */
 interface InviteEvent {
@@ -98,15 +88,6 @@ interface InviteBooking {
 
 const EVENT_COLUMNS = "id, slug, title_ro, title_en, date, time, end_date, end_time, location, ends_at";
 
-/** A moment as the email writes it: "25 noiembrie 2026, 18:00", Romanian time. */
-function emailMoment(date: Date, locale: EmailLocale): string {
-  return date.toLocaleString(locale === "en" ? "en-GB" : "ro-RO", {
-    timeZone: EVENT_TIME_ZONE,
-    dateStyle: "long",
-    timeStyle: "short",
-  });
-}
-
 /**
  * Creates a personal link for one booking and emails it, in the language they
  * booked in. Returns whether the email went; a link whose email failed is
@@ -115,7 +96,7 @@ function emailMoment(date: Date, locale: EmailLocale): string {
 async function invite(booking: InviteBooking, event: InviteEvent): Promise<boolean> {
   const supabase = createAdminClient();
   const locale = emailLocale(booking.locale);
-  const token = randomBytes(32).toString("base64url");
+  const token = newToken();
   const expires = new Date(Date.now() + REVIEW_LINK_DAYS * DAY_MS);
 
   const { data: row, error } = await supabase
@@ -128,20 +109,17 @@ async function invite(booking: InviteBooking, event: InviteEvent): Promise<boole
     return false;
   }
 
-  const template = await loadTemplate(supabase, "testimonial_request", locale);
-  const vars = {
-    user_name: firstName(booking.full_name),
-    ...eventEmailVars(event, locale),
-    testimonial_link: absoluteUrl(`/${locale}/testimonials/write?token=${token}`),
-    expires_at: emailMoment(expires, locale),
-  };
-  const result = template
-    ? await sendEmail({
-        to: booking.email,
-        subject: fillEmailTemplate(template.subject, vars),
-        html: fillEmailTemplate(template.body, vars),
-      })
-    : { ok: false as const, error: "No 'testimonial_request' template" };
+  const result = await sendTemplateEmail({
+    type: "testimonial_request",
+    locale,
+    to: booking.email,
+    vars: {
+      user_name: firstName(booking.full_name),
+      ...eventEmailVars(event, locale, siteUrl()),
+      testimonial_link: absoluteUrl(`/${locale}/testimonials/write?token=${token}`),
+      expires_at: emailMoment(expires, locale),
+    },
+  });
 
   if (!result.ok) {
     console.error(`Review link email failed for booking ${booking.id}:`, result.error);
@@ -248,8 +226,7 @@ export async function inviteEventParticipants(
  * ceiling on what one request can send.
  */
 export async function requestReviewLinks(email: string): Promise<void> {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const { data, error } = await createAdminClient()
     .from("registrations")
     .select(`id, full_name, email, locale, removed_at, payment_status, refund_requested_at, testimonials(id), events!inner(${EVENT_COLUMNS}, published)`)
     .ilike("email", email.replace(/[\\%_]/g, (c) => `\\${c}`))
@@ -267,18 +244,16 @@ export async function requestReviewLinks(email: string): Promise<void> {
 
   for (const booking of early) {
     const locale = emailLocale(booking.locale);
-    const template = await loadTemplate(supabase, "review_too_early", locale);
-    if (!template) continue;
     const event = booking.events;
-    const vars = {
-      user_name: firstName(booking.full_name),
-      ...eventEmailVars(event, locale),
-      event_end: formatDate(event.end_date || event.date, locale),
-    };
-    const result = await sendEmail({
+    const result = await sendTemplateEmail({
+      type: "review_too_early",
+      locale,
       to: booking.email,
-      subject: fillEmailTemplate(template.subject, vars),
-      html: fillEmailTemplate(template.body, vars),
+      vars: {
+        user_name: firstName(booking.full_name),
+        ...eventEmailVars(event, locale, siteUrl()),
+        event_end: formatDate(event.end_date || event.date, locale),
+      },
     });
     if (!result.ok) console.error(`Too-early review email failed for booking ${booking.id}:`, result.error);
   }
@@ -304,7 +279,7 @@ export interface OpenInvitation {
 export async function openInvitation(
   token: string | null | undefined
 ): Promise<{ ok: true; invitation: OpenInvitation } | { ok: false; reason: LinkRefusal }> {
-  if (!token || token.length < 20 || token.length > 100) return { ok: false, reason: "invalid" };
+  if (!plausibleToken(token)) return { ok: false, reason: "invalid" };
   const { data, error } = await createAdminClient()
     .from("review_invitations")
     .select(

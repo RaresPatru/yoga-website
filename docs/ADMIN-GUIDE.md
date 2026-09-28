@@ -15,7 +15,7 @@ cunoștințe tehnice pentru nimic din ce urmează.
 4. [Articole pe blog](#4-articole-pe-blog)
 5. [Testimoniale](#5-testimoniale)
 6. [Mesaje de la vizitatori](#6-mesaje)
-7. [Emailuri automate](#7-emailuri-automate)
+7. [Email-uri și anunțuri](#7-email-uri-și-anunțuri)
 8. [Când ceva nu merge](#8-când-ceva-nu-merge)
 
 ---
@@ -252,6 +252,9 @@ Starea plății:
 > participantelor sunt vizibile **doar** aici, doar pentru tine. Nu apar nicăieri
 > pe site public. Pe site se vede doar numărul de locuri ocupate.
 
+Ca să le scrii celor bifați (sau tuturor celor din lista filtrată), apasă
+**Scrie un anunț** în bara de jos. Vezi [Email-uri și anunțuri](#7-email-uri-și-anunțuri).
+
 ---
 
 ## 4. Articole pe blog
@@ -381,24 +384,81 @@ Formularul e protejat împotriva roboților, deci nu ar trebui să primești spa
 
 ---
 
-## 7. Emailuri automate
+## 7. Email-uri și anunțuri
 
 **Meniu: Email-uri**
 
-Textele emailurilor trimise automat. Poți schimba conținutul; **nu schimba
-cuvintele dintre acolade** — `{{user_name}}`, `{{event_name}}` — pentru că
-acolo se completează automat datele reale.
+Două taburi: **Automate**, emailurile pe care site-ul le trimite singur, și
+**Anunțuri**, emailurile pe care le scrii tu.
+
+Toate arată la fel: sus numele site-ului (sau logoul, cum ai ales în Conținut
+site → Identitate), jos denumirea și sediul firmei, din Pagini legale. Pleacă
+cu numele site-ului, iar când cineva răspunde, răspunsul ajunge la adresa din
+**Conținut site → Email-uri**. Până o completezi, ajunge la adresa pentru date
+personale din Pagini legale.
+
+### Emailurile automate
+
+Sunt în ordinea în care le primește cineva: înscrierea, lista de așteptare,
+anularea, după eveniment. La fiecare scrie când pleacă. Apasă pe unul ca să-l
+schimbi.
+
+- **RO / EN**: scrii textul în română, apoi în engleză. Engleza lăsată goală
+  înseamnă că pleacă textul în română. „Tradu ce lipsește" o completează
+  singur; citește-o înainte să salvezi.
+- **Pastilele** („Nume", „Eveniment", „Data", „Locul"...) se completează cu
+  datele fiecărei persoane și ale evenimentului ei. Le pui cu butoanele de sub
+  subiect și de deasupra textului, acolo unde e cursorul.
+- **Un link singur pe rândul lui apare ca buton**, de exemplu „Rezervă-ți
+  locul". Un rând care rămâne fără valoare, cum ar fi „Ora:" la un eveniment
+  fără oră, nu apare deloc.
+- **Previzualizarea** (în dreapta, pe telefon dedesubt) arată emailul exact
+  cum ajunge, cu datele următorului eveniment, la lățime de telefon sau de
+  calculator.
+- **Trimite-mi un test** îți trimite ce vezi pe ecran, chiar nesalvat, la
+  adresa cu care intri în panou.
+- Nimic nu se schimbă până apeși **Salvează modificările**. Dacă pleci cu
+  modificări nesalvate, te întreabă întâi.
 
 | Email | Când se trimite |
 |---|---|
-| Confirmare înscriere | Imediat, la evenimente gratuite. |
-| Confirmare plată | După ce plata a intrat, la evenimentele cu preț. |
-| Cerere testimonial | În dimineața de după un eveniment, când apeși „Trimite invitațiile" sau când participantul îl cere de pe site. Conține linkul personal. |
-| Testimonial: prea devreme | Când cineva cere linkul înainte să se încheie evenimentul: îi spune de când poate scrie. |
-| Înscriere anulată, Scoatere de pe lista de așteptare | Doar când bifezi „Trimite-i un email" la anulare. |
+| Confirmare înscriere | Imediat ce cineva se înscrie la un eveniment gratuit, sau își ia un loc eliberat la unul. Are atașată invitația pentru calendar. |
+| Confirmare plată | Imediat ce ajunge plata pentru un eveniment cu plată. Are atașată invitația pentru calendar. |
+| Pe lista de așteptare | Când cineva intră pe lista de așteptare a unui eveniment complet. |
+| Loc eliberat | Când se eliberează un loc: primii de pe listă primesc un link de rezervare valabil 24 de ore. |
+| Scos de pe lista de așteptare | Doar când bifezi „Trimite-i un email" când scoți pe cineva de pe listă. |
+| Înscriere anulată | Doar când bifezi „Trimite-i un email" la anulare. |
+| Invitație la testimonial | În dimineața de după eveniment (dacă invitațiile sunt pornite), când apeși „Trimite invitațiile" sau când cineva își cere linkul pe site. |
+| Testimonial: prea devreme | Când cineva își cere linkul înainte să se încheie evenimentul: îi spune de când poate scrie. |
 
 Fiecare confirmare are atașată invitația pentru calendar, cu ora corectă a
 României.
+
+### Anunțurile
+
+Un anunț pleacă **doar** la cei care au bifat, când s-au înscris, că vor să
+afle de evenimentele noi. Ceilalți apar la „rămân pe dinafară", cu motivul.
+Fiecare anunț are jos un link de dezabonare; cine îl folosește nu mai primește
+anunțuri, dar emailurile despre înscrierile lui vin în continuare.
+
+1. Din **Înscrieri**, bifează oamenii (sau filtrează lista și selectează-i pe
+   toți) și apasă **Scrie un anunț**. Sau, din **Email-uri → Anunțuri**, apasă
+   **Anunț nou**: pleacă la toți cei care au acceptat anunțuri.
+2. Scrie subiectul și textul, în română și în engleză. Cu butonul
+   **Eveniment** pui un eveniment ca un card: poza, data, locul și un buton
+   spre pagina lui.
+3. Verifică **Destinatarii** (câți îl primesc, cine rămâne pe dinafară) și
+   previzualizarea. Poți să-ți trimiți un test.
+4. Apasă **Trimite anunțul**. După ce pleacă nu se mai poate opri.
+
+După ce pleacă, anunțul arată la cine a ajuns și la cine nu. Dacă la unii nu a
+ajuns, îl poți trimite din nou doar lor. Ciornele stau în tabul Anunțuri până
+le trimiți sau le ștergi.
+
+> **Cineva îți cere pe alt drum să nu-i mai scrii?** Deschide-l în
+> **Înscrieri** și apasă „Oprește anunțurile către această persoană". E ca și
+> cum s-ar fi dezabonat. Dacă bifează din nou căsuța la o înscriere nouă,
+> primește iar anunțuri.
 
 ---
 

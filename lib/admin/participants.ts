@@ -1,9 +1,14 @@
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 import { AdminError, must } from "@/lib/admin/db";
-import { searchable } from "@/lib/admin/blog";
 import { getAuthToken } from "@/lib/get-auth-token";
 import type { ParticipantAction, ParticipantActionResult } from "@/lib/admin/participant-actions";
+import {
+  narrowed,
+  type ParticipantFilters,
+  type ParticipantStatus,
+  type ParticipantTab,
+} from "@/lib/participant-filters";
 
 /**
  * Reading and changing participants from the Registrations page.
@@ -15,31 +20,14 @@ import type { ParticipantAction, ParticipantActionResult } from "@/lib/admin/par
  * page, because this list only grows: every person who ever booked is in it.
  */
 
-export type ParticipantStatus =
-  | "free"
-  | "paid"
-  | "pending"
-  | "abandoned"
-  | "refund_requested"
-  | "refunded"
-  | "waitlist"
-  | "offers"
-  | "removed";
-
-/** The statuses the filter offers, in the order the menu lists them. */
-export const STATUS_FILTERS: readonly ParticipantStatus[] = [
-  "free",
-  "paid",
-  "pending",
-  "refund_requested",
-  "refunded",
-  "waitlist",
-  "offers",
-  "removed",
-  "abandoned",
-];
-
-export type ParticipantTab = "active" | "archive";
+// The filters live in lib/participant-filters.ts, which the server shares.
+export {
+  STATUS_FILTERS,
+  searchPattern,
+  type ParticipantFilters,
+  type ParticipantStatus,
+  type ParticipantTab,
+} from "@/lib/participant-filters";
 
 export const PER_PAGE = 50;
 
@@ -97,49 +85,9 @@ function participantOf(row: Partial<ViewRow>): Participant {
   };
 }
 
-export interface ParticipantFilters {
-  tab: ParticipantTab;
-  status: ParticipantStatus | null;
-  eventId: string | null;
-  q: string;
-}
-
-/**
- * What the search box matches against the view's `search_text`: the words
- * lowercased and without accents, or, for something that looks like a phone
- * number, its digits without the leading zero of a national number, so
- * "0722 111 222" finds "+40 722 111 222". Null for an empty box.
- */
-export function searchPattern(q: string): string | null {
-  const trimmed = q.trim();
-  if (!trimmed) return null;
-  const digits = trimmed.replace(/\D/g, "");
-  if (/^[\d\s+().\-/]+$/.test(trimmed) && digits.length >= 3) {
-    return `%${digits.replace(/^0+/, "")}%`;
-  }
-  // % and _ are wildcards to LIKE; typed ones are meant literally.
-  return `%${searchable(trimmed).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-}
-
 /** The columns the list and the export need; the notes stay in the panel. */
 const LIST_COLUMNS =
   "kind, id, event_id, full_name, email, phone, locale, created_at, status, archived, event_title, event_date, event_starts_at, event_ends_at, offer_expires_at, refund_requested_at, removed_at, marketing_consent_at";
-
-type Filterable<Q> = Q & {
-  eq: (column: string, value: string | boolean) => Filterable<Q>;
-  ilike: (column: string, pattern: string) => Filterable<Q>;
-};
-
-/** The filters, applied to any query on the view. The tab is optional so the two counts can share it. */
-function narrowed<Q>(query: Filterable<Q>, f: ParticipantFilters, tab: ParticipantTab | null): Filterable<Q> {
-  let q = query;
-  if (tab) q = q.eq("archived", tab === "archive");
-  if (f.status) q = q.eq("status", f.status);
-  if (f.eventId) q = q.eq("event_id", f.eventId);
-  const pattern = searchPattern(f.q);
-  if (pattern) q = q.ilike("search_text", pattern);
-  return q;
-}
 
 export interface ParticipantPage {
   rows: Participant[];

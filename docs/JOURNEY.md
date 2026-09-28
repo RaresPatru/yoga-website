@@ -1564,6 +1564,46 @@ event, and the tests that tidied up by deleting their event had been leaving
 their testimonials behind on the testimonials page, a dozen of them by the time
 anyone looked.
 
+### Phase 7: every email in one voice, and news for the people who asked
+
+**The emails were bare HTML from a plain box.** Seven templates, each a raw
+fragment she could only edit as markup, sent with whatever name the sending
+address carried and no way to reply to her. Now every email the site sends is
+drawn in one layout (her name at the top, her business and address at the
+bottom) and comes from the site's name, with replies going to her. She edits
+each one with the placeholders as chips in the text and sees, beside it, the
+real email filled in with her next event, at a phone's width or a computer's.
+One button sends her what is on screen as a test.
+
+**The preview had to be the email, not a picture of it.** The functions that
+fill a template in and draw the layout run in her browser for the preview and
+on the server before sending, so the two cannot disagree.
+
+**Empty lines had been reaching people.** A confirmation for an event without
+a WhatsApp group ended in "Alătură-te grupului de WhatsApp:" and a blank link,
+and an event with no hour yet printed "Ora:" and nothing. A line whose value is
+empty is now left out. Subjects had been escaped as if they were HTML, so
+"Yoga & brunch" arrived as "Yoga &amp; brunch".
+
+**Announcements.** She picks people on the Registrations page, or everyone,
+and writes once in each language, with events as cards. Before she sends, the
+page says who will receive it and who is left out and why: only people who
+ticked the box for news when they booked, and not anyone who unsubscribed
+since. Every announcement has an unsubscribe link and the headers mail apps
+use for their own Unsubscribe button. The link's page does nothing until its
+button is pressed, because mail scanners follow every link in an email.
+
+**Two offers at once could promise one seat twice.** Counting the free seats,
+choosing who is next and stamping their links were three separate requests,
+so a refund and her save arriving together could both hand out the same seat.
+All three now happen in one database step, under the lock bookings already
+take; the test fires six offers at two seats and gets two.
+
+**One bug the phone screenshots caught.** The unsubscribe page printed
+"unsubscribe.ask" instead of its sentence: public pages fill placeholders
+through next-intl, which wants the value passed in, while the admin panel's
+translator replaces them by hand afterwards. The page used the admin's habit.
+
 ---
 
 ## Decisions worth defending

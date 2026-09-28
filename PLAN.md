@@ -275,8 +275,8 @@ the first thing anyone sees of the site.
 ### Re-notify a waiting list that goes quiet
 
 Partly done: saving an event in the admin panel now offers every free seat to
-the front of the queue (`lib/notify-waiting-list.ts`), and a second save skips
-anyone still holding a live link. Still missing: when a claim link lapses
+the front of the queue (`lib/notify-waiting-list.ts`, in one locked database
+step since phase 7), and a second save skips anyone still holding a live link. Still missing: when a claim link lapses
 unused, nobody else is told until the next save or checkout expiry. Wants a
 scheduled job, or a "notify next" button in the admin waiting-list modal.
 

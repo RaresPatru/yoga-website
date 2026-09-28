@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { eventEmailVars, fillEmailTemplate, loadTemplate, sendEmail, type EmailLocale } from "@/lib/email";
+import { siteUrl } from "@/lib/site-config";
+import { eventEmailVars, type EmailLocale } from "@/lib/email-content";
+import { sendTemplateEmail } from "@/lib/email";
 
 /**
  * Tells someone she has taken them off an event: "your booking was
@@ -24,27 +26,19 @@ export async function sendRemovalEmail({
   locale: EmailLocale;
 }): Promise<boolean> {
   try {
-    const supabase = createAdminClient();
-    const { data: event, error } = await supabase
+    const { data: event, error } = await createAdminClient()
       .from("events")
-      .select("title_ro, title_en, date, time, end_date, end_time, location")
+      .select("slug, title_ro, title_en, date, time, end_date, end_time, location")
       .eq("id", eventId)
       .maybeSingle();
     if (error) throw error;
     if (!event) return false;
 
-    const type = kind === "booking" ? "booking_cancelled" : "waitlist_removed";
-    const template = await loadTemplate(supabase, type, locale);
-    if (!template) {
-      console.error(`No '${type}' email template; the removal email was not sent.`);
-      return false;
-    }
-
-    const vars = { user_name: fullName, ...eventEmailVars(event, locale) };
-    const result = await sendEmail({
+    const result = await sendTemplateEmail({
+      type: kind === "booking" ? "booking_cancelled" : "waitlist_removed",
+      locale,
       to: email,
-      subject: fillEmailTemplate(template.subject, vars),
-      html: fillEmailTemplate(template.body, vars),
+      vars: { user_name: fullName, ...eventEmailVars(event, locale, siteUrl()) },
     });
     if (!result.ok) console.error("Removal email failed:", result.error);
     return result.ok;

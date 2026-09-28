@@ -52,6 +52,96 @@ export type Database = {
         }
         Relationships: []
       }
+      announcement_recipients: {
+        Row: {
+          announcement_id: string
+          email: string
+          full_name: string
+          locale: string
+          reason: string | null
+          sent_at: string | null
+          status: string
+          unsubscribe_token_hash: string | null
+        }
+        Insert: {
+          announcement_id: string
+          email: string
+          full_name: string
+          locale?: string
+          reason?: string | null
+          sent_at?: string | null
+          status: string
+          unsubscribe_token_hash?: string | null
+        }
+        Update: {
+          announcement_id?: string
+          email?: string
+          full_name?: string
+          locale?: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          unsubscribe_token_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_recipients_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "admin_announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_recipients_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          audience: Json
+          body_en: string | null
+          body_ro: string
+          created_at: string
+          id: string
+          send_started_at: string | null
+          sent_at: string | null
+          status: string
+          subject_en: string | null
+          subject_ro: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: Json
+          body_en?: string | null
+          body_ro?: string
+          created_at?: string
+          id?: string
+          send_started_at?: string | null
+          sent_at?: string | null
+          status?: string
+          subject_en?: string | null
+          subject_ro?: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: Json
+          body_en?: string | null
+          body_ro?: string
+          created_at?: string
+          id?: string
+          send_started_at?: string | null
+          sent_at?: string | null
+          status?: string
+          subject_en?: string | null
+          subject_ro?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       blog_posts: {
         Row: {
           author: string | null
@@ -206,6 +296,42 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: true
             referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_suppressions: {
+        Row: {
+          announcement_id: string | null
+          created_at: string
+          email: string
+          reason: string
+        }
+        Insert: {
+          announcement_id?: string | null
+          created_at?: string
+          email: string
+          reason?: string
+        }
+        Update: {
+          announcement_id?: string | null
+          created_at?: string
+          email?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_suppressions_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "admin_announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_suppressions_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
             referencedColumns: ["id"]
           },
         ]
@@ -804,6 +930,26 @@ export type Database = {
       }
     }
     Views: {
+      admin_announcements: {
+        Row: {
+          audience: Json | null
+          body_en: string | null
+          body_ro: string | null
+          created_at: string | null
+          excluded_count: number | null
+          failed_count: number | null
+          id: string | null
+          pending_count: number | null
+          send_started_at: string | null
+          sent_at: string | null
+          sent_count: number | null
+          status: string | null
+          subject_en: string | null
+          subject_ro: string | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
       admin_dashboard: {
         Row: {
           active_events: number | null
@@ -875,6 +1021,16 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      offer_waiting_list_seats: {
+        Args: { p_event_id: string; p_hours?: number }
+        Returns: {
+          claim_expires_at: string
+          email: string
+          full_name: string
+          id: string
+          locale: string
+        }[]
+      }
       pending_hold_interval: { Args: never; Returns: string }
       publish_event_draft: { Args: { p_event_id: string }; Returns: undefined }
       publish_post_draft: { Args: { p_post_id: string }; Returns: undefined }
@@ -891,6 +1047,10 @@ export type Database = {
           p_phone: string
         }
         Returns: Json
+      }
+      settle_waiting_list_offers: {
+        Args: { p_event_id: string; p_sent: string[]; p_unsent: string[] }
+        Returns: undefined
       }
     }
     Enums: {

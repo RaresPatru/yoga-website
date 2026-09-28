@@ -44,6 +44,7 @@ what turn a visitor into a booking.
 | Tagline and description | SEO și firmă | What Google and shared links show. Without them, the site name alone. |
 | Her name for search engines | SEO și firmă | Optional. Without it, no person is named in the structured data. |
 | The ANPC SAL pictogram | Pagini legale | The official 250×50 image from anpc.ro. A text link stands in until then. |
+| Her address for replies | Email-uri | Where replies to the site's emails arrive. Until then, the address for personal data requests, and until that, the sending address. |
 
 ## Priority 3: reduces hesitation before booking
 

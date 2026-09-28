@@ -1,15 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateICS } from "@/lib/calendar";
-import { absoluteUrl } from "@/lib/site-config";
+import { absoluteUrl, siteUrl } from "@/lib/site-config";
 import { toPlainParagraphs } from "@/lib/plain-text";
-import {
-  eventEmailVars,
-  eventTitle,
-  fillEmailTemplate,
-  loadTemplate,
-  sendEmail,
-  type EmailLocale,
-} from "@/lib/email";
+import { eventEmailVars, eventTitle, type EmailLocale } from "@/lib/email-content";
+import { sendTemplateEmail } from "@/lib/email";
 
 interface SendConfirmationArgs {
   eventId: string;
@@ -62,13 +56,6 @@ export async function sendConfirmationEmail({
     if (eventError) throw eventError;
     if (!event) return false;
 
-    const template = await loadTemplate(supabase, templateType, locale);
-    if (!template) {
-      console.error(`No '${templateType}' email template; the confirmation was not sent.`);
-      return false;
-    }
-
-    const vars = { user_name: fullName, ...eventEmailVars(event, locale) };
     const title = eventTitle(event, locale);
     const description = (locale === "en" && event.description_en?.trim()) || event.description_ro;
 
@@ -93,10 +80,11 @@ export async function sendConfirmationEmail({
     // Strip characters that are awkward in a filename across operating systems.
     const safeName = title.replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 60);
 
-    const result = await sendEmail({
+    const result = await sendTemplateEmail({
+      type: templateType,
+      locale,
       to: email,
-      subject: fillEmailTemplate(template.subject, vars),
-      html: fillEmailTemplate(template.body, vars),
+      vars: { user_name: fullName, ...eventEmailVars(event, locale, siteUrl()) },
       attachments: [
         {
           filename: `${safeName || (locale === "en" ? "event" : "eveniment")}.ics`,

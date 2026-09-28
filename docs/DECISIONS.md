@@ -1648,3 +1648,105 @@ PostHog records the address of every page. A testimonial link (`?token=`) and
 a waiting-list claim (`?claim=`) are keys: whoever holds one can use it. The
 provider replaces both with "redacted" in every event before it leaves the
 browser.
+
+### One email layout, and the preview runs the code that sends
+
+Every email the site sends, automatic or announcement, is filled in by
+`lib/email-content.ts` and drawn by `lib/email-layout.ts`: her name or logo
+on the cream background, the message on a white sheet, her business name and
+address below. Both are string functions with nothing server-only in them, so
+the admin's live preview runs them in the browser and the server runs the same
+ones before sending. A preview drawn by other code would be a guess about the
+email. The HTML is written the old way on purpose (tables, a style on every
+element, hex colours, 560px wide), because Outlook for Windows draws with
+Word's engine and Gmail keeps only part of a stylesheet.
+
+### A link alone on its line is the button
+
+Her text has no "button" to choose. A paragraph whose only content is one link
+is drawn as a rose pill button instead; a link inside a sentence stays a link.
+The chips she inserts for a link (the booking link, the WhatsApp group) put
+words she can change into a link, so a link chip on its own line is the email's
+action. When a link's address comes out empty (an event with no WhatsApp
+group), its paragraph goes; when a labelled line's value is empty ("Ora:" for
+an event with no hour), the line goes. Both used to arrive as an empty label.
+
+### Placeholders are chips on screen and {{names}} in the database
+
+The stored templates keep `{{event_name}}`, which every sender already
+understood, so nothing that sends changed. The editor turns each one into an
+atomic chip with a plain name when it loads and back when it saves
+(`lib/email-editor.ts`), so a placeholder cannot be half deleted or misspelled.
+Link placeholders live in a link's address, where they stay as written.
+
+### An automatic email saves on Save, not on its own
+
+The post and event editors autosave, because a draft is private until
+published. A template has no draft: the next confirmation goes out with
+whatever is saved, so a half-written sentence must not be. The editor has one
+Save, says when something is unsaved, and asks before leaving. A test email
+sends the text on screen, saved or not, so she can try before she saves.
+
+### A test email goes only to the address she signs in with
+
+"Trimite-mi un test" takes the text and nothing else: the route reads the
+admin's address from her session. A route that sent the site's layout, in her
+name, to an address in the request would be a way for anyone with a stolen
+session to send email as her to anyone.
+
+### Emails come from the site's name, and replies go to her
+
+The sending address (`RESEND_FROM_EMAIL`) has to be on a domain verified in
+Resend and is usually one nobody reads. The name beside it is the site's name
+from Conținut site, whatever the variable says, and every email carries a
+Reply-To: her address from Conținut site → Email-uri, or the address for
+personal data requests until she sets one (audit I13). Until she has named the
+site, the name is the site's address, not the placeholder the code keeps.
+
+### Who an announcement reaches: a yes newer than any unsubscribe
+
+Promotional email needs a ticked opt-in (Law 506/2004, art. 12). An
+announcement goes to an address whose latest `marketing_consent_at`, on any of
+its bookings or waiting-list entries, is newer than any unsubscribe for it:
+the box asks about future events, not one event, and ticking it again after
+unsubscribing is a new yes. One email per address, with the name and language
+of that person's latest row. The rule is `exclusions()` in
+`lib/announcement-audience.ts`: the editor runs it with her session to show who
+will receive it, and the server runs it again when it sends, including just
+before each hundred leave, so someone who unsubscribes meanwhile is not
+written to.
+
+### Unsubscribing takes a press on the page, and one click in the mail app
+
+Every announcement carries `List-Unsubscribe` and `List-Unsubscribe-Post`
+(RFC 8058), which Gmail and Apple Mail turn into their own Unsubscribe button
+and which Gmail expects from bulk senders; that POST unsubscribes at once. The
+link in the footer opens a page instead, and the page changes nothing until
+its button is pressed, because mail scanners open every link in an email and a
+link that unsubscribed on its own would unsubscribe people who never asked.
+The button is a plain form post, answered with a redirect, so it works before
+any script has loaded in an in-app browser. Each link carries a random token
+stored only as its SHA-256, like the testimonial links.
+
+### Announcements go a hundred at a time, and a stopped send carries on
+
+Resend's batch endpoint takes a hundred emails per request. The recipients are
+written down once, on the first attempt, each marked sent or failed as its
+batch returns, so a send the function's time limit cut short resumes with the
+ones still pending, and failed ones can be tried again from the report. The
+announcement's status moves to `sending` in one conditional update, and
+`send_started_at` is refreshed after every batch, so a second press, or a
+second tab, cannot send it twice; a send that has not moved for ten minutes can
+be taken over.
+
+### Offering a freed seat is one locked database step
+
+The count of free seats, the choice of who is next and the stamping of their
+claim windows used to be three requests from the server, so a Stripe webhook
+and her save arriving together could both count the same free seat (audit
+B16). `offer_waiting_list_seats()` does all three under the lock on the event
+row that `register_for_event()` takes, so bookings and offers on one event wait
+for each other. The server then emails, and `settle_waiting_list_offers()`
+withdraws the offers whose email failed and records the rest as one batch, so
+no seat is held for someone who was never told and the log counts only links
+that went out (B9).

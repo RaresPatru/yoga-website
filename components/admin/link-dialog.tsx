@@ -23,6 +23,8 @@ export interface LinkValue {
 export function normaliseHref(input: string): string {
   const href = input.trim();
   if (!href) return "";
+  // An email's link to a placeholder, such as {{claim_url}}, filled in when it is sent.
+  if (/^\{\{\s*\w+\s*\}\}$/.test(href)) return href;
   if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("/") || href.startsWith("#")) return href;
   if (/^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(href)) return `mailto:${href}`;
   return `https://${href}`;

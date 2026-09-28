@@ -6,6 +6,7 @@ import { useId } from "react";
 import type { FieldDef, SiteContentKey } from "@/lib/site-content-schema";
 import { socialUrl } from "@/lib/social";
 import { toPlainText } from "@/lib/plain-text";
+import { validEmail } from "@/lib/email-brand";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/admin/ui/segmented";
 import { CompactEditor } from "@/components/admin/compact-editor";
@@ -74,7 +75,13 @@ export function ContentField({
     return t("admin.cms.empty_hidden");
   })();
 
-  const describedBy = [def.help ? helpId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
+  // An address she typed that is not one would be ignored where it is used,
+  // so she hears about the typo here rather than from a missing reply.
+  const badEmail = def.format === "email" && current.trim() !== "" && !validEmail(current);
+  const warningId = `${id}-warning`;
+
+  const describedBy =
+    [def.help ? helpId : null, hint ? hintId : null, badEmail ? warningId : null].filter(Boolean).join(" ") || undefined;
 
   const reference =
     editingEnglish && value.ro.trim() ? (
@@ -148,14 +155,15 @@ export function ContentField({
         return (
           <input
             id={id}
-            type="text"
+            type={def.format === "email" ? "email" : "text"}
             value={current}
             onChange={(e) => set(e.target.value)}
             maxLength={def.maxLength}
-            inputMode={def.kind === "social" ? "url" : undefined}
-            autoComplete="off"
-            lang={def.kind === "social" ? undefined : lang === "ro" ? "ro-RO" : "en"}
+            inputMode={def.kind === "social" ? "url" : def.format === "email" ? "email" : undefined}
+            autoComplete={def.format === "email" ? "email" : "off"}
+            lang={def.kind === "social" || def.format === "email" ? undefined : lang === "ro" ? "ro-RO" : "en"}
             aria-describedby={describedBy}
+            aria-invalid={badEmail || undefined}
             className={INPUT}
           />
         );
@@ -200,6 +208,11 @@ export function ContentField({
           <a href={socialLink} target="_blank" rel="noopener noreferrer" className="text-rose-deep underline underline-offset-2">
             {socialLink}
           </a>
+        </p>
+      )}
+      {badEmail && (
+        <p id={warningId} className="text-sm text-error">
+          {t("admin.cms.not_an_email")}
         </p>
       )}
       {hint && (

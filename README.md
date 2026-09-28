@@ -2,8 +2,9 @@
 
 A bilingual (Romanian / English) site for a solo yoga instructor: event listings
 with paid and free registration, capacity limits, waiting lists with expiring
-claim links, a blog, transactional email with calendar invites, and an admin
-panel she runs herself without a developer.
+claim links, a blog, branded transactional email with calendar invites,
+announcements to the people who opted in, and an admin panel she runs herself
+without a developer.
 
 **Stack:** Next.js 16 (App Router) · Supabase (Postgres, Auth, Storage) ·
 Stripe Checkout · Resend · Cloudflare Turnstile · Tailwind CSS 4 · Playwright ·

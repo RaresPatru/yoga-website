@@ -595,7 +595,7 @@ from (values
   ('yoga-la-rasarit', 'Ana Popescu', 'ana.popescu@example.test', '+40724111222', 'completed', 'ro',
    null, null, true, false, null, interval '50 days'),
   ('yoga-la-rasarit', 'Dan Georgescu', 'dan.georgescu@example.test', '+40724111777', 'completed', 'ro',
-   null, null, false, false, null, interval '45 days')
+   null, null, true, false, null, interval '45 days')
 ) as v(slug, full_name, email, phone, payment_status, locale, note, admin_note, marketing, refund_asked, removal_reason, ago)
 join public.events e on e.slug = v.slug
 where not exists (select 1 from public.registrations r where r.email = 'ana.popescu@example.test');
@@ -640,6 +640,49 @@ select r.event_id, r.id, 'text',
 from public.registrations r
 where r.email = 'dan.georgescu@example.test'
   and not exists (select 1 from public.testimonials t where t.registration_id = r.id);
+
+
+-- ---------------------------------------------------------------------------
+-- An announcement in the history, and someone who unsubscribed from it
+-- ---------------------------------------------------------------------------
+-- Sent twenty days ago to everyone who had opted in: Ana Popescu and Dan
+-- Georgescu in Romanian, Sophie Martin in English, with the paid retreat as a
+-- card. Everyone else on the list had not opted in. Dan unsubscribed through
+-- its link ten days later, so a new announcement leaves him out as
+-- "S-a dezabonat" beside the ones who never said yes.
+insert into public.announcements (subject_ro, subject_en, body_ro, body_en, audience, status, created_at, sent_at)
+select 'Mai sunt locuri la retreatul de weekend',
+       'There are still places on the weekend retreat',
+       '<h2>Salut {{user_name}}!</h2><p>Mai sunt câteva locuri la retreatul de weekend. Dacă te gândeai să vii, acum e momentul.</p><div data-event-card="' || e.id || '"></div>',
+       '<h2>Hi {{user_name}}!</h2><p>There are still a few places on the weekend retreat. If you were thinking of coming, now is the time.</p><div data-event-card="' || e.id || '"></div>',
+       '{"kind": "all"}'::jsonb, 'sent', now() - interval '21 days', now() - interval '20 days'
+from public.events e
+where e.slug = 'retreat-de-weekend'
+  and not exists (select 1 from public.announcements a where a.subject_ro = 'Mai sunt locuri la retreatul de weekend');
+
+insert into public.announcement_recipients (announcement_id, email, full_name, locale, status, reason, sent_at)
+select a.id, p.email, p.full_name, p.locale,
+       case when p.email in ('ana.popescu@example.test', 'dan.georgescu@example.test', 'sophie.martin@example.test')
+            then 'sent' else 'excluded' end,
+       case when p.email in ('ana.popescu@example.test', 'dan.georgescu@example.test', 'sophie.martin@example.test')
+            then null else 'no_consent' end,
+       case when p.email in ('ana.popescu@example.test', 'dan.georgescu@example.test', 'sophie.martin@example.test')
+            then a.sent_at end
+from public.announcements a
+cross join (
+  select distinct on (lower(r.email)) lower(r.email) as email, r.full_name, r.locale
+  from public.registrations r
+  where r.email like '%@example.test'
+  order by lower(r.email), r.created_at desc
+) p
+where a.subject_ro = 'Mai sunt locuri la retreatul de weekend'
+on conflict do nothing;
+
+insert into public.email_suppressions (email, reason, announcement_id, created_at)
+select 'dan.georgescu@example.test', 'unsubscribed', a.id, now() - interval '10 days'
+from public.announcements a
+where a.subject_ro = 'Mai sunt locuri la retreatul de weekend'
+on conflict (email) do nothing;
 
 
 -- ---------------------------------------------------------------------------

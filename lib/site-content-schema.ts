@@ -54,6 +54,8 @@ export interface FieldDef {
   defaultChoice?: string;
   /** For `social` fields: which network the address belongs to. */
   network?: "instagram" | "facebook" | "tiktok" | "linkedin";
+  /** For a text field that holds an email address: the right keyboard, and a warning for a typo. */
+  format?: "email";
   maxLength?: number;
 }
 
@@ -388,6 +390,18 @@ export const FIELDS = {
     },
   },
 
+  // Emails ----------------------------------------------------------------
+  "email.reply_to": {
+    kind: "text",
+    format: "email",
+    translatable: false,
+    label: { ro: "Răspunsurile ajung la", en: "Replies go to" },
+    help: {
+      ro: "Adresa ta de email. Când cineva răspunde la un email trimis de site, răspunsul ajunge aici. Gol înseamnă adresa pentru date personale, din Pagini legale.",
+      en: "Your email address. When someone replies to an email the site sent, the reply comes here. Empty means the address for personal data requests, from Legal pages.",
+    },
+  },
+
   "blog.default_author": {
     kind: "text",
     translatable: false,
@@ -474,6 +488,7 @@ export const FIELDS = {
   },
   "legal.email": {
     kind: "text",
+    format: "email",
     translatable: false,
     label: { ro: "Email pentru date personale", en: "Email for personal data requests" },
     help: {
@@ -688,6 +703,16 @@ export const CONTENT_SECTIONS: readonly ContentSection[] = [
       en: "How participants come to write a testimonial.",
     },
     groups: [{ keys: ["testimonials.invitations"] }],
+  },
+  {
+    id: "emails",
+    kind: "fields",
+    title: { ro: "Email-uri", en: "Emails" },
+    description: {
+      ro: "Ce au în comun emailurile trimise de site. Sus apare numele sau logoul site-ului (Identitate); în subsol, denumirea și sediul firmei (Pagini legale).",
+      en: "What the site’s emails have in common. The site’s name or logo appears at the top (Identity); the business name and address in the footer (Legal pages).",
+    },
+    groups: [{ keys: ["email.reply_to"] }],
   },
   {
     id: "blog",

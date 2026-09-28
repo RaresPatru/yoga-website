@@ -27,7 +27,7 @@ const NAMED_ENTITIES: Record<string, string> = {
  * not `<`. Only `&nbsp;` and `&amp;` used to be decoded, so a description
  * mentioning "5 < 6" reached search results as "5 &lt; 6" (audit B28).
  */
-function decodeEntities(text: string): string {
+export function decodeEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, name: string) => {
     if (name.startsWith("#")) {
       const hex = name[1] === "x" || name[1] === "X";

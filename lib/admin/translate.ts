@@ -1,6 +1,6 @@
 "use client";
 
-import { Editor } from "@tiptap/core";
+import { Editor, type Extensions } from "@tiptap/core";
 import { getAuthToken } from "@/lib/get-auth-token";
 import { compactEditorExtensions } from "@/lib/compact-editor";
 import { translateDocument } from "@/lib/translate-document";
@@ -31,10 +31,14 @@ export async function translateTexts(texts: string[]): Promise<string[]> {
  * Formatted text (HTML) to English, keeping every paragraph, list and link
  * where it was: only the words go to the translator, paragraph by paragraph
  * (lib/translate-document.ts explains why). Runs in an editor that is never
- * shown, built with the same extensions as the one on screen.
+ * shown, built with the same extensions as the one on screen: the site
+ * content editor's by default, the email editor's for an email.
  */
-export async function translateHtml(html: string): Promise<string> {
-  const editor = new Editor({ extensions: compactEditorExtensions(), content: html });
+export async function translateHtml(
+  html: string,
+  extensions: Extensions = compactEditorExtensions()
+): Promise<string> {
+  const editor = new Editor({ extensions, content: html });
   try {
     const translated = await translateDocument(editor, translateTexts);
     editor.commands.setContent(translated);

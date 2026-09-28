@@ -13,6 +13,7 @@ import {
   type Participant,
 } from "@/lib/admin/participants";
 import { REMOVAL_REASON_MAX, type ParticipantAction } from "@/lib/admin/participant-actions";
+import { announcementVerdict, stopAnnouncements } from "@/lib/admin/emails";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { useToast } from "@/components/admin/ui/toaster";
@@ -57,6 +58,30 @@ export function ParticipantPanel({
 
   const { data, loading, error, reload } = useAdminData(() => loadParticipant(id), id);
   const person = data?.person;
+
+  // Whether announcements reach them: the rule an announcement uses, for
+  // their address across every booking, and whether they unsubscribed since.
+  const email = person?.email ?? "";
+  const { data: verdict, reload: reloadVerdict } = useAdminData(
+    () => (email ? announcementVerdict(email) : Promise.resolve(undefined)),
+    email
+  );
+
+  const stopAll = async () => {
+    const { confirmed } = await confirm({
+      title: t("admin.participant.stop_title"),
+      body: t("admin.participant.stop_body"),
+      confirmLabel: t("admin.participant.stop"),
+    });
+    if (!confirmed) return;
+    try {
+      await stopAnnouncements(email);
+      toast.success(t("admin.participant.stopped"));
+      reloadVerdict();
+    } catch (failure) {
+      toast.error(t(adminErrorKey(toAdminError(failure))));
+    }
+  };
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -280,10 +305,23 @@ export function ParticipantPanel({
                 )}
               </ul>
               <p className="mt-2 text-sm text-charcoal-light">
-                {person.marketingConsentAt
-                  ? t("admin.participant.marketing_yes").replace("{date}", shortDay(person.marketingConsentAt, lang))
-                  : t("admin.participant.marketing_no")}
+                {verdict === "unsubscribed"
+                  ? t("admin.participant.unsubscribed")
+                  : verdict === "included" && person.marketingConsentAt
+                    ? t("admin.participant.marketing_yes").replace("{date}", shortDay(person.marketingConsentAt, lang))
+                    : verdict === "included"
+                      ? t("admin.participant.marketing_elsewhere")
+                      : t("admin.participant.marketing_no")}
               </p>
+              {verdict === "included" && (
+                <button
+                  type="button"
+                  onClick={stopAll}
+                  className="mt-1 inline-flex min-h-10 items-center rounded-full text-sm font-medium text-rose-deep underline decoration-rose-deep/40 underline-offset-2 hover:decoration-rose-deep"
+                >
+                  {t("admin.participant.stop")}
+                </button>
+              )}
             </section>
 
             {person.participantNote && (

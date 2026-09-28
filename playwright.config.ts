@@ -205,6 +205,8 @@ export default defineConfig({
         /cron\.spec\.ts/,
         /email-language\.spec\.ts/,
         /plain-text\.spec\.ts/,
+        /email-layout\.spec\.ts/,
+        /announcements\.spec\.ts/,
       ],
     },
   ],

@@ -23,6 +23,7 @@ export function FormBar({
   onTranslate,
   canTranslate,
   bilingual = true,
+  saveLabel,
 }: {
   mode: "ro" | "en";
   onMode: (mode: "ro" | "en") => void;
@@ -35,6 +36,8 @@ export function FormBar({
   canTranslate: boolean;
   /** False for a section with nothing to translate (names, addresses, pictures). */
   bilingual?: boolean;
+  /** The Save button's words, when "Salvează modificările" is not what it does. */
+  saveLabel?: string;
 }) {
   const { t } = useAdminLocale();
   return (
@@ -89,7 +92,7 @@ export function FormBar({
           {dirty ? t("admin.cms.unsaved") : t("admin.cms.all_saved")}
         </p>
         <Button type="submit" size="sm" disabled={saving}>
-          {saving ? t("admin.saving") : t("admin.cms.save")}
+          {saving ? t("admin.saving") : (saveLabel ?? t("admin.cms.save"))}
         </Button>
       </div>
     </div>

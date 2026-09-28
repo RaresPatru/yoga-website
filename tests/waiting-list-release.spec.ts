@@ -6,6 +6,8 @@ import {
   seedRegistrationFor,
   updateEventCapacity,
   adminAccessToken,
+  waitingListFor,
+  waitingListBatches,
 } from "./helpers";
 
 /**
@@ -22,10 +24,10 @@ import {
  * Before the route these tests cover, nothing released it. Worse, the Stripe
  * webhook emailed claim links on a refund without ever asking whether the event
  * had a seat to give, so people on a closed event's list were sent links that
- * register_for_event() then refused with a 409. The guard now lives inside
- * notifyWaitingList(), which counts free seats from `event_availability` — the
- * same view the booking gate agrees with — so a link it sends is a link the
- * claim route will honour.
+ * register_for_event() then refused with a 409. The guard now lives in the
+ * database: offer_waiting_list_seats() counts free seats the way the booking
+ * gate does, under the same lock on the event row, so a link it sends is a
+ * link the claim route will honour, however many callers arrive at once.
  *
  * The emails go to the local stack's mailbox, as every email does against the
  * local database (lib/email.ts), so what these assert is who is written to,
@@ -158,6 +160,59 @@ test.describe("releasing a waiting list from the admin panel", () => {
         (await release(request, event.id)).body.notified,
         "their claim link is still live"
       ).toBe(0);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  /**
+   * Audit B16: offers made at the same moment.
+   *
+   * A Stripe webhook and her save can arrive together. When the count, the
+   * choice of who is next and the stamping were three separate requests, both
+   * callers could count the same free seat and send more links than there
+   * were seats. offer_waiting_list_seats() now does all three under a lock on
+   * the event row, so however many arrive at once, two seats make two offers.
+   */
+  test("offers made at the same moment never promise more seats than there are", async ({ request }) => {
+    const event = await seedEvent({ max_participants: 0 });
+    try {
+      for (let i = 0; i < 4; i++) await seedWaitingEntry(event.id);
+      await updateEventCapacity(event.id, 2);
+
+      const bodies = await Promise.all(Array.from({ length: 6 }, () => release(request, event.id)));
+      const offered = bodies.reduce((sum, { body }) => sum + (body.notified ?? 0), 0);
+      expect(offered, "six calls at once, two seats").toBe(2);
+
+      const live = (await waitingListFor(event.id)).filter(
+        (entry) => entry.claim_expires_at && Date.parse(String(entry.claim_expires_at)) > Date.now()
+      );
+      expect(live, "two live claim links, not more").toHaveLength(2);
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  /*
+   * Audit B9: the record says how many links went out, one batch per call
+   * that sent something, numbered in order.
+   */
+  test("each batch of offers is recorded with how many went", async ({ request }) => {
+    const event = await seedEvent({ max_participants: 0 });
+    try {
+      for (let i = 0; i < 3; i++) await seedWaitingEntry(event.id);
+
+      await updateEventCapacity(event.id, 2);
+      expect((await release(request, event.id)).body.notified).toBe(2);
+      await updateEventCapacity(event.id, 3);
+      expect((await release(request, event.id)).body.notified).toBe(1);
+      expect((await release(request, event.id)).body.notified, "nothing left to offer").toBe(0);
+
+      const batches = await waitingListBatches(event.id);
+      expect(batches.map((b) => [b.batch_number, b.spots_opened])).toEqual([
+        [1, 2],
+        [2, 1],
+      ]);
     } finally {
       await deleteEventBySlug(event.slug);
     }

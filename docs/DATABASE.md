@@ -57,8 +57,11 @@ because only one of the two was done.
 | `registrations` | Name, email, phone per signup. | Personal data | `register_for_event()` only |
 | `contact_messages` | Contact-form messages. | Private correspondence | `/api/contact` (service key) |
 | `waiting_list` | Who is waiting, plus their claim window. | Personal data | `/api/register/waiting-list` |
-| `waiting_list_notifications` | Audit log of notified batches. | Operational | Stripe webhook |
-| `email_templates` | Transactional email bodies. | Editable config | `/admin/emails` |
+| `waiting_list_notifications` | Audit log of offer batches: how many links went out, per event. | Operational | `settle_waiting_list_offers()` |
+| `email_templates` | The automatic emails' subjects and texts, RO and EN, with `{{placeholders}}`. | Editable config | `/admin/emails`, `lib/email.ts` |
+| `announcements` | Emails she writes herself: the texts, who they are for (`audience`), `status` draft / sending / sent. | Admin only | `/admin/emails`, `lib/announcements.ts` |
+| `announcement_recipients` | Per announcement and address: `pending`, `sent`, `failed` or `excluded` with the reason, and the unsubscribe link's SHA-256. | Personal data; the admin reads, only the server writes | `lib/announcements.ts` |
+| `email_suppressions` | Everyone who unsubscribed from announcements (`unsubscribed`), or whom she stopped (`admin`). | Admin and server only | `/api/unsubscribe`, the participant panel |
 | `whatsapp_links` | Saved invite URLs. | **A URL is a capability** | `/admin/events` |
 | `admins` | Who may enter `/admin`. | Revoked from everyone; read only by `is_admin()` | by hand |
 | `profiles` | Extra auth fields. | Vestigial — see below | nothing |
@@ -66,7 +69,8 @@ because only one of the two was done.
 | `review_invitations` | Personal links to write a testimonial: the token's SHA-256, `expires_at`, `used_at`. | A link is a credential; RLS on, no policy, `service_role` only | `lib/reviews.ts` |
 | `admin_dashboard` | **View.** One row: the dashboard's five counts. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
-| `admin_participants` | **View.** Every booking and every unclaimed waiting-list entry, with its event, a status, `archived` and a search text. | `security_invoker`; `select` for `authenticated` only | `/admin/registrations` (reads) |
+| `admin_participants` | **View.** Every booking and every unclaimed waiting-list entry, with its event, a status, `archived` and a search text. | `security_invoker`; `select` for `authenticated`, and for `service_role` to work out an announcement's recipients | `/admin/registrations`, `lib/announcement-audience.ts` (reads) |
+| `admin_announcements` | **View.** Every announcement with how many were sent, failed, are pending and were left out. | `security_invoker`; `select` for `authenticated` only | `/admin/emails` (reads) |
 
 `whatsapp_links` is the only table on this schema that is admin-only for
 *reading* as well as writing. Anyone holding a WhatsApp invite URL can join the
@@ -121,6 +125,25 @@ update. `blog_posts_slug_format` limits the address to lowercase letters,
 digits and single hyphens (`not valid`, like the events check). `media_urls`
 is gone; nothing ever used it.
 
+**Emails** (`20260930000000_email_system.sql`). `email_templates.type` gained
+`waitlist_joined`, the confirmation for joining a waiting list. An
+announcement's `audience` is JSON: `{"kind": "all"}`, `{"kind": "ids",
+"ids": [...]}` (rows of `admin_participants`) or `{"kind": "filter",
+"filters": {...}}` (the Registrations page's filters). The people are worked
+out when it is sent, one per address, and only those whose latest
+`marketing_consent_at` (on any of their rows) is newer than any
+`email_suppressions.created_at` for them receive it. Recipients are written
+once, on the first attempt, so a send cut short carries on from the ones
+still `pending`; `send_started_at` keeps two sends from running at once.
+`email_suppressions` rows are lowercase, one per address; an address that
+unsubscribes twice has its date moved forward.
+
+**Offering freed seats** is `offer_waiting_list_seats()` then
+`settle_waiting_list_offers()`, both under the lock on the event row that
+`register_for_event()` takes, so a booking and an offer, or two offers,
+wait for each other (audit B16). The first decides and stamps; the server
+emails; the second withdraws what did not go and records what did.
+
 **Private changes.** While a post is live, the editor's autosave writes to
 its row in `content_drafts` (`data` holds the fields by column name), so
 visitors keep reading the published version. Exactly one of `post_id` and
@@ -144,6 +167,8 @@ same set as the post list's Ciorne tab.
 | `publish_post_draft(id)`, `publish_event_draft(id)` | invoker | `authenticated` (RLS makes it the admin) |
 | `admin_delete_participants(ids)` | invoker; skips anyone not archived | `authenticated` (RLS makes it the admin) |
 | `daily_cleanup()` | invoker; also deletes lapsed testimonial links | **`service_role` only** (`/api/cron/daily`) |
+| `offer_waiting_list_seats(event, hours)` | definer; locks the event row, counts free seats and live links, stamps the next people in line | **`service_role` only** (`lib/notify-waiting-list.ts`) |
+| `settle_waiting_list_offers(event, sent, unsent)` | definer; withdraws offers whose email failed, records the rest as a batch | **`service_role` only** |
 | `keep_event_on_testimonials()` | trigger function, before an event is deleted | nobody; only its trigger runs it |
 | `set_updated_at()` | trigger function, `search_path` pinned | nobody; only its triggers run it |
 

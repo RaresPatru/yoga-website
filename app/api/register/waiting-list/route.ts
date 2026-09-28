@@ -4,6 +4,9 @@ import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { validateAttendee, validateBookingExtras } from "@/lib/validate-attendee";
 import { hasStarted, localeFrom } from "@/lib/register-for-event";
+import { siteUrl } from "@/lib/site-config";
+import { eventEmailVars } from "@/lib/email-content";
+import { sendTemplateEmail } from "@/lib/email";
 
 /**
  * Adds someone to an event's waiting list.
@@ -14,6 +17,10 @@ import { hasStarted, localeFrom } from "@/lib/register-for-event";
  *
  * Refused once the event has started: nobody can be offered a seat after
  * that, so a place in the queue would be a promise nothing can keep.
+ *
+ * They are emailed a confirmation (waitlist_joined), in the language of the
+ * page they joined on, so they know it worked and what happens next. The
+ * place in the queue does not depend on that email going.
  */
 export async function POST(req: Request) {
   try {
@@ -56,7 +63,7 @@ export async function POST(req: Request) {
     // Only published events have a waiting list worth joining.
     const { data: event } = await supabase
       .from("events")
-      .select("id, starts_at")
+      .select("id, slug, title_ro, title_en, date, time, end_date, end_time, location, starts_at")
       .eq("id", eventId)
       .eq("published", true)
       .single();
@@ -94,18 +101,27 @@ export async function POST(req: Request) {
     }
 
     const now = new Date().toISOString();
+    const locale = localeFrom(body.locale);
     const { error } = await supabase.from("waiting_list").insert({
       event_id: eventId,
       full_name: fullName,
       email,
       phone,
-      locale: localeFrom(body.locale),
+      locale,
       participant_note: extras.value.note,
       note_consent_at: extras.value.note ? now : null,
       marketing_consent_at: extras.value.marketing ? now : null,
     });
 
     if (error) throw error;
+
+    const confirmation = await sendTemplateEmail({
+      type: "waitlist_joined",
+      locale,
+      to: email,
+      vars: { user_name: fullName, ...eventEmailVars(event, locale, siteUrl()) },
+    });
+    if (!confirmation.ok) console.error("Waiting-list confirmation email failed:", confirmation.error);
 
     return NextResponse.json({ success: true });
   } catch (error) {

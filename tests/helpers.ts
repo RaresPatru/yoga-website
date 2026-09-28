@@ -783,6 +783,8 @@ export async function registerDirectly(eventId: string) {
 /** An email as the local mailbox holds it. */
 export interface MailboxMessage {
   ID: string;
+  From: { Name: string; Address: string };
+  ReplyTo: Array<{ Name: string; Address: string }>;
   Subject: string;
   HTML: string;
   Text: string;
@@ -948,4 +950,113 @@ export async function reviewLinksFor(registrationId: string) {
     .eq("registration_id", registrationId);
   if (error) throw new Error(`reviewLinksFor failed: ${error.message}`);
   return (data ?? []) as Array<{ id: string; used_at: string | null; expires_at: string }>;
+}
+
+/** The batches of waiting-list offers recorded for an event, oldest first. */
+export async function waitingListBatches(eventId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("waiting_list_notifications")
+    .select("batch_number, spots_opened, expires_at")
+    .eq("event_id", eventId)
+    .order("batch_number");
+  if (error) throw new Error(`waitingListBatches failed: ${error.message}`);
+  return (data ?? []) as Array<{ batch_number: number; spots_opened: number; expires_at: string }>;
+}
+
+/** An email's headers as the local mailbox holds them, each a list of values. */
+export async function emailHeaders(messageId: string): Promise<Record<string, string[]>> {
+  return fetch(`${MAILBOX_URL}/api/v1/message/${messageId}/headers`).then((r) => r.json());
+}
+
+/** Deletes every email the local mailbox holds for an address. */
+export async function clearMailbox(address: string) {
+  await fetch(`${MAILBOX_URL}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`, { method: "DELETE" });
+}
+
+/** An announcement written straight into the database, as the admin's editor would save it. */
+export async function seedAnnouncement(fields: Record<string, unknown>): Promise<string> {
+  const { data, error } = await (await adminScoped()).from("announcements").insert(fields).select("id").single();
+  if (error) throw new Error(`seedAnnouncement failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+export async function announcementById(id: string) {
+  const { data, error } = await (await adminScoped()).from("admin_announcements").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`announcementById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+export async function announcementRecipients(id: string) {
+  const { data, error } = await (await adminScoped())
+    .from("announcement_recipients")
+    .select("email, full_name, locale, status, reason, sent_at")
+    .eq("announcement_id", id);
+  if (error) throw new Error(`announcementRecipients failed: ${error.message}`);
+  return (data ?? []) as Array<{ email: string; full_name: string; locale: string; status: string; reason: string | null; sent_at: string | null }>;
+}
+
+/** Announcements whose Romanian subject starts with this, deleted with their recipients. */
+export async function deleteAnnouncementsTitled(prefix: string) {
+  const { error } = await (await adminScoped()).from("announcements").delete().like("subject_ro", `${prefix}%`);
+  if (error) throw new Error(`deleteAnnouncementsTitled failed: ${error.message}`);
+}
+
+export async function suppressionFor(email: string) {
+  const { data, error } = await (await adminScoped())
+    .from("email_suppressions")
+    .select("email, reason, created_at, announcement_id")
+    .eq("email", email.toLowerCase())
+    .maybeSingle();
+  if (error) throw new Error(`suppressionFor failed: ${error.message}`);
+  return data as { email: string; reason: string; created_at: string; announcement_id: string | null } | null;
+}
+
+/** Puts an address on the suppression list as of `at`, as an unsubscribe would. */
+export async function suppress(email: string, at: Date = new Date()) {
+  const { error } = await (await adminScoped())
+    .from("email_suppressions")
+    .upsert({ email: email.toLowerCase(), reason: "unsubscribed", created_at: at.toISOString() }, { onConflict: "email" });
+  if (error) throw new Error(`suppress failed: ${error.message}`);
+}
+
+export async function deleteSuppression(email: string) {
+  const { error } = await (await adminScoped()).from("email_suppressions").delete().eq("email", email.toLowerCase());
+  if (error) throw new Error(`deleteSuppression failed: ${error.message}`);
+}
+
+/** Sets when a booking ticked "send me news", or clears it. */
+export async function setMarketingConsent(registrationId: string, at: Date | null) {
+  const { error } = await (await serviceClient())
+    .from("registrations")
+    .update({ marketing_consent_at: at ? at.toISOString() : null })
+    .eq("id", registrationId);
+  if (error) throw new Error(`setMarketingConsent failed: ${error.message}`);
+}
+
+/** An email template's texts, to restore after a test changes them. */
+export async function templateTexts(type: string) {
+  const { data, error } = await (await adminScoped())
+    .from("email_templates")
+    .select("subject_ro, subject_en, body_ro, body_en")
+    .eq("type", type)
+    .single();
+  if (error) throw new Error(`templateTexts failed: ${error.message}`);
+  return data as { subject_ro: string; subject_en: string | null; body_ro: string; body_en: string | null };
+}
+
+export async function restoreTemplate(type: string, texts: Awaited<ReturnType<typeof templateTexts>>) {
+  const { error } = await (await adminScoped()).from("email_templates").update(texts).eq("type", type);
+  if (error) throw new Error(`restoreTemplate failed: ${error.message}`);
+}
+
+/** Writes announcement recipients directly, as a send cut short would leave them. Server key: only the server writes this table. */
+export async function putRecipients(
+  announcementId: string,
+  rows: Array<{ email: string; full_name: string; status: string; locale?: string; reason?: string | null }>
+) {
+  const { error } = await (await serviceClient()).from("announcement_recipients").upsert(
+    rows.map((row) => ({ announcement_id: announcementId, locale: "ro", reason: null, ...row })),
+    { onConflict: "announcement_id,email" }
+  );
+  if (error) throw new Error(`putRecipients failed: ${error.message}`);
 }

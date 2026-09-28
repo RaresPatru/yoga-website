@@ -3,7 +3,7 @@ import { isAdminRequest } from "@/lib/is-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyWaitingList } from "@/lib/notify-waiting-list";
 import { sendRemovalEmail } from "@/lib/send-removal-email";
-import { emailLocale } from "@/lib/email";
+import { emailLocale } from "@/lib/email-content";
 import { REMOVAL_REASON_MAX, type ParticipantAction } from "@/lib/admin/participant-actions";
 
 /**

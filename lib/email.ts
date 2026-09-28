@@ -1,11 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { getResend } from "@/lib/resend";
-import { formatEventSchedule } from "@/lib/utils";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { siteUrl } from "@/lib/site-config";
+import { fillHtml, fillText, type EmailLocale, type TemplateType } from "@/lib/email-content";
+import { renderEmail } from "@/lib/email-layout";
+import { loadEmailSettings, type EmailSettings } from "@/lib/email-brand";
 
 /**
- * Sending the site's emails: where they go, in which language, and what
- * happens when one fails.
+ * Sending the site's emails: where they go, who they are from, and what
+ * happens when one fails. Server only.
  *
  * WHERE THEY GO
  *
@@ -19,17 +23,21 @@ import { formatEventSchedule } from "@/lib/utils";
  * use production (audit S6: local runs used to send through the live Resend
  * account).
  *
+ * WHO THEY ARE FROM
+ *
+ * The address is RESEND_FROM_EMAIL, which has to be on a domain verified in
+ * Resend. The name beside it is her site's name ("flow4ward"), whatever name
+ * the variable carries, and replies go to her own address (audit I13): the
+ * sending address is usually one nobody reads.
+ *
  * WHAT A FAILURE LOOKS LIKE
  *
  * Resend returns `{ error }` rather than throwing, and logs it only outside
  * production, so a send nobody checks fails in silence: a bad key or an
  * unverified domain meant nobody received anything and nobody found out
- * (audit B9). sendEmail() therefore answers every send with ok or the reason,
- * and never throws: a booking that worked is not undone by an email that did
- * not go.
+ * (audit B9). Every send here answers ok or the reason, and never throws: a
+ * booking that worked is not undone by an email that did not go.
  */
-
-export type EmailLocale = "ro" | "en";
 
 export interface EmailAttachment {
   filename: string;
@@ -42,14 +50,23 @@ export interface OutgoingEmail {
   to: string;
   subject: string;
   html: string;
+  /** The plain-text version, for clients and readers that prefer it. */
+  text: string;
   attachments?: EmailAttachment[];
+  /** Extra headers, such as an announcement's List-Unsubscribe. */
+  headers?: Record<string, string>;
 }
 
 export type SendResult = { ok: true } | { ok: false; error: string };
 
-/** The page's language from a stored value: English when it says so, else Romanian. */
-export function emailLocale(value: unknown): EmailLocale {
-  return value === "en" ? "en" : "ro";
+/** Who an email is from, and where a reply goes. */
+export interface Sender {
+  fromName: string;
+  replyTo: string | null;
+}
+
+export function senderOf(settings: EmailSettings): Sender {
+  return { fromName: settings.brand.siteName, replyTo: settings.replyTo };
 }
 
 const LOCAL_DATABASE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/;
@@ -64,21 +81,37 @@ function mailboxUrl(): string {
   return process.env.LOCAL_MAILBOX_URL || "http://127.0.0.1:54324";
 }
 
-/** "flow4ward <hello@example.ro>" or "hello@example.ro", as Mailpit wants it. */
-function parseAddress(from: string): { Email: string; Name?: string } {
-  const named = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
-  return named ? { Email: named[2], Name: named[1] || undefined } : { Email: from.trim() };
+/** The address out of "flow4ward <hello@example.ro>" or "hello@example.ro". */
+function addressOf(from: string): string {
+  return from.match(/<([^>]+)>/)?.[1]?.trim() ?? from.trim();
 }
 
-async function sendToMailbox(email: OutgoingEmail, from: string): Promise<SendResult> {
+/**
+ * A display name as a header needs it: quoted when it holds a character that
+ * means something in an address, such as a comma or a full stop.
+ */
+function displayName(name: string): string {
+  const clean = name.replace(/[\r\n]+/g, " ").trim();
+  return /[()<>[\]:;@\\,."]/.test(clean) ? `"${clean.replace(/(["\\])/g, "\\$1")}"` : clean;
+}
+
+function fromHeader(sender: Sender, configured: string): string {
+  const address = addressOf(configured);
+  return sender.fromName ? `${displayName(sender.fromName)} <${address}>` : address;
+}
+
+async function sendToMailbox(email: OutgoingEmail, sender: Sender, configured: string): Promise<SendResult> {
   const response = await fetch(`${mailboxUrl()}/api/v1/send`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      From: parseAddress(from),
+      From: { Email: addressOf(configured), Name: sender.fromName || undefined },
       To: [{ Email: email.to }],
+      ReplyTo: sender.replyTo ? [{ Email: sender.replyTo }] : undefined,
       Subject: email.subject,
       HTML: email.html,
+      Text: email.text,
+      Headers: email.headers,
       Attachments: (email.attachments ?? []).map((a) => ({
         Filename: a.filename,
         Content: a.content,
@@ -90,17 +123,26 @@ async function sendToMailbox(email: OutgoingEmail, from: string): Promise<SendRe
   return { ok: true };
 }
 
-export async function sendEmail(email: OutgoingEmail): Promise<SendResult> {
-  const from = process.env.RESEND_FROM_EMAIL;
+function resendPayload(email: OutgoingEmail, sender: Sender, configured: string) {
+  return {
+    from: fromHeader(sender, configured),
+    to: email.to,
+    replyTo: sender.replyTo ?? undefined,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+    headers: email.headers,
+  };
+}
+
+export async function sendEmail(email: OutgoingEmail, sender: Sender): Promise<SendResult> {
+  const configured = process.env.RESEND_FROM_EMAIL;
   try {
-    if (usesLocalMailbox()) return await sendToMailbox(email, from || "site@localhost");
-    if (!from) return { ok: false, error: "RESEND_FROM_EMAIL is not set" };
+    if (usesLocalMailbox()) return await sendToMailbox(email, sender, configured || "site@localhost");
+    if (!configured) return { ok: false, error: "RESEND_FROM_EMAIL is not set" };
 
     const { error } = await getResend().emails.send({
-      from,
-      to: email.to,
-      subject: email.subject,
-      html: email.html,
+      ...resendPayload(email, sender, configured),
       attachments: email.attachments?.map((a) => ({
         filename: a.filename,
         content: a.content,
@@ -114,41 +156,55 @@ export async function sendEmail(email: OutgoingEmail): Promise<SendResult> {
   }
 }
 
-/**
- * Escapes text before it is dropped into an HTML email.
- *
- * One of the values is the name typed into a public form. Unescaped, someone
- * could book as `<a href="http://evil.example">Click here</a>` and that link
- * would arrive as a real one in an email from her own address: a ready-made
- * phishing email with her branding on it.
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+/** Resend's batch endpoint takes at most this many emails per request. */
+const BATCH_SIZE = 100;
 
 /**
- * Substitutes {{key}} placeholders in a stored template, escaping every value
- * on the way in. Every email goes through this one function, so the escaping
- * cannot be forgotten by one of them.
+ * Many emails at once, for announcements: one request per hundred to Resend,
+ * each email's outcome reported by its position. Attachments are not
+ * possible this way, and an announcement has none.
  */
-export function fillEmailTemplate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => escapeHtml(vars[key] ?? ""));
-}
+export async function sendEmails(emails: OutgoingEmail[], sender: Sender): Promise<SendResult[]> {
+  const configured = process.env.RESEND_FROM_EMAIL;
+  if (usesLocalMailbox()) {
+    const results: SendResult[] = [];
+    for (const email of emails) {
+      results.push(
+        await sendToMailbox(email, sender, configured || "site@localhost").catch((error: unknown) => ({
+          ok: false as const,
+          error: error instanceof Error ? error.message : String(error),
+        }))
+      );
+    }
+    return results;
+  }
+  if (!configured) return emails.map(() => ({ ok: false, error: "RESEND_FROM_EMAIL is not set" }));
 
-/** The rows of `email_templates`, one per email the site sends (its CHECK constraint lists the same). */
-export type TemplateType =
-  | "registration_confirmation"
-  | "payment_confirmation"
-  | "testimonial_request"
-  | "spot_available"
-  | "booking_cancelled"
-  | "waitlist_removed"
-  | "review_too_early";
+  const results: SendResult[] = [];
+  for (let start = 0; start < emails.length; start += BATCH_SIZE) {
+    const chunk = emails.slice(start, start + BATCH_SIZE);
+    try {
+      // "permissive": an address Resend refuses fails on its own instead of
+      // taking the other ninety-nine down with it.
+      const { data, error } = await getResend().batch.send(
+        chunk.map((email) => resendPayload(email, sender, configured)),
+        { batchValidation: "permissive" }
+      );
+      if (error) {
+        results.push(...chunk.map(() => ({ ok: false as const, error: `${error.name}: ${error.message}` })));
+        continue;
+      }
+      const failed = new Map((data?.errors ?? []).map((e) => [e.index, e.message]));
+      results.push(
+        ...chunk.map((_email, i): SendResult => (failed.has(i) ? { ok: false, error: failed.get(i)! } : { ok: true }))
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      results.push(...chunk.map(() => ({ ok: false as const, error: message })));
+    }
+  }
+  return results;
+}
 
 /**
  * A stored template in the person's language. An English subject or body left
@@ -173,37 +229,38 @@ export async function loadTemplate(
   };
 }
 
-/** The event columns an email about it needs. */
-export interface EmailEvent {
-  title_ro: string;
-  title_en: string | null;
-  date: string;
-  time: string | null;
-  end_date: string | null;
-  end_time: string | null;
-  location: string | null;
-  whatsapp_group_link?: string | null;
-}
-
-/** The event's title in the person's language, the Romanian when the English is blank. */
-export function eventTitle(event: Pick<EmailEvent, "title_ro" | "title_en">, locale: EmailLocale): string {
-  return (locale === "en" && event.title_en?.trim()) || event.title_ro;
-}
-
 /**
- * The placeholders every email about an event can use, in the person's
- * language. {{event_date}} is the date as the site writes it ("10 octombrie
- * 2026", "October 10, 2026", or a range for an event over several days) and
- * {{event_time}} the hours, with the end when she has given one. Before, the
- * date arrived as "2026-10-10" and only in Romanian (audit B15).
+ * One of the automatic emails, to one person: her template in their
+ * language, filled in with `vars`, drawn in the site's layout and sent from
+ * her name. Never throws; a missing template is a failure like any other.
  */
-export function eventEmailVars(event: EmailEvent, locale: EmailLocale): Record<string, string> {
-  const schedule = formatEventSchedule(event, locale);
-  return {
-    event_name: eventTitle(event, locale),
-    event_date: schedule.date,
-    event_time: schedule.time ?? "",
-    event_location: event.location || "",
-    whatsapp_link: event.whatsapp_group_link || "",
-  };
+export async function sendTemplateEmail({
+  type,
+  locale,
+  to,
+  vars,
+  attachments,
+}: {
+  type: TemplateType;
+  locale: EmailLocale;
+  to: string;
+  vars: Record<string, string>;
+  attachments?: EmailAttachment[];
+}): Promise<SendResult> {
+  try {
+    const supabase = createAdminClient();
+    const template = await loadTemplate(supabase, type, locale);
+    if (!template) return { ok: false, error: `No '${type}' email template` };
+    const settings = await loadEmailSettings(supabase, siteUrl());
+    const subject = fillText(template.subject, vars);
+    const { html, text } = renderEmail({
+      brand: settings.brand,
+      locale,
+      subject,
+      body: fillHtml(template.body, vars),
+    });
+    return await sendEmail({ to, subject, html, text, attachments }, senderOf(settings));
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }

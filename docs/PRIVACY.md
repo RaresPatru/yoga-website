@@ -27,6 +27,8 @@ every page's footer. Each shows the date it was last saved.
 | Joining a waiting list | name, email, phone | to offer a freed place (contract) |
 | Either form, if they write one | a note, often about health | so she knows at the event (explicit consent, a separate tick) |
 | Either form, if they tick it | the wish to hear about future events | announcements (consent) |
+| Receiving an announcement | the address, name and language it went to, and whether it arrived | the history of what was sent (as long as bookings) |
+| Unsubscribing | the address, and when | so nobody is written to again (legitimate interest; kept while announcements are sent) |
 | Paying | nothing; the card goes to Stripe | Stripe confirms the payment |
 | Writing a testimonial | the text, rating, chosen name, and a photo or video link if added | published with their consent, once she approves it (consent) |
 | The contact form | name, email, message | to reply (legitimate interest) |
@@ -106,8 +108,21 @@ they are business decisions rather than facts:
 ## Other rules the site follows
 
 - **ANSPDCP** is named in the privacy policy as the authority to complain to.
-- **Promotional emails** (phase 7) go only to people who ticked an opt-in, with
-  an unsubscribe link in every message (Law 506/2004, art. 12).
+- **Promotional emails** go only to people who ticked an opt-in, with an
+  unsubscribe link in every message (Law 506/2004, art. 12). Since phase 7
+  (28 September 2026) that is announcements: an address is included only if
+  its latest opt-in, on any booking, is newer than any unsubscribe. Every
+  announcement carries one-click unsubscribe headers (RFC 8058) as well as the
+  link, and the link's page changes nothing until its button is pressed.
+  Unsubscribed addresses stay on `email_suppressions`; the policy draft says
+  so (`20260930000000_email_system.sql`).
+- **Someone who asks another way** (a message, in person) to stop receiving
+  announcements: she presses "Oprește anunțurile" in their panel in
+  Înscrieri, which suppresses the address the same way.
+- **Erasure requests** reach the announcement history too: deleting a person
+  from Înscrieri does not delete the announcements they received. Deleting an
+  announcement from the history deletes its list of recipients; the
+  suppression list is kept, so an erased address is not written to again.
 - **Reviews** (phase 6): the testimonials page will say every testimonial comes
   from a verified participant (the EU Omnibus directive).
 - **The old SOL badge is not needed**: the EU platform behind it closed in July

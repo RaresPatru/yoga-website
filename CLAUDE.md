@@ -273,6 +273,17 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   specs on every run. Measured: 1-3 failures at two workers, 0 at one. Before
   believing a WebKit failure, re-run that spec alone — and do not raise
   `workers` to buy back the ninety seconds. See `playwright.config.ts`.
+- **`[WebServer] ⨯ Error: The destination stream closed early.` is not a
+  failure.** It is React stopping a render because the browser went away
+  before the response was finished. After a page loads, Next's `<Link>`
+  prefetches the pages its visible links lead to, and on this site every one
+  of those is a render on the server; a test that ends while they run closes
+  the window on them. Measured on 28 September 2026: closing the window 50 to
+  100 ms after the prefetches start logs it, while closing sooner (the
+  requests never arrive) or later (they have finished) does not. Every full
+  run since Phase 0 printed it between 42 and 96 times, always with digest
+  `3080431700`, and every one of those runs was green. A visitor who closes a
+  page a moment after opening it would print the same line in Vercel's logs.
 - **Pin `next` exactly and keep `@next/swc-*` in step with it.** Vercel runs
   `npm install`, not `npm ci`, so a floating range can resolve there to a version
   CI never saw. A caret on `next` beside literal `optionalDependencies` pins
@@ -290,7 +301,11 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   read them at http://127.0.0.1:54324, and in tests with `emailsTo()` from
   `tests/helpers.ts`. `npm run dev:prod` sends real email. The daily job
   (`/api/cron/daily`) refuses to run without `CRON_SECRET`; the test server
-  gets one from `playwright.config.ts`.
+  gets one from `playwright.config.ts`. Mailpit hands back an email's text
+  part with CRLF line endings. Every email also opens with a hidden preheader
+  (`lib/email-layout.ts`) repeating the first words of its text, so an
+  assertion on a sentence in an email or its preview should target a
+  paragraph (`locator("p", { hasText })`), not `getByText`.
 - **Local content comes from `supabase/seed.sql`,** which `npx supabase db reset`
   replays: six upcoming events and one six weeks past, five posts, six
   testimonials, five FAQs and her copy, all invented except the business name.
@@ -300,9 +315,21 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   one (`yoga-la-rasarit`) has an approved testimonial, so the events archive
   and an ended event's page have something to show. The paid retreat has one
   participant in each state the Registrations page shows. Three testimonials are
-  on the home page, and one written through a link waits for approval. None has a WhatsApp link, so anything that
+  on the home page, and one written through a link waits for approval. One
+  announcement is in the history, sent to the three people who had opted in;
+  Dan Georgescu unsubscribed through it, so a new one lists him as left out.
+  None has a WhatsApp link, so anything that
   renders one is invisible locally until you add it in `/admin`. Pictures live in `/public/mock`, built from the gitignored
   `mock-images/` by `npm run mock:images`.
+- **Two translators, two placeholder styles.** Public pages use next-intl,
+  whose messages are ICU: pass the value, `t("ask", { site })`. Calling
+  `t("ask")` and replacing `{site}` afterwards renders the raw key
+  ("unsubscribe.ask") on the page, because a missing value is a formatting
+  error. The admin panel's `t()` (`useAdminLocale`) is its own: it returns
+  the string as written, and callers `.replace("{count}", …)` by hand. In the
+  messages files a key is either a sentence or a group, never both:
+  `admin.email` is the login form's label, so the Email-uri page's copy lives
+  under `admin.mail`.
 - **Tailwind v4 compiles `scale-*` to the individual `scale` property**, which
   does **not** override `transform` — the browser applies translate, rotate,
   scale and *then* transform, so the two multiply. `hover:scale-[1.02]` on an

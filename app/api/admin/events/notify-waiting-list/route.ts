@@ -21,9 +21,10 @@ import { notifyWaitingList } from "@/lib/notify-waiting-list";
  *
  * WHY IT TAKES NO NUMBERS
  *
- * Only an event id. How many seats are free is read out of the database by
- * notifyWaitingList(), from the same view register_for_event() agrees with, so
- * a link it sends is a link that route will honour. Nothing about who gets
+ * Only an event id. How many seats are free is worked out in the database by
+ * offer_waiting_list_seats() (through notifyWaitingList()), counting seats the
+ * way register_for_event() does and under the same lock, so a link it sends is
+ * a link that route will honour. Nothing about who gets
  * emailed, or how many, can be influenced by what the browser puts in the body
  * — the same reason prices are never read from a request here.
  *

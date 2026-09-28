@@ -26,7 +26,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 4 | Events: admin list and editor, per-event numbers, public archive | done, 25 Sep |
 | 5 | Registrations: one list with the waiting list, archive, notes, exports | done, 26 Sep |
 | 6 | Testimonials and verified reviews | done, 28 Sep |
-| 7 | Emails: editor, preview, test sends, announcements | not started |
+| 7 | Emails: editor, preview, test sends, announcements | done, 28 Sep |
 | 8 | Messages: unread, starred, archive, letter view | not started |
 | 9 | Public polish and speed: loader, transitions, FAQ, blur, back to top | not started |
 | 10 | Stripe: the money path | not started |
@@ -104,6 +104,18 @@ Rares can overturn any of these.
   has the reasoning.
 - **English labels are in sentence case**: "Blog posts", "New event",
   "Log out".
+- **Joining a waiting list sends a confirmation** (`waitlist_joined`, phase 7).
+  It sent nothing before, so people could not tell whether it had worked.
+- **An automatic email is saved when she presses Save**, not on its own: the
+  next email of that kind goes out with whatever is saved.
+- **Replies go to an address she sets in Conținut site → Email-uri**, and to
+  the address for personal data requests until she does. The name the emails
+  come from is the site's name.
+- **An announcement goes once per address**, addressed with the name and in
+  the language of that person's latest booking, and a yes on any booking
+  counts: the box asks about future events, not one event.
+- **She can stop announcements to one person** from their panel in
+  Înscrieri, for someone who asked by message rather than through the link.
 
 ---
 
@@ -935,7 +947,7 @@ passed in both engines (87 of 87).
 
 ### Phase 7: Emails
 
-- [ ] **`/admin/emails`:**
+- [x] **`/admin/emails`:**
   - every automatic email, with the moment it is sent
   - an editor with the RO / EN switch, subject and body (email-safe formats
     only)
@@ -944,13 +956,13 @@ passed in both engines (87 of 87).
   - a live preview in the real email layout, filled with data from the next
     event, at phone or computer width
   - "Trimite-mi un test", which sends a test to her
-- [ ] **One branded email layout:**
+- [x] **One branded email layout:**
   - her name or logo at the top
   - her business name and address in the footer
   - replies go to her
   - From reads "flow4ward" (I13)
   - a plain-text version
-- [ ] **Announcements:**
+- [x] **Announcements:**
   - written once in both languages
   - recipients chosen from Registrations, either the selected rows or a
     filter; only people who opted in are included, and the rest are listed
@@ -959,20 +971,78 @@ passed in both engines (87 of 87).
   - a preview, then batch sending
   - an unsubscribe link and one-click unsubscribe
   - a history of what was sent
-- [ ] **B16.** Offering freed seats to the waiting list happens in one locked
+- [x] **B16.** Offering freed seats to the waiting list happens in one locked
   database step. Offers are recorded only for emails that actually sent (B9).
+
+**How it turned out** (28 September 2026)
+
+- **One layout for every email** (`lib/email-layout.ts`): her name or logo
+  on the cream background above a white sheet, the message, her business name
+  and address underneath, and the site's address. A paragraph holding only a
+  link is drawn as a rose button, so each placeholder link she inserts on its
+  own line becomes the email's one action. Tables and inline styles, so
+  Outlook and Gmail draw it too. Every email has a plain-text version.
+- **Lines with nothing to say are left out:** "Ora:" for an event with no
+  hour yet, or the WhatsApp button for an event without a group.
+- **The preview is the email.** The same functions fill and draw it in the
+  browser as on the server, with the next event's details and "Ana Popescu"
+  as the reader. "Trimite-mi un test" sends the text on screen, saved or not,
+  to the address she signs in with, and only there.
+- **Placeholders are chips** with plain names (Nume, Eveniment, Data, Ora,
+  Locul, and each email's links), inserted at the caret; each field has its
+  own row. The stored text still says `{{event_name}}`, so nothing that
+  sends changed its format.
+- **Announcements** start from the Registrations page (the rows ticked, or
+  everyone matching the filter) or from "Anunț nou" (everyone who accepted).
+  The editor says who will receive it and who is left out and why, before
+  she sends. They go a hundred to a request to Resend; each person is marked
+  sent or failed as it goes, so a send cut short carries on, and failed ones
+  can be tried again. The report lists everyone.
+- **Unsubscribing:** every announcement carries its own link and the
+  `List-Unsubscribe` headers (RFC 8058), so Gmail and Apple Mail show their
+  own Unsubscribe. The page the link opens changes nothing until its button
+  is pressed, because mail scanners open every link, and the button is a
+  plain form, working before any script loads.
+- **B16:** `offer_waiting_list_seats()` counts, chooses and stamps under
+  the lock on the event row that bookings take; six offers fired at once for
+  two seats make two. `settle_waiting_list_offers()` withdraws the offers
+  whose email failed and records only the ones sent (B9).
+- **Found along the way:** subjects were escaped as HTML, so an event called
+  "Yoga & brunch" arrived as "Yoga &amp; brunch"; and a confirmation for an
+  event without a WhatsApp group ended in "Alătură-te grupului de WhatsApp:"
+  and an empty link. Subjects are filled in as plain text now.
 
 **New migrations**
 
-- `…_email_system.sql`: new template types, the suppression list and the
-  announcement history. Admin-only.
+- `20260930000000_email_system.sql`:
+  - the `waitlist_joined` email, and the confirmations' WhatsApp line as a
+    button where its text is still the original
+  - `announcements`, `announcement_recipients`, `admin_announcements`
+  - `email_suppressions`
+  - `offer_waiting_list_seats()` and `settle_waiting_list_offers()`
+  - `admin_participants` readable by the server
+  - the privacy draft on unsubscribing and what is kept
 
 **Tests**
 
-- `admin-emails.spec.ts` is rewritten: edit, preview, and a test email in the
-  local mailbox.
-- `announcements.spec.ts`: only opted-in recipients get an email, the
-  unsubscribe works, and suppressed addresses get nothing.
+- `admin-emails.spec.ts` is rewritten: the list in a booking's order,
+  editing with chips and saving, the preview and a test in the local
+  mailbox, leaving with changes, English falling back to Romanian, an
+  announcement from Registrations to its report, deleting a draft, the reply
+  address, and stopping announcements to one person.
+- `announcements.spec.ts` (new): only opted-in people receive one, in their
+  language; someone who unsubscribed is left out unless they opted in again;
+  one-click unsubscribe; failed ones tried again and a stopped send carried
+  on, without writing to anyone twice; nothing sent twice or without its
+  Romanian text.
+- `unsubscribe.spec.ts` (new, both engines): the page's button, a link that
+  matches nobody, and no indexing.
+- `email-layout.spec.ts` (new): escaping, the empty lines left out, the
+  button, the card, the text version.
+- `email-language.spec.ts`: the From name, Reply-To and text part; no empty
+  WhatsApp line; the waiting-list confirmation.
+- `waiting-list-release.spec.ts`: six offers at once for two seats, and
+  batches recorded with how many went.
 
 ### Phase 8: Messages
 
@@ -1075,11 +1145,42 @@ passed in both engines (87 of 87).
 - **Vercel settings:**
   - Phase 5: add a `CRON_SECRET` environment variable (a random string of at
     least 16 characters). Until it is set, the daily job refuses to run.
-  - Phase 7: a verified sending domain and From address in Resend.
+  - Phase 7: a verified sending domain and From address in Resend
+    (`RESEND_FROM_EMAIL`). Its name does not matter: emails go out under the
+    site's name.
+- **Her address for replies** in Conținut site → Email-uri (or the address
+  for personal data requests in Pagini legale). Until one is filled in,
+  replies go to the sending address.
 - **Before merging to `main`:** run `npx supabase migration list --linked`,
   then `npx supabase db push` for the new migrations.
 - **B3:** one seat per email per event, or may someone book for a friend?
 - **Phase 11:** a PostHog project on the EU cloud.
+
+---
+
+## For the polish pass
+
+Rares' plan, 28 September: build every phase and test it locally first, then
+check, tweak and polish the whole together, with her. Anything built so far
+may change to fit how she works. The production steps under "Needs Rares"
+wait for that pass too, unless Rares decides to do them sooner.
+
+Noted so far:
+
+- **"Testimonial: prea devreme" may go.** Rares finds the email redundant:
+  someone who asks for their link before the event has ended could be told
+  so on the page. The catch is "The share page gives one answer to every
+  email" in DECISIONS.md: a page that answered "wait until your event has
+  ended" would tell anyone who typed an address that its owner has a
+  booking. A sentence on the share page, the same for everyone, saying when
+  a link can be asked for keeps both, and a request that comes too early then
+  sends nothing.
+- **Fewer emails if she takes Resend's free plan.** It caps what can be sent
+  per day and per month, and every email counts against it: confirmations,
+  the waiting list, testimonial invitations and announcements alike. The
+  Phase 7 emails stay for now. Then: count what one booking sends from start
+  to finish, and check on a preview what an announcement larger than a day's
+  allowance does.
 
 ---
 

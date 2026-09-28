@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Download, Search, Trash2, X } from "lucide-react";
+import { Download, Megaphone, Search, Trash2, X } from "lucide-react";
 import { adminErrorKey, toAdminError } from "@/lib/admin/db";
 import { useAdminData } from "@/lib/admin/use-admin-data";
 import { useSelection } from "@/lib/admin/use-selection";
@@ -23,6 +23,8 @@ import {
   type ParticipantTab,
 } from "@/lib/admin/participants";
 import { downloadBlob, toCsv, toXlsx, type ExportColumn, type ExportFormat } from "@/lib/admin/export";
+import { createAnnouncement, loadAnnouncement, setAnnouncementAudience } from "@/lib/admin/emails";
+import type { Audience } from "@/lib/announcement-audience";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Pagination } from "@/components/ui/pagination";
@@ -49,6 +51,12 @@ import { StatusChip, eventDay, shortDay } from "@/components/admin/participants/
  * &page=2), so the dashboard and each number on an event open it already
  * filtered, and ?p=<id> opens one person's panel over it. The database does
  * the filtering and paging (lib/admin/participants.ts), 50 to a page.
+ *
+ * Announcements start here too: the people she ticks, or everyone matching
+ * the filter, become a new announcement's recipients ("Scrie un anunț").
+ * Arriving from an announcement's "Alege din Înscrieri"
+ * (?announcement=<id>), the same button gives that draft its recipients
+ * instead, and a banner says so.
  */
 
 const TABS: readonly ParticipantTab[] = ["active", "archive"];
@@ -71,6 +79,7 @@ function Participants() {
   const query = params.get("q") ?? "";
   const requestedPage = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const openId = params.get("p");
+  const announcementId = params.get("announcement");
 
   /** This view's address with some settings changed. A new filter starts again at page 1. */
   const hrefWith = (changes: Record<string, string | null>) => {
@@ -111,6 +120,11 @@ function Participants() {
     `${listKey}|${requestedPage}`
   );
   const { data: events = [] } = useAdminData(eventChoices);
+  const { data: announcement } = useAdminData(
+    () => (announcementId ? loadAnnouncement(announcementId) : Promise.resolve(null)),
+    announcementId ?? ""
+  );
+  const choosingFor = announcement?.status === "draft" ? announcement : null;
   const selection = useSelection(listKey);
   const [working, setWorking] = useState(false);
 
@@ -190,6 +204,29 @@ function Participants() {
     }
   };
 
+  /**
+   * The people ticked, or everyone matching the filter, as an announcement's
+   * recipients: a new one, or the draft she came to choose them for.
+   */
+  const announce = async () => {
+    const audience: Audience = selection.allMatching
+      ? { kind: "filter", filters }
+      : { kind: "ids", ids: [...selection.ids] };
+    setWorking(true);
+    try {
+      if (choosingFor?.id) {
+        await setAnnouncementAudience(choosingFor.id, audience);
+        router.push(`/admin/emails/announcements/${choosingFor.id}`);
+      } else {
+        const id = await createAnnouncement(audience);
+        router.push(`/admin/emails/announcements/${id}`);
+      }
+    } catch (failure) {
+      toast.error(t(adminErrorKey(toAdminError(failure))));
+      setWorking(false);
+    }
+  };
+
   const exportItems = (fromSelection: boolean) => [
     { id: "xlsx", label: t("admin.participants.export_xlsx"), onSelect: () => void exportAs("xlsx", fromSelection) },
     { id: "csv", label: t("admin.participants.export_csv"), onSelect: () => void exportAs("csv", fromSelection) },
@@ -222,6 +259,24 @@ function Participants() {
           />
         }
       />
+
+      {choosingFor && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-rose-deep/25 bg-rose/10 px-5 py-4">
+          <Megaphone className="h-5 w-5 shrink-0 text-rose-deep" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-sm text-charcoal">
+            <strong className="font-medium">
+              {t("admin.announce.choosing").replace("{subject}", choosingFor.subject_ro?.trim() || t("admin.announce.untitled"))}
+            </strong>{" "}
+            {t("admin.announce.choosing_hint")}
+          </p>
+          <Link
+            href={`/admin/emails/announcements/${choosingFor.id}`}
+            className="text-sm font-medium text-rose-deep underline decoration-rose-deep/40 underline-offset-2 hover:decoration-rose-deep"
+          >
+            {t("admin.announce.back_to_draft")}
+          </Link>
+        </div>
+      )}
 
       <div className="mb-5 flex flex-col gap-3">
         <nav aria-label={t("admin.participants.tabs")} className="-mx-1 overflow-x-auto px-1">
@@ -374,6 +429,10 @@ function Participants() {
       />
 
       <SelectionBar count={selectedCount} onClear={selection.clear}>
+        <button type="button" disabled={working} onClick={announce} className={selectionButton()}>
+          <Megaphone className="h-4 w-4" aria-hidden="true" />
+          {choosingFor ? t("admin.announce.use_selection") : t("admin.announce.write")}
+        </button>
         <MenuButton
           label={t("admin.selection.export")}
           side="top"
