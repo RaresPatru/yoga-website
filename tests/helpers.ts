@@ -603,6 +603,66 @@ export async function deleteMessages(ids: string[]) {
   if (error) throw new Error(`deleteMessages failed: ${error.message}`);
 }
 
+/**
+ * `count` messages at once, named "<name> 1" to "<name> N", a second apart
+ * and in the past, so their order is fixed and anything written during the
+ * test is newer than all of them.
+ */
+export async function seedManyMessages(count: number, name: string): Promise<string[]> {
+  const now = Date.now();
+  const rows = Array.from({ length: count }, (_, i) => ({
+    name: `${name} ${i + 1}`,
+    email: `msg-${unique("many")}@example.com`,
+    subject: "Mesaj E2E",
+    message: "Unul din mai multe mesaje de test.",
+    created_at: new Date(now - (count - i) * 1000).toISOString(),
+  }));
+  const { data, error } = await (await serviceClient()).from("contact_messages").insert(rows).select("id");
+  if (error) throw new Error(`seedManyMessages failed: ${error.message}`);
+  return (data as { id: string }[]).map((row) => row.id);
+}
+
+export interface MessageRow {
+  id: string;
+  name: string;
+  locale: string;
+  read_at: string | null;
+  starred: boolean;
+  archived_at: string | null;
+}
+
+/** A contact message as stored, or null once it is deleted. */
+export async function messageRow(id: string): Promise<MessageRow | null> {
+  const { data, error } = await (await serviceClient())
+    .from("contact_messages")
+    .select("id, name, locale, read_at, starred, archived_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`messageRow failed: ${error.message}`);
+  return data as MessageRow | null;
+}
+
+/** What the contact form stored from one address, newest first. */
+export async function messagesFrom(email: string): Promise<MessageRow[]> {
+  const { data, error } = await (await serviceClient())
+    .from("contact_messages")
+    .select("id, name, locale, read_at, starred, archived_at")
+    .eq("email", email.toLowerCase())
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`messagesFrom failed: ${error.message}`);
+  return data as MessageRow[];
+}
+
+/** How many of these messages still exist. */
+export async function messagesLeft(ids: string[]): Promise<number> {
+  const { count, error } = await (await serviceClient())
+    .from("contact_messages")
+    .select("id", { count: "exact", head: true })
+    .in("id", ids);
+  if (error) throw new Error(`messagesLeft failed: ${error.message}`);
+  return count ?? 0;
+}
+
 /** A date `days` from today in Bucharest, as YYYY-MM-DD (negative for the past). */
 export function bucharestDate(days: number): string {
   // en-CA formats as YYYY-MM-DD. Noon keeps the arithmetic clear of the hour

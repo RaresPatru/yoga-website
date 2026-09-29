@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { EMAIL_RE } from "@/lib/validate-attendee";
+import { localeFrom } from "@/lib/register-for-event";
 
 export async function POST(req: Request) {
   try {
@@ -13,7 +14,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, email, subject, message, captchaToken } = await req.json();
+    const { name, email, subject, message, locale, captchaToken } = await req.json();
 
     if (!captchaToken) {
       return NextResponse.json({ error: "Missing captcha token" }, { status: 400 });
@@ -50,6 +51,8 @@ export async function POST(req: Request) {
       email: email.trim().toLowerCase(),
       subject: cleanSubject,
       message: message.trim(),
+      // The language of the page they wrote from, so she can answer in it.
+      locale: localeFrom(locale),
     });
 
     if (error) throw error;

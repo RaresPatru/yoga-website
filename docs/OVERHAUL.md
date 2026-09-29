@@ -27,7 +27,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 5 | Registrations: one list with the waiting list, archive, notes, exports | done, 26 Sep |
 | 6 | Testimonials and verified reviews | done, 28 Sep |
 | 7 | Emails: editor, preview, test sends, announcements | done, 28 Sep |
-| 8 | Messages: unread, starred, archive, letter view | not started |
+| 8 | Messages: unread, starred, archive, letter view | done, 29 Sep |
 | 9 | Public polish and speed: loader, transitions, FAQ, blur, back to top | not started |
 | 10 | Stripe: the money path | not started |
 | 11 | PostHog analytics | not started |
@@ -395,10 +395,11 @@ passed on their own afterwards (`admin-events.spec.ts`, 18 of 18).
     it is, seats taken, people on the waiting list, payments pending, and a
     link to its public page
   - quick actions: "Eveniment nou" and "Articol nou" open the empty forms
-- [ ] **Each row opens its list already filtered.** The links carry their filter
-  now (`?status=pending`, `?filter=unread`, `?tab=pending`,
-  `?tab=drafts`). Each list applies it when its own phase rebuilds it, and
-  those phases list it.
+- [x] **Each row opens its list already filtered** (`?status=pending`,
+  `?filter=unread`, `?tab=pending`, `?tab=drafts`). Each list learned to read
+  its filter when its phase rebuilt it: the posts in 3, Registrations in 5,
+  Testimoniale in 6 and Mesaje in 8, the last of them. Each list's spec opens
+  it from that address.
 
 **New migrations**
 
@@ -1046,24 +1047,99 @@ passed in both engines (87 of 87).
 
 ### Phase 8: Messages
 
-- [ ] **The inbox:**
+- [x] **The inbox:**
   - Tabs: *Inbox* · *Starred* · *Archive*, with an Unread filter and search.
     The dashboard's `?filter=unread` opens the Inbox with the filter on.
   - Select one, many or all, then mark read or unread, star, archive or
     delete (with confirmation).
-- [ ] **The letter view.** On desktop the list and the letter sit side by
+- [x] **The letter view.** On desktop the list and the letter sit side by
   side; on a phone the letter opens full screen.
   - The sender and subject are set in the serif typeface.
   - Line breaks are kept.
   - "Răspunde prin email" (Reply by email) is there, along with star, archive
     and delete.
   - Opening a message marks it read.
-- [ ] The contact form stores the visitor's language.
+- [x] The contact form stores the visitor's language.
+
+**How it turned out** (29 September 2026). The full suite passed on a
+production build: 646 passed, 11 skipped, none failed.
+
+- **The tabs are Primite, Cu stea and Arhivă.** Cu stea holds every starred
+  message, archived or not, as a mail app's does; an archived one there says
+  "Arhivat". Each tab counts what it would show with the current search and
+  switch.
+- **"Necitite" is a switch, not a fourth tab.** It narrows whichever tab is
+  open and says how many unread messages that tab holds either way. The
+  dashboard's link turns it on.
+- **The database searches and pages**, 25 to a page, as it does for
+  Registrations. The search reads the name, the address, the subject and the
+  message, with or without accents: `search_text`, a column Postgres keeps
+  itself.
+- **The letter sits beside the list from 1280 px wide.** It sticks under the
+  top bar and scrolls on its own, so a long list scrolls past it. Narrower, it
+  covers the screen, with "Înapoi la mesaje" at the top, and it has its own
+  address (`?m=<id>`), so the back gesture and a refresh work.
+- **Opening marks it read, and the list follows.** With "Necitite" on, the
+  message then leaves the list, while the letter stays open. "Marchează ca
+  necitit" puts it back and closes the letter. Starring keeps the letter open;
+  archiving, moving back to Primite and deleting close it.
+- **"Răspunde prin email" opens her mail app** addressed to them, with
+  "Re: <their subject>" and their message quoted underneath, since they wrote
+  through a form and have no copy of it. The subject line and the quote's
+  heading are in the language of the page they wrote from. Without a subject of
+  their own, the reply's is "Mesajul tău către <her site's name>". A message
+  too long for a mail link is quoted from the start and marked as cut.
+- **The bar at the bottom** offers each tab's likeliest action first
+  (Arhivează, Scoate steaua, Mută în Primite), "Mai multe" for the rest, and
+  Șterge. "All N that match" means the ones she was shown: a message that
+  arrives while she is choosing is not archived or deleted with them.
+- **She can star a row** without opening it, so without marking it read.
+- **The seed** has six messages to look at locally: two unread, one of them
+  from the English site, one starred, one without a subject, two archived.
+
+**New migration**
+
+- `20261001000000_message_inbox.sql`: `contact_messages.search_text`,
+  generated from the name, address, subject and message, lowercased and
+  without accents. The table's grants and policy are unchanged, so visitors
+  still reach nothing.
 
 **Tests**
 
-- `admin-messages.spec.ts` is rewritten, replacing a test that proved nothing
-  (T4).
+- `admin-messages.spec.ts` is rewritten (T4). It replaces a test that passed
+  whatever the page showed. The new one covers:
+  - the tabs and their counts, and an archived starred message
+  - the switch from the dashboard's address
+  - searching without accents, by address and by words in the text
+  - starring a row without reading it
+  - opening marks it read, and the dashboard's count follows
+  - line breaks, and the serif for who and what
+  - the reply in both languages
+  - the letter's actions, and deleting only after a yes
+  - a refresh keeping it open, and a message that is gone
+  - "all 27 that match" leaving a newer one alone
+  - English
+- `admin-mobile.spec.ts`: on an iPhone the letter covers the screen, starts at
+  the sender's name, and goes back to the list.
+- `public-contact.spec.ts`: a message from `/en/contact` is stored as English,
+  one from `/ro/contact` as Romanian, and anything else as Romanian.
+- `admin-dashboard.spec.ts`: the messages row lands with "Necitite" on.
+
+**Found along the way**
+
+- **The events list counted events like people.** Its Trecute tab borrowed
+  the Registrations wording, "Toți cei 12 … sunt selectați" and "Selectați:
+  2". Romanian counts evenimente (and mesaje) as "Toate cele 12 … sunt
+  selectate". Both lists now have their own words.
+- **The Supabase CLI that `9b403e9` updated writes the database types
+  differently.** They come out unformatted, so this phase's regeneration
+  rewrote the whole of `lib/database.types.ts`. They also mark generated
+  columns `never` on insert and update, so TypeScript now refuses the write
+  CLAUDE.md warned about.
+- **Nothing deletes old messages.** The privacy draft keeps them "until the
+  conversation ends, at most a year", a default she has to confirm, as with
+  bookings. Once she does, the daily job can enforce it. docs/PRIVACY.md says
+  so.
 
 ### Phase 9: Public polish and speed
 

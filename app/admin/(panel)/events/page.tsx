@@ -295,7 +295,7 @@ function EventList() {
           {selectable && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-sage/20 px-4 py-2.5 text-sm text-charcoal-light">
               <Checkbox
-                label={t("admin.participants.select_page")}
+                label={t("admin.events_list.select_page")}
                 checked={pageSelected === visibleIds.length}
                 indeterminate={pageSelected > 0 && pageSelected < visibleIds.length}
                 onChange={(e) => selection.setMany(visibleIds, e.target.checked)}
@@ -303,16 +303,16 @@ function EventList() {
               {pageSelected === visibleIds.length && shown.length > visible.length && (
                 <p>
                   {selection.allMatching ? (
-                    t("admin.selection.all_selected").replace("{count}", String(shown.length))
+                    t("admin.events_list.all_selected").replace("{count}", String(shown.length))
                   ) : (
                     <>
-                      {t("admin.selection.all_on_page").replace("{count}", String(visible.length))}{" "}
+                      {t("admin.events_list.all_on_page").replace("{count}", String(visible.length))}{" "}
                       <button
                         type="button"
                         onClick={() => selection.setAllMatching(true)}
                         className="font-medium text-rose-deep underline underline-offset-2"
                       >
-                        {t("admin.selection.select_all").replace("{count}", String(shown.length))}
+                        {t("admin.events_list.select_all").replace("{count}", String(shown.length))}
                       </button>
                     </>
                   )}
@@ -353,7 +353,11 @@ function EventList() {
         }}
       />
 
-      <SelectionBar count={selectable ? selectedIds.length : 0} onClear={selection.clear}>
+      <SelectionBar
+        count={selectable ? selectedIds.length : 0}
+        countLabel={t("admin.events_list.selected")}
+        onClear={selection.clear}
+      >
         <button type="button" disabled={deleting} onClick={deleteSelected} className={selectionButton(true)}>
           <Trash2 className="h-4 w-4" aria-hidden="true" />
           {t("admin.participants.delete_forever")}

@@ -1750,3 +1750,51 @@ for each other. The server then emails, and `settle_waiting_list_offers()`
 withdraws the offers whose email failed and records the rest as one batch, so
 no seat is held for someone who was never told and the log counts only links
 that went out (B9).
+
+### Cu stea holds every starred message, archived or not
+
+The inbox has three tabs: Primite (not archived), Cu stea and Arhivă. A star
+means "come back to this", so a starred message stays in Cu stea when she
+archives it, as in a mail app, and says "Arhivat" there so she knows where it
+lives. The tabs are views of two separate facts, `starred` and `archived_at`,
+not places a message moves between.
+
+### "Necitite" is a switch on every tab, not a tab of its own
+
+Unread is a state a message is in wherever it is, so it narrows the tab she
+is on instead of being a fourth place; the dashboard's "mesaje necitite" opens
+Primite with it on (`?filter=unread`). Opening a message marks it read, and the
+list follows at once: with the switch on, the message leaves the list while
+its letter stays open, because the switch promised unread ones. "Marchează ca
+necitit" puts one back.
+
+### The letter sits beside the list from 1280 px, and covers the screen below
+
+Side by side needs room for both a list she can scan and a letter at a
+reading width. From 1280 px, even with the sidebar wide, there is room for a
+23 rem list and a letter of about 37 rem; below that the letter would be
+squeezed to a phone's width beside a squeezed list. So below 1280 px it is a
+modal dialog over the whole screen, like a mail app on a phone, and on a
+tablet or a small laptop its text is centred at a reading width. Either way it
+has its own address (`?m=<id>`), so the back button and a refresh work. The
+wide pane sticks under the top bar and scrolls on its own, so a long list
+scrolls past without taking the letter away.
+
+### The reply is a mail link that quotes what they wrote
+
+"Răspunde prin email" is a `mailto:` link: her own mail app sends the reply,
+from her own address, and keeps it in her sent mail, which a form on the site
+could not do without sending her replies through the site's email allowance.
+The visitor wrote through a form and has no copy of their message, so the reply
+quotes it, as a mail app quotes a reply, under a heading in the language of the
+page they wrote from. Some mail apps refuse links near 2,000 characters, and a
+Romanian letter takes six once encoded, so a long message is quoted from the
+start for as much as fits and marked as cut.
+
+### "All N that match" means the ones she was shown
+
+Ticking every message that matches the tab and the search is a promise, not a
+list: the ids are read when she presses an action. In an inbox, messages keep
+arriving, and one that came in while she was choosing would be archived or
+deleted without ever being seen. So the list remembers when the newest message
+it knew of arrived, and "all that match" stops there.

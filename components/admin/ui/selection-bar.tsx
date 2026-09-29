@@ -11,8 +11,22 @@ import { useAdminLocale } from "@/components/admin/locale-provider";
  * At the bottom, where a thumb reaches on a phone, and fixed there so it stays
  * in view while she scrolls through a long list ticking rows. It is a toolbar
  * of ordinary buttons, announced politely when the count changes.
+ *
+ * `countLabel` words the count for what is ticked ("Selectate: {count}" for
+ * messages, where the default "Selectați" suits people): Romanian agrees the
+ * word with the noun it stands for.
  */
-export function SelectionBar({ count, children, onClear }: { count: number; children: ReactNode; onClear: () => void }) {
+export function SelectionBar({
+  count,
+  countLabel,
+  children,
+  onClear,
+}: {
+  count: number;
+  countLabel?: string;
+  children: ReactNode;
+  onClear: () => void;
+}) {
   const { t } = useAdminLocale();
   if (count === 0) return null;
   return (
@@ -23,7 +37,7 @@ export function SelectionBar({ count, children, onClear }: { count: number; chil
     >
       <div className="flex max-w-full flex-wrap items-center gap-1.5 rounded-3xl border border-sage/25 bg-warm-white/95 p-1.5 pl-4 shadow-[0_16px_40px_-12px_rgb(0_0_0/0.3)] backdrop-blur-md">
         <p className="mr-1 text-sm font-medium tabular-nums text-charcoal" aria-live="polite">
-          {t("admin.selection.count").replace("{count}", String(count))}
+          {(countLabel ?? t("admin.selection.count")).replace("{count}", String(count))}
         </p>
         {children}
         <button

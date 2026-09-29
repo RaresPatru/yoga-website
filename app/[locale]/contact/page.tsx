@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useId } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Check, Send } from "lucide-react";
 
 export default function ContactPage() {
   const t = useTranslations("contact");
+  const locale = useLocale();
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -31,7 +32,7 @@ export default function ContactPage() {
     const res = await fetch("/api/contact", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, captchaToken }),
+      body: JSON.stringify({ ...form, locale, captchaToken }),
     });
 
     if (!res.ok) {

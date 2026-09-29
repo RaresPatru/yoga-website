@@ -182,6 +182,8 @@ test.describe("the dashboard page", () => {
     }
     await row(page, "Mesaje").click();
     await expect(page.getByRole("heading", { level: 1, name: "Mesaje" })).toBeVisible();
+    // The inbox reads its filter: the unread ones are what the row counted.
+    await expect(page.getByRole("button", { name: /^Necitite/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   test("the next event is the soonest one that has not ended, with its numbers", async ({ page }) => {

@@ -299,6 +299,8 @@ test.describe("the events list", () => {
     const rows = page.locator("main li").filter({ has: page.locator("a[href^='/admin/events/']") });
     await expect(rows).toHaveCount(1);
     await rows.first().getByRole("checkbox").check();
+    // Events are "evenimente", which Romanian counts with "Selectate", not the people's "Selectați".
+    await expect(page.getByRole("toolbar")).toContainText("Selectate: 1");
     await page.getByRole("toolbar").getByRole("button", { name: "Șterge definitiv" }).click();
     const dialog = page.getByRole("dialog", { name: "Ștergi definitiv un eveniment?" });
     await expect(dialog).toContainText("Testimonialele rămân");
@@ -319,7 +321,11 @@ test.describe("the events list", () => {
   test("only Trecute offers deleting", async ({ page }) => {
     await page.goto("/admin/events");
     await expect(page.getByRole("heading", { level: 1, name: "Evenimente" })).toBeVisible();
-    await expect(page.getByLabel("Selectează toți de pe pagină")).toHaveCount(0);
+    await expect(page.getByLabel("Selectează toate de pe pagină")).toHaveCount(0);
+    const past = await seedEvent({ title_ro: `${marker} Trecut`, date: bucharestDate(-10) });
+    slugs.push(past.slug);
+    await page.goto(`/admin/events?tab=past&q=${encodeURIComponent(`${marker} Trecut`)}`);
+    await expect(page.getByLabel("Selectează toate de pe pagină")).toBeVisible();
   });
 
   /**

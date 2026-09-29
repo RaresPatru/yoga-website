@@ -161,14 +161,17 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   (`npx supabase gen types typescript --local > lib/database.types.ts`). All
   four Supabase clients are typed from it, so a stale file type-checks code
   against a schema that no longer exists.
-- **The generated types offer generated columns on insert and update.**
-  `events.starts_at` and `events.ends_at` are computed by Postgres, which
-  refuses any write to them, but `lib/database.types.ts` lists both as optional
-  fields of `Insert` and `Update`. Spread a whole `Row` into `.update()` and
-  every save fails. The events editor's `EventDraft` omits them; any new writer
-  of `events` has to as well. `blog_posts.first_image` and
-  `reading_minutes_ro` / `_en` are the same: the post editor writes only the
-  fields in `POST_FIELDS` (`lib/admin/blog.ts`).
+- **Generated columns cannot be written.** `events.starts_at` and
+  `events.ends_at` are computed by Postgres, which refuses any write to them,
+  and so are `blog_posts.first_image`, `reading_minutes_ro` / `_en` and
+  `contact_messages.search_text`. Spread a whole `Row` into `.update()` and
+  the save fails. Since the Supabase CLI 2.118 (`9b403e9`),
+  `lib/database.types.ts` types them `never` on `Insert` and `Update`, so
+  TypeScript catches it; the older CLI offered them as optional fields and
+  the failure only showed at runtime. The events editor's `EventDraft` omits
+  them, and the post editor writes only the fields in `POST_FIELDS`
+  (`lib/admin/blog.ts`). That CLI also writes the file unformatted, so don't
+  hand-format it: the next regeneration would undo it.
 - **Next.js writes the layout's `<title>` after a page's effects on a full
   load.** A client page that sets `document.title` in an effect sees it
   replaced by the metadata title a moment later. In the admin panel use
@@ -318,9 +321,11 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   on the home page, and one written through a link waits for approval. One
   announcement is in the history, sent to the three people who had opted in;
   Dan Georgescu unsubscribed through it, so a new one lists him as left out.
-  None has a WhatsApp link, so anything that
-  renders one is invisible locally until you add it in `/admin`. Pictures live in `/public/mock`, built from the gitignored
-  `mock-images/` by `npm run mock:images`.
+  Six contact messages fill Mesaje: two unread (one written on the English
+  site), one starred, one without a subject, two archived. No event has a
+  WhatsApp link, so anything that renders one is invisible locally until you
+  add it in `/admin`. Pictures live in `/public/mock`, built from the
+  gitignored `mock-images/` by `npm run mock:images`.
 - **Two translators, two placeholder styles.** Public pages use next-intl,
   whose messages are ICU: pass the value, `t("ask", { site })`. Calling
   `t("ask")` and replacing `{site}` afterwards renders the raw key

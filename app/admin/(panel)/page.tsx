@@ -33,9 +33,9 @@ import { PageHeader } from "@/components/admin/ui/page-header";
  * that need her. The counts come from the `admin_dashboard` view
  * (20260924000400_admin_dashboard.sql), which states each rule.
  *
- * Each link carries the filter its list will apply (`?status=pending`,
- * `?tab=drafts`, …). The lists learn to read them as each one is rebuilt in
- * the later phases of docs/OVERHAUL.md.
+ * Each link carries the filter its list applies (`?status=pending`,
+ * `?filter=unread`, `?tab=pending`, `?tab=drafts`), so the list opens on the
+ * very things the row counted.
  */
 
 type Tone = "todo" | "info";

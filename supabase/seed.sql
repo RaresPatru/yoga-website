@@ -686,6 +686,42 @@ on conflict (email) do nothing;
 
 
 -- ---------------------------------------------------------------------------
+-- Messages from the contact form, for the Mesaje page
+-- ---------------------------------------------------------------------------
+-- Four in the inbox: two unread (one written on the English site), one
+-- starred, and one without a subject from Ionuț, which a search for "ionut"
+-- finds. Two archived: Ana Popescu's thanks after the sunrise class and Mihai
+-- Ene's after his refund.
+insert into public.contact_messages (name, email, subject, message, locale, read_at, starred, archived_at, created_at)
+select v.name, v.email, v.subject, v.message, v.locale,
+       case when v.read then now() - v.ago + interval '1 hour' end,
+       v.starred,
+       case when v.archived then now() - v.ago + interval '2 hours' end,
+       now() - v.ago
+from (values
+  ('Andreea Mureșan', 'andreea.muresan@example.test', 'Sesiune pentru o echipă',
+   E'Bună ziua,\n\nLucrez într-o echipă de 12 oameni și ne-ar plăcea o dimineață de yoga împreună, undeva în natură, într-o vineri din noiembrie.\nSe poate organiza așa ceva? Ce ar trebui să știm dinainte?\n\nMulțumesc,\nAndreea',
+   'ro', false, false, false, interval '2 hours'),
+  ('Sophie Martin', 'sophie.martin@example.test', 'Parking at the retreat',
+   E'Hi!\n\nIs there somewhere to leave a car near the retreat house, or is the train easier?\n\nThanks,\nSophie',
+   'en', false, false, false, interval '1 day'),
+  ('Ioana Rusu', 'ioana.rusu@example.test', 'Colaborare: yoga și brunch',
+   E'Salut! Am o cafenea cu o terasă mare și mi-ar plăcea să facem împreună o dimineață de yoga urmată de brunch, la primăvară.\n\nPutem vorbi săptămâna asta?',
+   'ro', true, true, false, interval '4 days'),
+  ('Ionuț Dragomir', 'ionut.dragomir@example.test', null,
+   'Salut, se poate veni și fără saltea? Nu am încă una a mea.',
+   'ro', true, false, false, interval '6 days'),
+  ('Mihai Ene', 'mihai.ene@example.test', 'Rambursare',
+   'Bună ziua, am primit banii înapoi. Mulțumesc că s-a rezolvat atât de repede.',
+   'ro', true, false, true, interval '9 days'),
+  ('Ana Popescu', 'ana.popescu@example.test', 'Mulțumesc pentru dimineața de la răsărit',
+   E'Bună!\n\nVoiam doar să-ți spun că a fost exact ce îmi trebuia.\nNe vedem la retreat!\n\nAna',
+   'ro', true, false, true, interval '40 days')
+) as v(name, email, subject, message, locale, read, starred, archived, ago)
+where not exists (select 1 from public.contact_messages m where m.email = 'andreea.muresan@example.test');
+
+
+-- ---------------------------------------------------------------------------
 -- Frequently asked questions
 -- ---------------------------------------------------------------------------
 -- These answer what actually stalls a booking. The home page renders them as a

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { deleteMessages, messagesFrom, unique } from "./helpers";
 
 test.describe("contact page (RO)", () => {
   test.beforeEach(async ({ page }) => {
@@ -44,14 +45,18 @@ test.describe("contact page (RO)", () => {
     // which makes the fills below stick on every engine.
     await expect(page.locator('[data-verified="true"]')).toBeAttached();
 
+    const email = `${unique("contact-ro")}@example.com`;
     await page.getByLabel("Nume").fill("Test E2E");
-    await page.getByLabel("Email").fill(`e2e-${Date.now()}@example.com`);
+    await page.getByLabel("Email").fill(email);
     await page.getByLabel("Subiect").fill("Subiect test");
     await page.getByLabel("Mesaj").fill("Mesaj de test E2E, suficient de lung.");
 
     await page.getByRole("button", { name: "Trimite" }).click();
 
     await expect(page.getByText("Mesajul a fost trimis cu succes!")).toBeVisible();
+    const stored = await messagesFrom(email);
+    await deleteMessages(stored.map((m) => m.id));
+    expect(stored.map((m) => m.locale)).toEqual(["ro"]);
   });
 });
 
@@ -86,5 +91,45 @@ test.describe("contact page (EN spot check)", () => {
     await expect(page.getByLabel("Name")).toBeVisible();
     await expect(page.getByLabel("Message")).toBeVisible();
     await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+  });
+
+  // The admin's letter tells her to answer in English, and her reply opens in
+  // English, only if the message remembers where it was written.
+  test("a message from the English page is stored as English", async ({ page }) => {
+    await page.goto("/en/contact");
+    await expect(page.locator('[data-verified="true"]')).toBeAttached();
+
+    const email = `${unique("contact-en")}@example.com`;
+    await page.getByLabel("Name").fill("Test E2E");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Message").fill("A test message from the English page.");
+    await page.getByRole("button", { name: "Send" }).click();
+
+    await expect(page.getByText("Message sent successfully!")).toBeVisible();
+    const stored = await messagesFrom(email);
+    await deleteMessages(stored.map((m) => m.id));
+    expect(stored.map((m) => m.locale)).toEqual(["en"]);
+  });
+});
+
+test.describe("the language a message is stored in", () => {
+  // Whatever the page says it is, only "ro" and "en" reach the table; the
+  // column refuses anything else, so a bad value would lose the message.
+  test("anything but English is stored as Romanian", async ({ request }) => {
+    const email = `${unique("contact-de")}@example.com`;
+    const res = await request.post("/api/contact", {
+      data: {
+        name: "Test E2E",
+        email,
+        message: "Ein Test, lang genug für das Formular.",
+        locale: "de",
+        // The suite's Turnstile secret is Cloudflare's always-pass test key.
+        captchaToken: "XXXX.DUMMY.TOKEN.XXXX",
+      },
+    });
+    const stored = await messagesFrom(email);
+    await deleteMessages(stored.map((m) => m.id));
+    expect(res.status()).toBe(200);
+    expect(stored.map((m) => m.locale)).toEqual(["ro"]);
   });
 });

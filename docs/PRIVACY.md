@@ -91,6 +91,9 @@ they are business decisions rather than facts:
   confirms a period, the daily job can. Payment records: as
   long as accounting law requires.
 - **Contact messages**: until the conversation ends, at most one year.
+  Nothing deletes them yet: a message stays in Mesaje, archived or not, until
+  she deletes it (phase 8). Once she confirms a period, the daily job can
+  delete older ones.
 
 ## What a lawyer should check
 

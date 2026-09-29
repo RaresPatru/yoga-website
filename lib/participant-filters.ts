@@ -1,4 +1,4 @@
-import { searchable } from "@/lib/search-text";
+import { containsPattern } from "@/lib/search-text";
 
 /**
  * The Registrations page's filters, as rules any query on `admin_participants`
@@ -53,8 +53,7 @@ export function searchPattern(q: string): string | null {
   if (/^[\d\s+().\-/]+$/.test(trimmed) && digits.length >= 3) {
     return `%${digits.replace(/^0+/, "")}%`;
   }
-  // % and _ are wildcards to LIKE; typed ones are meant literally.
-  return `%${searchable(trimmed).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  return containsPattern(trimmed);
 }
 
 export type Filterable<Q> = Q & {

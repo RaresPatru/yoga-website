@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { deleteMessages, seedMessage, unique } from "./helpers";
 
 /**
  * The admin panel on a phone: the `admin-mobile` project runs this on iPhone
@@ -74,5 +75,35 @@ test.describe("the admin panel on a phone", () => {
     await expect(drawer).toBeHidden();
     // The tap closed the drawer and did nothing to the page underneath.
     await expect(page).toHaveURL(/\/admin$/);
+  });
+
+  test("a message opens over the whole screen, and the arrow goes back to the list", async ({ page }) => {
+    const tag = unique("telefon");
+    const id = await seedMessage({ name: `Andreea ${tag}`, message: "Primul rând\nAl doilea rând" });
+    try {
+      await page.goto(`/admin/messages?q=${tag}`);
+      await expect(page.getByRole("heading", { level: 1, name: "Mesaje" })).toBeVisible();
+      await page.getByRole("link", { name: new RegExp(`Andreea ${tag}`) }).click();
+
+      const letter = page.getByRole("dialog", { name: `Andreea ${tag}` });
+      await expect(letter).toBeVisible();
+      const box = (await letter.boundingBox())!;
+      const viewport = page.viewportSize()!;
+      expect(Math.round(box.x)).toBe(0);
+      expect(Math.round(box.width)).toBe(viewport.width);
+      expect(Math.round(box.height)).toBe(viewport.height);
+      // Reading starts at the letter, not with a ring round the back arrow.
+      await expect(letter.getByRole("heading", { level: 2 })).toBeFocused();
+      await expect(letter.getByRole("link", { name: "Răspunde prin email" })).toBeVisible();
+      const overflow = await letter.evaluate((el) => el.scrollWidth - el.clientWidth);
+      expect(overflow, "nothing in the letter should scroll sideways").toBeLessThanOrEqual(0);
+
+      await letter.getByRole("button", { name: "Înapoi la mesaje" }).click();
+      await expect(letter).toBeHidden();
+      await expect(page).not.toHaveURL(/m=/);
+      await expect(page.getByRole("link", { name: new RegExp(`Andreea ${tag}`) })).toBeVisible();
+    } finally {
+      await deleteMessages([id]);
+    }
   });
 });

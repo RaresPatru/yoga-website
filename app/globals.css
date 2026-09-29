@@ -508,6 +508,17 @@ body {
     pointer-events: none;
   }
 
+  /*
+   * For a button at the right edge of a box that clips (the letter pane on
+   * the Mesaje page scrolls, and so clips): the tooltip ends at the button
+   * instead of being centred on it and cut off.
+   */
+  [data-tooltip][data-tooltip-end]::after {
+    left: auto;
+    right: 0;
+    translate: none;
+  }
+
   /* Keyboard first, and deliberately outside the pointer query below: someone
      tabbing on a touchscreen laptop still gets it. */
   [data-tooltip]:focus-visible::after {
@@ -1391,6 +1402,69 @@ body {
 
   @media (prefers-reduced-motion: reduce) {
     .admin-sheet[open] {
+      animation: none;
+    }
+  }
+}
+
+/*
+ * THE LETTER VIEW
+ *
+ * One message on the Mesaje page (components/admin/messages/letter.tsx).
+ *
+ * From 1280px wide, the letter is a pane beside the list. It sticks below the
+ * top bar and scrolls by itself, so the message stays in view while a long
+ * list scrolls past it; `contain` keeps its scrolling from carrying on into
+ * the page at either end.
+ *
+ * Narrower than that, the letter is a modal <dialog> over the whole screen,
+ * pinned to the edges like the participant panel on a phone, and it arrives
+ * from the right as a page would.
+ */
+@layer components {
+  @media (min-width: 80rem) {
+    .admin-letter-pane {
+      position: sticky;
+      top: calc(var(--admin-header-h) + 1.5rem);
+      max-height: calc(100dvh - var(--admin-header-h) - 3rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+  }
+
+  .admin-letter {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+  }
+
+  .admin-letter::backdrop {
+    background-color: var(--color-cream);
+  }
+
+  .admin-letter[open] {
+    animation: admin-letter-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  @keyframes admin-letter-in {
+    from {
+      translate: 2.5rem 0;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-letter[open] {
       animation: none;
     }
   }

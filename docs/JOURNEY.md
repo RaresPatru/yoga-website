@@ -1604,6 +1604,41 @@ take; the test fires six offers at two seats and gets two.
 through next-intl, which wants the value passed in, while the admin panel's
 translator replaces them by hand afterwards. The page used the admin's habit.
 
+### Phase 8: an inbox she can read like letters
+
+**Messages were a pile.** Every message the contact form had ever received sat
+on one page, newest first, each with a delete button: nothing to say which
+were new, no way to keep one aside or put one away, and no way to answer
+except copying the address. The database had been ready since phase 1: read,
+starred and archived columns that no screen used. The test for the page
+checked that it showed "either messages or the empty state", which it would
+have done with any page at all.
+
+**Now it works like a mail app, in her colours.** Primite, Cu stea and Arhivă;
+a Necitite switch that the dashboard's count opens; a search that finds
+"Ionuț" when she types "ionut". A message opens beside the list on a computer
+and over the whole screen on her phone, with the sender and subject in the
+site's serif and the visitor's own line breaks kept. Opening it marks it read.
+
+**The reply had a gap nobody sees from the admin side.** The visitor wrote
+through a form, so they have no copy of what they asked. "Răspunde prin
+email" opens her own mail app with their message quoted underneath, and the
+quote's heading and the subject are in the language of the page they wrote
+from. That meant the contact form finally had to record which page that was.
+
+**"Select all" had to mean "all I saw".** Ticking every message that matches a
+search is a promise kept when she presses a button. In an inbox new messages
+keep arriving, so one that came in while she was choosing would have been
+archived, or deleted, unseen. The list remembers the newest message it had,
+and the test adds one mid-selection to check that it is left alone.
+
+**Two things turned up along the way.** The events list's Trecute tab counted
+events with the words for people ("Toți cei 12 … selectați"), which Romanian
+does not do. And the Supabase CLI, updated earlier that day, now marks
+computed columns as impossible to write in the generated types. That had been a
+runtime-only trap, written up as a warning in CLAUDE.md; the compiler catches
+it now.
+
 ---
 
 ## Decisions worth defending
