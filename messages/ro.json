@@ -17,7 +17,8 @@
     "share": "Distribuie",
     "copied": "Link copiat!",
     "copy_failed": "Copiază linkul din bara de adrese",
-    "skip_to_content": "Sari la conținut"
+    "skip_to_content": "Sari la conținut",
+    "loading_page": "Se încarcă pagina…"
   },
   "home": {
     "free": "Gratuit"

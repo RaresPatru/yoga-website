@@ -3,6 +3,7 @@ import { Calendar, Clock, MapPin } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
 import { SeatCount } from "@/components/events/seat-count";
+import { PhotoTransition } from "@/components/layout/view-transitions";
 import { formatEventSchedule } from "@/lib/utils";
 import { formatPrice } from "@/lib/money";
 import { toPlainText } from "@/lib/plain-text";
@@ -63,26 +64,27 @@ export function EventCard({
           /*
             Left, top and right: the photograph is the card's lid. `-3`
             against the card's `p-6` leaves it a little proud of the text
-            without reaching the edge, which it cannot do for the reason in
-            components/events/event-feature-card.tsx: the card's
-            backdrop-filter defeats rounded overflow clipping.
+            without reaching the edge, like the home page's feature card.
+            The frame glides into the event's page when the card is opened.
           */
-          <div className="relative -mx-3 -mt-3 mb-4 aspect-[3/2] overflow-hidden rounded-xl bg-sage/10">
-            <Image
-              src={event.image_url}
-              unoptimized={!canOptimise(event.image_url)}
-              alt={title}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              // The photograph answers the hover: a slow push-in inside the
-              // rounded frame while the card lifts. `scale-100` is the resting
-              // identity (GlassCard explains why), and `motion-safe:` means the
-              // zoom never exists for someone who asked for less motion.
-              className={`object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105 ${
-                phase === "ended" ? "saturate-[0.85]" : ""
-              }`}
-            />
-          </div>
+          <PhotoTransition kind="event" slug={event.slug}>
+            <div className="relative -mx-3 -mt-3 mb-4 aspect-[3/2] overflow-hidden rounded-xl bg-sage/10">
+              <Image
+                src={event.image_url}
+                unoptimized={!canOptimise(event.image_url)}
+                alt={title}
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                // The photograph answers the hover: a slow push-in inside the
+                // rounded frame while the card lifts. `scale-100` is the resting
+                // identity (GlassCard explains why), and `motion-safe:` means the
+                // zoom never exists for someone who asked for less motion.
+                className={`object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105 ${
+                  phase === "ended" ? "saturate-[0.85]" : ""
+                }`}
+              />
+            </div>
+          </PhotoTransition>
         )}
         <Heading className="font-serif text-xl text-charcoal break-words">{title}</Heading>
         {phase !== "ended" && (

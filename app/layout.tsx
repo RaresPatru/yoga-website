@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
-import { PostHogProvider } from "@/components/providers/posthog-provider";
 import { getLocale } from "next-intl/server";
 import { siteUrl } from "@/lib/site-config";
 import { getSiteName } from "@/lib/site-content";
@@ -80,18 +79,13 @@ export default async function RootLayout({
     <html lang={locale} suppressHydrationWarning className={`${playfair.variable} ${inter.variable}`}>
       <body className="flex min-h-dvh flex-col antialiased">
         {/*
-          No Suspense boundary here any more.
-
-          It used to wrap {children} — the whole application — purely because
-          the analytics provider calls useSearchParams(). That made Next flush
-          the document shell immediately and stream everything after it, so the
-          response status was committed as 200 before any page could call
-          notFound(). Missing events answered "200 OK" while showing a 404.
-
-          The boundary now lives inside PostHogProvider, around the tracker that
-          actually needs it.
+          Nothing wraps {children} here, and nothing should: a Suspense
+          boundary around the whole application makes Next send the response
+          before any page can call notFound(), so missing pages would answer
+          200. The public site's analytics live in app/[locale]/layout.tsx,
+          where the admin panel never reaches them.
         */}
-        <PostHogProvider>{children}</PostHogProvider>
+        {children}
       </body>
     </html>
   );

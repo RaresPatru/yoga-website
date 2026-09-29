@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LegalDocument, legalMetadata } from "@/components/legal/legal-document";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 export async function generateMetadata({
   params,
@@ -10,5 +11,9 @@ export async function generateMetadata({
 }
 
 export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
-  return <LegalDocument kind="cookies" locale={(await params).locale} />;
+  return (
+    <PageTransition>
+      <LegalDocument kind="cookies" locale={(await params).locale} />
+    </PageTransition>
+  );
 }

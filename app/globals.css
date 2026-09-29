@@ -519,6 +519,18 @@ body {
     translate: none;
   }
 
+  /*
+   * For a button pinned to the bottom right of the screen ("Înapoi sus"),
+   * where below and centred would both leave the screen: beside it, on the
+   * left.
+   */
+  [data-tooltip][data-tooltip-left]::after {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 0.5rem);
+    translate: 0 -50%;
+  }
+
   /* Keyboard first, and deliberately outside the pointer query below: someone
      tabbing on a touchscreen laptop still gets it. */
   [data-tooltip]:focus-visible::after {
@@ -1584,5 +1596,502 @@ body {
   .email-event-node-remove:hover {
     background-color: color-mix(in oklab, var(--color-sage) 15%, transparent);
     color: var(--color-charcoal);
+  }
+}
+
+/*
+ * THE LOTUS AND THE VEIL
+ *
+ * What a tap on a link looks like while the next page is on its way
+ * (components/layout/navigation-feedback.tsx), and the lotus that turns in it
+ * (components/layout/lotus.tsx). The timing lives here, and it is what keeps
+ * a quick page from showing any of it:
+ *
+ *   0 ms      the link is followed; nothing changes yet
+ *   150 ms    the page washes pale and stops taking taps
+ *   450 ms    the lotus appears, turning
+ *
+ * The veil is a wash rather than a blur: blurring the whole page costs a
+ * phone more than the half-second it is there for.
+ */
+@layer components {
+  .nav-veil {
+    position: fixed;
+    inset: 0;
+    /* Over the page, under the top bar (z-50): another destination stays one tap away. */
+    z-index: 40;
+    display: grid;
+    place-items: center;
+    background-color: color-mix(in oklab, var(--color-cream) 55%, transparent);
+    /* Hidden, and so letting every tap through, until a link is followed. */
+    visibility: hidden;
+    opacity: 0;
+  }
+
+  /*
+   * `visibility` is hidden through the delay (the animation's first frame
+   * holds it) and visible from the moment the fade starts, so taps are taken
+   * from then on and not before. The name carries it through the page
+   * transition, where it fades out on top of the old page (PAGE TRANSITIONS).
+   */
+  .nav-veil[data-pending] {
+    view-transition-name: nav-veil;
+    animation: nav-veil-in 240ms ease-out 150ms both;
+  }
+
+  .nav-veil-lotus {
+    display: grid;
+    place-items: center;
+    width: 5.5rem;
+    height: 5.5rem;
+    border-radius: 999px;
+    background-color: var(--color-warm-white);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--color-sage) 25%, transparent),
+      0 14px 32px -14px rgb(0 0 0 / 0.3);
+    animation: nav-veil-lotus-in 320ms ease-out 450ms both;
+  }
+
+  @keyframes nav-veil-in {
+    from {
+      visibility: hidden;
+      opacity: 0;
+    }
+    to {
+      visibility: visible;
+      opacity: 1;
+    }
+  }
+
+  @keyframes nav-veil-lotus-in {
+    from {
+      opacity: 0;
+      scale: 0.92;
+    }
+  }
+
+  /*
+   * The lotus turns once every 2.8 seconds while a wave of colour runs round
+   * its outer petals, one petal after the next, every 1.4 seconds: the turn
+   * says "working", and the wave keeps it from looking like a picture that
+   * happens to be rotating.
+   */
+  .lotus {
+    overflow: visible;
+    animation: lotus-turn 2.8s linear infinite;
+  }
+
+  .lotus-petal {
+    fill: var(--color-blush);
+    animation: lotus-wave 1.4s ease-in-out infinite;
+    /* Eight petals, 175 ms apart: one full wave per cycle. Negative, so the
+       wave is already running on the first frame. */
+    animation-delay: calc(var(--petal) * 175ms - 1.4s);
+  }
+
+  .lotus-inner {
+    fill: var(--color-rose);
+  }
+
+  .lotus-heart {
+    fill: var(--color-sage);
+  }
+
+  @keyframes lotus-turn {
+    to {
+      rotate: 1turn;
+    }
+  }
+
+  @keyframes lotus-wave {
+    0%,
+    100% {
+      fill: var(--color-blush);
+    }
+    35% {
+      fill: var(--color-rose-deep);
+    }
+  }
+
+  /*
+   * Less motion: the lotus stops turning and the wave slows, so it still
+   * shows that something is happening without anything moving across the
+   * screen; and it arrives without growing.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .lotus {
+      animation: none;
+    }
+
+    .lotus-petal {
+      animation-duration: 2.8s;
+      animation-delay: calc(var(--petal) * 350ms - 2.8s);
+    }
+
+    .nav-veil-lotus {
+      animation-name: fade-in;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+/*
+ * BACK TO TOP
+ *
+ * The round button in the bottom corner (components/layout/back-to-top.tsx).
+ * It floats over the page, so it keeps the frosted glass of the top bar.
+ */
+@layer components {
+  /* One screen below the top of the page; the button shows once this has
+     scrolled above the screen. */
+  .back-to-top-marker {
+    position: absolute;
+    top: 100vh;
+    top: 100svh;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .back-to-top {
+    position: fixed;
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    /* Under the veil and the top bar. */
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 35%, transparent);
+    border-radius: 999px;
+    background-color: rgb(255 255 255 / 0.8);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    backdrop-filter: blur(12px) saturate(150%);
+    color: var(--color-sage-deep);
+    box-shadow: 0 10px 24px -12px rgb(0 0 0 / 0.3);
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 0.75rem;
+  }
+
+  .back-to-top[data-shown] {
+    opacity: 1;
+    visibility: visible;
+    translate: 0 0;
+  }
+
+  /*
+   * It comes and goes with the top bar: away while the page is being read
+   * downwards, where it would sit on whatever is in the corner, and back the
+   * moment the page is scrolled up, which is what someone looking for the
+   * top does anyway. The bar marks itself `data-hidden`
+   * (components/layout/header.tsx); both are children of <body>.
+   */
+  .nav-bar[data-hidden] ~ .back-to-top[data-shown] {
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 0.75rem;
+  }
+
+  @media (hover: hover) {
+    .back-to-top:hover {
+      background-color: #ffffff;
+      color: var(--color-charcoal);
+    }
+  }
+
+  .back-to-top:active {
+    background-color: #ffffff;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .back-to-top {
+      transition:
+        opacity 200ms ease,
+        translate 200ms ease,
+        visibility 200ms,
+        background-color 150ms ease,
+        color 150ms ease;
+    }
+  }
+
+  /* Less motion: it fades in place instead of rising. */
+  @media (prefers-reduced-motion: reduce) {
+    .back-to-top,
+    .nav-bar[data-hidden] ~ .back-to-top[data-shown] {
+      translate: none;
+      transition:
+        opacity 150ms ease,
+        visibility 150ms;
+    }
+  }
+}
+
+/*
+ * THE FAQ
+ *
+ * The questions on the home page (components/faq-list.tsx): a rounded frame,
+ * a hairline between questions, and the answer unfolding under its question.
+ *
+ * Unfolding is CSS where the browser can animate a <details> to its natural
+ * height (Chromium: `interpolate-size` and `::details-content`), and
+ * components/faq-accordion.tsx everywhere else (Safari, Firefox). Both take
+ * 320 ms on the same curve, and neither runs for someone who asked for less
+ * motion: the answer is simply there.
+ */
+@layer components {
+  .faq-list {
+    border: 1px solid color-mix(in oklab, var(--color-sage) 30%, transparent);
+    border-radius: 1rem;
+    background-color: rgb(255 255 255 / 0.6);
+  }
+
+  .faq-item + .faq-item {
+    border-top: 1px solid color-mix(in oklab, var(--color-sage) 30%, transparent);
+  }
+
+  .faq-question {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    /* The keyboard outline follows it, so on the first and last question it
+       stays inside the corners of the frame. */
+    border-radius: 1rem;
+    color: var(--color-charcoal);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  /* The browser's own triangle: `::marker` in most engines, the prefixed
+     pseudo-element in older Safari. The + says the same thing. */
+  .faq-question::marker {
+    content: "";
+  }
+
+  .faq-question::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Inside the row: outside, it would cross the hairlines around it. */
+  .faq-question:focus-visible {
+    outline-offset: -3px;
+  }
+
+  .faq-icon {
+    flex-shrink: 0;
+    color: var(--color-rose-deep);
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  /* A × while open, and back to + the moment it starts to close. */
+  .faq-item[open]:not([data-closing]) .faq-icon {
+    rotate: 45deg;
+  }
+
+  .faq-answer {
+    padding: 0 1.25rem 1.25rem;
+    color: var(--color-charcoal-light);
+    white-space: pre-line;
+    overflow-wrap: break-word;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .faq-icon {
+      transition: rotate 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+  }
+
+  /*
+   * The CSS half. The answer's box goes from no height to its own, and its
+   * text fades in with it. `content-visibility` is what a closed <details>
+   * hides its content with; `allow-discrete` holds it visible until the
+   * height has finished closing, instead of vanishing on the first frame.
+   */
+  @supports (interpolate-size: allow-keywords) and selector(::details-content) {
+    @media (prefers-reduced-motion: no-preference) {
+      .faq-list {
+        interpolate-size: allow-keywords;
+      }
+
+      .faq-item::details-content {
+        block-size: 0;
+        overflow-y: clip;
+        opacity: 0;
+        transition:
+          block-size 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+          opacity 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+          content-visibility 320ms allow-discrete;
+      }
+
+      .faq-item[open]::details-content {
+        block-size: auto;
+        opacity: 1;
+      }
+    }
+  }
+}
+
+/*
+ * PAGE TRANSITIONS
+ *
+ * Moving between pages is a breath: the page being left fades out, and the
+ * new one fades in, rising a few pixels, in about a third of a second. The
+ * top bar stays exactly where it is, and the photograph of an event or a
+ * post glides from the card that was tapped to its place on the new page.
+ *
+ * React runs these through the browser's View Transitions API
+ * (components/layout/view-transitions.tsx): the content of every page is a
+ * <ViewTransition> with the classes `page-in` and `page-out`, and each
+ * photograph one named after its event or post, with the class
+ * `photo-glide`. A browser without the API (Safari before 18) simply shows
+ * the new page, as before.
+ *
+ * WHAT IS LAYERED OVER WHAT
+ *
+ * While a transition runs, the browser draws pictures of the old and new
+ * states in a layer over the page, each named part in its own group, and it
+ * paints named groups over everything unnamed. So each part that has to
+ * stay on top is named and stacked here: the pages at the bottom, then the
+ * veil fading away, then the photograph, then the top bar.
+ *
+ * The name of the bar is on its <nav>, not on <header>: a named element is
+ * a "backdrop root", which would stop the frosted glass inside it from
+ * seeing the page behind (components/layout/header.tsx).
+ *
+ * Taps during that third of a second are dropped rather than passed to the
+ * new page, which is not visible yet: the same rule as the veil.
+ */
+@layer components {
+  ::view-transition-old(.page-out) {
+    animation: page-out 150ms ease-in both;
+  }
+
+  ::view-transition-new(.page-in) {
+    animation: page-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1) 60ms both;
+  }
+
+  @keyframes page-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      translate: 0 0.625rem;
+    }
+  }
+
+  ::view-transition-group(nav-veil) {
+    z-index: 10;
+    animation: none;
+  }
+
+  ::view-transition-old(nav-veil),
+  ::view-transition-new(nav-veil) {
+    animation: page-out 200ms ease-out both;
+  }
+
+  /*
+   * The photograph. A card and a page frame it in different shapes (3:2 on
+   * a card, 16:9 at the top of an event), so both pictures cover the moving
+   * frame instead of stretching to it, cropped as the page crops them.
+   *
+   * The crop has to be asked for: a transition's pictures are not clipped,
+   * so the part of the 3:2 picture outside a 16:9 frame showed above and
+   * below it as a pale box. Clipping the pair gives the frame one rounded
+   * corner throughout, between the card's 12 px and the page's 24 px, which
+   * no eye catches settling at either end.
+   */
+  ::view-transition-group(.photo-glide) {
+    z-index: 20;
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  ::view-transition-image-pair(.photo-glide) {
+    overflow: clip;
+    border-radius: 1rem;
+  }
+
+  ::view-transition-old(.photo-glide),
+  ::view-transition-new(.photo-glide) {
+    height: 100%;
+    object-fit: cover;
+    overflow: clip;
+  }
+
+  /*
+   * The top bar: shown as it is after the change, from the first frame.
+   *
+   * WHY OLD PICTURES ARE MADE INVISIBLE, NEVER `display: none`
+   *
+   * `display: none` is the usual way to drop an old picture (the Next.js
+   * guide does it for exactly this bar), and WebKit crashes on it: the
+   * whole page, when anything asks for the page's animations while the
+   * picture's group is still animating. React animates the root's group
+   * itself, so on this site that is every transition. Reproduced on a bare
+   * page, three crashes in three; `opacity: 0` never crashed.
+   */
+  ::view-transition-group(site-header) {
+    z-index: 30;
+    animation: none;
+  }
+
+  ::view-transition-old(site-header) {
+    animation: none;
+    opacity: 0;
+  }
+
+  ::view-transition-new(site-header) {
+    animation: none;
+  }
+
+  /*
+   * Back, forward, and the swipe back on an iPhone: the browser has already
+   * shown the other page by the time the site hears of it, so a fade after
+   * that would show the page being left for a moment and then fade back.
+   * navigation-feedback.tsx marks these, and they change in one frame.
+   *
+   * Switching the animations off is not enough on its own. The browser still
+   * shows its pictures for the few frames it takes to wind the transition
+   * down, and with nothing fading, the old page and the new one are drawn
+   * over each other for that moment (measured: about 0.1 s in Chromium). So
+   * the old picture is made invisible as well.
+   */
+  :root[data-history-nav]::view-transition-group(*),
+  :root[data-history-nav]::view-transition-new(*),
+  :root[data-history-nav]::view-transition-old(*) {
+    animation: none !important;
+  }
+
+  :root[data-history-nav]::view-transition-old(*) {
+    opacity: 0 !important;
+  }
+
+  /* Less motion: the new page replaces the old one in a single frame. */
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-new(*),
+    ::view-transition-old(*) {
+      animation: none !important;
+    }
+
+    ::view-transition-old(*) {
+      opacity: 0 !important;
+    }
   }
 }

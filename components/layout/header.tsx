@@ -149,8 +149,14 @@ const BAR_SHELL =
   "mx-auto max-w-7xl px-4 py-3 transition-[max-width,padding] duration-200 ease-out " +
   "group-data-[compact]:max-w-none group-data-[compact]:px-0 group-data-[compact]:py-0";
 
+/*
+ * `view-transition-name` keeps the bar still while the page under it changes
+ * (app/globals.css, "PAGE TRANSITIONS"). It is on this element and not on
+ * <header>: a named element is a backdrop root, and on the header it would
+ * leave this glass nothing behind it to blur.
+ */
 const BAR_SURFACE =
-  "rounded-2xl border border-white/30 bg-white/60 shadow-lg shadow-black/5 backdrop-blur-xl backdrop-saturate-150 " +
+  "rounded-2xl border border-white/30 bg-white/60 shadow-lg shadow-black/5 backdrop-blur-xl backdrop-saturate-150 [view-transition-name:site-header] " +
   "transition-[border-radius,background-color,box-shadow,border-color] duration-200 ease-out " +
   "group-data-[compact]:rounded-none group-data-[compact]:border-x-white/40 " +
   "group-data-[compact]:border-t-white/40 group-data-[compact]:border-b-sage/25 " +
@@ -553,10 +559,11 @@ export function Header({ brand, labels }: { brand: Brand; labels: NavLabels }) {
     <>
       {/* Two independent pieces of state on one element. `data-compact` drives
           the shape through the `group-data-` variants above; `data-hidden`
-          drives the translate in globals.css. They are separate because a bar
-          can be compact and on screen, compact and away, or neither — but
-          never hidden while it is still the floating card, since nothing hides
-          inside the first 80px. */}
+          drives the translate in globals.css, and takes the "Înapoi sus"
+          button away with the bar (components/layout/back-to-top.tsx). They
+          are separate because a bar can be compact and on screen, compact and
+          away, or neither — but never hidden while it is still the floating
+          card, since nothing hides inside the first 80px. */}
       <header
         data-compact={compact ? "" : undefined}
         data-hidden={hidden ? "" : undefined}

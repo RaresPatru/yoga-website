@@ -143,14 +143,14 @@ export function WhatsappLinkField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="https://chat.whatsapp.com/…"
-          className="min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm"
+          className="min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50"
         />
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label={t("admin.manage_saved_links")}
           data-tooltip={t("admin.manage_saved_links")}
-          className="shrink-0 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal-light backdrop-blur-sm transition-colors hover:border-rose/30 hover:text-rose-deep"
+          className="shrink-0 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal-light transition-colors hover:border-rose/30 hover:text-rose-deep"
         >
           <BookmarkPlus className="h-4 w-4" />
         </button>
@@ -163,7 +163,7 @@ export function WhatsappLinkField({
           if (e.target === e.currentTarget) setOpen(false);
         }}
       >
-        <GlassCard hover={false} className="max-h-[80vh] overflow-y-auto">
+        <GlassCard hover={false} floating className="max-h-[80vh] overflow-y-auto">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-serif text-lg text-charcoal">{t("admin.saved_links")}</h2>
             <button

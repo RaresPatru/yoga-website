@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { BackToTop } from "@/components/layout/back-to-top";
+import { NavigationFeedback } from "@/components/layout/navigation-feedback";
+import { Analytics } from "@/components/providers/analytics";
 import { LocaleLang } from "@/components/locale-lang";
 import { buildPageMetadata } from "@/lib/metadata";
 import { absoluteUrl } from "@/lib/site-config";
@@ -101,8 +104,14 @@ export default async function LocaleLayout({
         {t("skip_to_content")}
       </a>
       <Header brand={brandOf(content, siteName)} labels={navLabels(content, locale)} />
-      <main id="main-content" tabIndex={-1} className="flex-1 pt-20">{children}</main>
+      {/* Focusable so "Sari la conținut" and "Înapoi sus" can move the keyboard here;
+          no outline, since the whole page would light up and it is not a control. */}
+      <main id="main-content" tabIndex={-1} className="flex-1 pt-20 focus:outline-none">{children}</main>
       <Footer locale={locale} />
+      {/* The public site only: the admin panel has its own layout and none of these. */}
+      <BackToTop />
+      <NavigationFeedback />
+      <Analytics />
     </NextIntlClientProvider>
   );
 }

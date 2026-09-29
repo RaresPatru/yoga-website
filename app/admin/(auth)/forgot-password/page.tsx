@@ -66,7 +66,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-cream px-4">
-      <div className="w-full max-w-sm rounded-3xl border border-white/30 bg-white/60 p-8 shadow-xl backdrop-blur-xl">
+      <div className="w-full max-w-sm rounded-3xl border border-white/30 bg-white/60 p-8 shadow-xl">
         <h1 className="text-center font-serif text-2xl text-charcoal">
           {t("admin.forgot_title")}
         </h1>

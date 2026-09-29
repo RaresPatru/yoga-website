@@ -13,6 +13,7 @@ import {
   TestimonialCard,
   type PublicTestimonial,
 } from "@/components/testimonials/testimonial-card";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 /** Twelve fills one, two or three columns evenly, as on the blog and the events archive. */
 const PER_PAGE = 12;
@@ -66,40 +67,42 @@ export default async function TestimonialsPage({ params, searchParams }: Props) 
   if (page > pageCount) notFound();
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-12">
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <div className="max-w-2xl">
-          <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
-          <p className="mt-2 text-charcoal-light">{t("subtitle")}</p>
+    <PageTransition>
+      <div className="mx-auto max-w-6xl px-4 py-12">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div className="max-w-2xl">
+            <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
+            <p className="mt-2 text-charcoal-light">{t("subtitle")}</p>
+          </div>
+          <Link href="/testimonials/share" className={buttonClasses({ variant: "secondary" })}>
+            {t("share")}
+          </Link>
         </div>
-        <Link href="/testimonials/share" className={buttonClasses({ variant: "secondary" })}>
-          {t("share")}
-        </Link>
+        <p className="mt-4 max-w-2xl text-sm text-charcoal-light">{t("how_we_check")}</p>
+
+        {!testimonials.length ? (
+          <p className="mt-8 text-charcoal-light">{t("no_testimonials")}</p>
+        ) : (
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {testimonials.map((item) => (
+              <TestimonialCard key={item.id} item={item} locale={locale} />
+            ))}
+          </div>
+        )}
+
+        <Pagination
+          className="mt-10"
+          page={page}
+          pageCount={pageCount}
+          href={(p) => (p === 1 ? `/${locale}/testimonials` : `/${locale}/testimonials?page=${p}`)}
+          labels={{
+            label: tp("label"),
+            previous: tp("previous"),
+            next: tp("next"),
+            page: (p) => tp("page", { page: p }),
+          }}
+        />
       </div>
-      <p className="mt-4 max-w-2xl text-sm text-charcoal-light">{t("how_we_check")}</p>
-
-      {!testimonials.length ? (
-        <p className="mt-8 text-charcoal-light">{t("no_testimonials")}</p>
-      ) : (
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {testimonials.map((item) => (
-            <TestimonialCard key={item.id} item={item} locale={locale} />
-          ))}
-        </div>
-      )}
-
-      <Pagination
-        className="mt-10"
-        page={page}
-        pageCount={pageCount}
-        href={(p) => (p === 1 ? `/${locale}/testimonials` : `/${locale}/testimonials?page=${p}`)}
-        labels={{
-          label: tp("label"),
-          previous: tp("previous"),
-          next: tp("next"),
-          page: (p) => tp("page", { page: p }),
-        }}
-      />
-    </div>
+    </PageTransition>
   );
 }

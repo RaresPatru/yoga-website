@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { ArrowRight, Calendar, Clock, MapPin } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { GlassCard } from "@/components/ui/glass-card";
+import { PhotoTransition } from "@/components/layout/view-transitions";
 import { SeatCount } from "@/components/events/seat-count";
 import type { Availability } from "@/lib/event-availability";
 import { formatEventSchedule } from "@/lib/utils";
@@ -130,33 +131,23 @@ export async function EventFeatureCard({
               `GlassCard` sets `p-6`, so `-3` here — twelve pixels against the
               card's twenty-four — gives the photograph half that margin and
               leaves the other half. It sits a little proud of the text beside
-              it without touching the edge.
+              it without touching the edge, and its own `rounded-xl` reads as
+              concentric with the card's `rounded-2xl`.
 
-              IT USED TO GO ALL THE WAY, AND COULD NOT
-
-              A full bleed meant cancelling the whole `p-6` and letting the card
-              clip the corners, which is the ordinary way to do this and does
-              not work here: `GlassCard` carries `backdrop-blur-xl`, and an
-              element with a backdrop-filter is promoted to its own compositing
-              layer, after which its `overflow: hidden` clips descendants to a
-              plain rectangle and ignores the `border-radius`. The photograph
-              kept its square corners inside the card's rounded ones, with a
-              sliver of card showing through each. Nothing in the markup says
-              so, and no style assertion catches it — it has to be looked at.
-
-              Keeping the photograph inside the radius sidesteps the whole
-              thing, and its own `rounded-xl` then reads as concentric with the
-              card's `rounded-2xl` rather than fighting it.
+              The frame is what glides into the event's page when the card is
+              opened (PhotoTransition, components/layout/view-transitions.tsx).
             */
-            <div className="relative -mx-3 -mt-3 aspect-video overflow-hidden rounded-xl md:col-span-2 md:mx-0 md:-my-3 md:-ml-3 md:aspect-[8/7]">
-              <Image
-                src={event.image_url}
-                alt={title}
-                fill
-                sizes="(max-width: 768px) 100vw, 40vw"
-                className="object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
-              />
-            </div>
+            <PhotoTransition kind="event" slug={event.slug}>
+              <div className="relative -mx-3 -mt-3 aspect-video overflow-hidden rounded-xl md:col-span-2 md:mx-0 md:-my-3 md:-ml-3 md:aspect-[8/7]">
+                <Image
+                  src={event.image_url}
+                  alt={title}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 40vw"
+                  className="object-cover scale-100 transition-transform duration-500 ease-out motion-safe:group-hover:scale-105"
+                />
+              </div>
+            </PhotoTransition>
           )}
           <div className={`text-center ${event.image_url ? "md:col-span-3" : "md:col-span-5"}`}>
             <h3 className="font-serif text-2xl text-charcoal md:text-3xl">{title}</h3>

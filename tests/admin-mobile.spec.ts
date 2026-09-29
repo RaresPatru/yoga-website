@@ -87,6 +87,9 @@ test.describe("the admin panel on a phone", () => {
 
       const letter = page.getByRole("dialog", { name: `Andreea ${tag}` });
       await expect(letter).toBeVisible();
+      // It slides in (app/globals.css, "THE LETTER VIEW"): measured mid-slide,
+      // it stood 3 px from the edge.
+      await letter.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
       const box = (await letter.boundingBox())!;
       const viewport = page.viewportSize()!;
       expect(Math.round(box.x)).toBe(0);

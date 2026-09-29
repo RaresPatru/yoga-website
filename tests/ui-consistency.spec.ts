@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -340,6 +340,100 @@ test.describe("the authorisation root stays out of reach", () => {
   });
 });
 
+test.describe("glass only where something passes behind it", () => {
+  /**
+   * WHAT THIS PROTECTS
+   *
+   * A backdrop blur costs every element that has one its own compositing
+   * layer: memory and frame time on a phone, and in Chrome, text drawn
+   * without subpixel smoothing. Over the flat cream page it blurs nothing, so
+   * it is paid for nothing. Rares's rule (24 September 2026): it stays on what
+   * floats over other content (the fixed top bar, the "Înapoi sus" button,
+   * the sticky booking panel, dialogs, drawers, the admin's sticky bars and
+   * overlays) and comes off everything that rests on the page: cards,
+   * buttons, inputs, the FAQ.
+   *
+   * The list below is every file allowed to ask for one. A new use has to be
+   * added here, which is the moment to ask whether anything passes behind it.
+   */
+  const ALLOWED = [
+    // The public site: the fixed top bar, GlassCard's `floating` prop, and
+    // the "Înapoi sus" button (app/globals.css).
+    "components/layout/header.tsx",
+    "components/ui/glass-card.tsx",
+    "app/globals.css",
+    // The admin panel's sticky bars, dialogs and overlays.
+    "components/admin/blog/editor-bar.tsx",
+    "components/admin/content/form-bar.tsx",
+    "components/admin/media-library.tsx",
+    "components/admin/messages/letter.tsx",
+    "components/admin/participants/participant-panel.tsx",
+    "components/admin/rich-text-editor.tsx",
+    "components/admin/shell/admin-shell.tsx",
+    "components/admin/ui/confirm-dialog.tsx",
+    "components/admin/ui/selection-bar.tsx",
+  ];
+
+  test("only what floats over the page asks for a blur", () => {
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) return walk(full);
+        return /\.(ts|tsx|css)$/.test(entry.name) ? [full] : [];
+      });
+    const offenders = ["app", "lib", "components"]
+      .flatMap((dir) => walk(join(process.cwd(), dir)))
+      .filter((file) =>
+        readFileSync(file, "utf8")
+          .split("\n")
+          // Comments may talk about it; only code asks for it.
+          .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+          .some((line) => /backdrop-blur|backdrop-filter/.test(line))
+      )
+      .map((file) => file.replace(process.cwd(), "").replace(/\\/g, "/").replace(/^\//, ""))
+      .filter((file) => !ALLOWED.includes(file));
+    expect(offenders, "see the note above: is anything actually behind it?").toEqual([]);
+  });
+
+  const blurOf = (target: Locator) =>
+    target.first().evaluate((el) => {
+      const style = getComputedStyle(el) as CSSStyleDeclaration & { webkitBackdropFilter?: string };
+      return style.backdropFilter || style.webkitBackdropFilter || "none";
+    });
+
+  test("cards, buttons, fields and the FAQ rest on the page without one", async ({ page }) => {
+    const event = await seedEvent({ image_url: "/mock/event-2.webp" });
+    try {
+      await page.goto("/ro");
+      // A secondary button (the hero's second), a post card, the FAQ frame.
+      expect(await blurOf(page.locator("main").getByRole("link", { name: "Despre mine", exact: true }))).toBe("none");
+      expect(await blurOf(page.locator("main a[href*='/blog/'] > div"))).toBe("none");
+      expect(await blurOf(page.locator(".faq-list"))).toBe("none");
+
+      await page.goto("/ro/events");
+      expect(await blurOf(page.locator(`main a[href$="/events/${event.slug}"] > div`))).toBe("none");
+
+      await page.goto("/ro/contact");
+      expect(await blurOf(page.locator("main input"))).toBe("none");
+      expect(await blurOf(page.locator("main textarea"))).toBe("none");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  test("the top bar and the sticky booking panel keep it", async ({ page }) => {
+    const event = await seedEvent();
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+      expect(await blurOf(page.locator("header nav"))).not.toBe("none");
+      // The booking panel: the card that holds the booking form, sticky beside the event.
+      expect(await blurOf(page.locator("main .sticky"))).not.toBe("none");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+});
+
 test.describe("seats and ratings say the same thing wherever they appear", () => {
   /**
    * Both of these are shared components rather than markup repeated per page —
@@ -495,12 +589,12 @@ test.describe("seats and ratings say the same thing wherever they appear", () =>
       // Scoped to the card element, not `div`. Matching every div on the page and
       // filtering by text made Playwright resolve thousands of handles and run
       // the browser process out of memory.
-      const ratedCard = page.locator(".backdrop-blur-xl").filter({ hasText: rated.content });
+      const ratedCard = page.locator("main article").filter({ hasText: rated.content });
       // One accessible name for the group, not five icons each announcing
       // "star". A screen reader says "4 din 5 stele" and moves on.
       await expect(ratedCard.getByRole("img", { name: "4 din 5 stele" })).toBeVisible();
 
-      const unratedCard = page.locator(".backdrop-blur-xl").filter({ hasText: unrated.content });
+      const unratedCard = page.locator("main article").filter({ hasText: unrated.content });
       await expect(unratedCard.getByRole("img", { name: /din 5 stele/ })).toHaveCount(0);
     } finally {
       await deleteTestimonial(rated);

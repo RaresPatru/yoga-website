@@ -708,6 +708,14 @@ export async function deleteFaqsByQuestion(questionRo: string) {
   if (error) throw new Error(`deleteFaqsByQuestion failed: ${error.message}`);
 }
 
+/** A published FAQ at the top of the home page's list. Remove it with deleteFaqsByQuestion. */
+export async function seedFaq(questionRo: string, answerRo: string) {
+  const { error } = await (await adminScoped())
+    .from("faqs")
+    .insert({ question_ro: questionRo, answer_ro: answerRo, published: true, sort_order: -1 });
+  if (error) throw new Error(`seedFaq failed: ${error.message}`);
+}
+
 /** Inserts a FAQ the way a bare insert would, to check the table's defaults. */
 export async function insertBareFaq(questionRo: string): Promise<{ published: boolean }> {
   const { data, error } = await (await adminScoped())

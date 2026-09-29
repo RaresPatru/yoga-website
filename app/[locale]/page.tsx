@@ -24,6 +24,7 @@ import {
   type PublicTestimonial,
 } from "@/components/testimonials/testimonial-card";
 import { eventAvailability } from "@/lib/event-availability";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 /**
  * Home page — a server component.
@@ -113,19 +114,14 @@ export default async function HomePage({
   const renderedAt = new Date();
   const today = renderedAt.toISOString().split("T")[0];
 
-  const [content, faqs] = await Promise.all([getSiteContent(locale), getFaqs(locale)]);
-  /**
-   * Every word on this page is hers, from "Conținut site" → "Pagina de start".
-   * `text` is what she wrote, or the plain label a heading or button falls
-   * back to ("Vezi toate evenimentele"). Her own words with no plain
-   * equivalent (the main heading, the introduction) show a dashed placeholder
-   * named after the part instead, so an unfinished page looks unfinished
-   * rather than borrowing sentences she never wrote.
+  /*
+   * Every read the page needs, sent together. Each round trip to the database
+   * is a wait the visitor sits through, so only the seat counts, which need
+   * these events' ids, go out after the rest.
    */
-  const text = (key: SiteContentKey) => contentText(content, key, locale) ?? "";
-  const placeholder = (key: SiteContentKey) => placeholderName(key, locale);
-
-  const [{ data: upcoming }, { data: selected }, { data: posts }] = await Promise.all([
+  const [content, faqs, { data: upcoming }, { data: selected }, { data: newest }, { data: posts }] = await Promise.all([
+    getSiteContent(locale),
+    getFaqs(locale),
     supabase
       .from("events")
       // One literal, never concatenated — see the note in CLAUDE.md about what
@@ -143,6 +139,15 @@ export default async function HomePage({
       .eq("on_home", true)
       .order("home_order", { ascending: true, nullsFirst: false })
       .limit(HOME_TESTIMONIALS),
+    // Until she has chosen any for the home page, the three newest stand in,
+    // so the section does not disappear the day testimonials start arriving.
+    // Read every time rather than after finding her selection empty: three
+    // short rows cost less than a second trip.
+    supabase
+      .from("testimonials")
+      .select(PUBLIC_TESTIMONIAL_COLUMNS)
+      .order("created_at", { ascending: false })
+      .limit(3),
     supabase
       .from("blog_posts")
       .select(CARD_COLUMNS)
@@ -153,21 +158,20 @@ export default async function HomePage({
       .limit(3),
   ]);
 
+  /**
+   * Every word on this page is hers, from "Conținut site" → "Pagina de start".
+   * `text` is what she wrote, or the plain label a heading or button falls
+   * back to ("Vezi toate evenimentele"). Her own words with no plain
+   * equivalent (the main heading, the introduction) show a dashed placeholder
+   * named after the part instead, so an unfinished page looks unfinished
+   * rather than borrowing sentences she never wrote.
+   */
+  const text = (key: SiteContentKey) => contentText(content, key, locale) ?? "";
+  const placeholder = (key: SiteContentKey) => placeholderName(key, locale);
+
   const candidates = (upcoming ?? []) as FeaturedEvent[];
 
-  // Until she has chosen any for the home page, the three newest stand in, so
-  // the section does not disappear the day testimonials start arriving.
-  const testimonials = (
-    selected?.length
-      ? selected
-      : (
-          await supabase
-            .from("testimonials")
-            .select(PUBLIC_TESTIMONIAL_COLUMNS)
-            .order("created_at", { ascending: false })
-            .limit(3)
-        ).data ?? []
-  ) as unknown as PublicTestimonial[];
+  const testimonials = ((selected?.length ? selected : newest) ?? []) as unknown as PublicTestimonial[];
 
   // Seat counts, which decide the ordering below as well as what each card
   // says. Why they come from a view and not from `registrations` is in
@@ -261,228 +265,230 @@ export default async function HomePage({
   };
 
   return (
-    <div className="flex flex-col">
-      {/* ---------------------------------------------------------------- */}
-      {/* 1. Hero — her, not a decorative glyph                            */}
-      {/* ---------------------------------------------------------------- */}
-      <section className="px-4 pt-8 pb-16 md:pt-16">
-        <div className="mx-auto grid w-full max-w-6xl items-center gap-8 md:grid-cols-2 md:gap-16">
-          {/*
-           * On a phone the headline comes first and the photograph follows;
-           * on desktop the photograph moves back to the left column.
-           *
-           * A 3:4 portrait at full mobile width is about 520px tall, so
-           * image-first meant a visitor arriving from Instagram saw a whole
-           * screen of photo and had to scroll before learning what the site
-           * even was. Leading with the headline also helps Largest Contentful
-           * Paint, since text renders immediately while the image is still
-           * downloading.
-           */}
-          <div className="order-2 relative mx-auto w-full max-w-md md:order-1 md:mx-0">
-            {content["home.hero_image"] ? (
-              <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-xl md:aspect-[3/4]">
-                <Image
-                  src={content["home.hero_image"]}
-                  alt={content["home.hero_image_alt"] ?? ""}
-                  fill
-                  sizes="(max-width: 768px) 90vw, 45vw"
-                  className="object-cover"
-                  // The hero image is the largest thing on screen, so it is the
-                  // Largest Contentful Paint element. `priority` tells Next to
-                  // preload it instead of waiting for layout.
-                  priority
-                />
-              </div>
-            ) : (
-              <ImagePlaceholder
-                label={placeholder("home.hero_image")}
-                aspect="aspect-[4/5] md:aspect-[3/4]"
-              />
-            )}
-          </div>
-
-          <div className="order-1 text-center md:order-2 md:text-left">
-            <h1 className="font-serif text-4xl leading-tight text-charcoal md:text-6xl">
-              {content["home.hero_title"] ?? <TextPlaceholder label={placeholder("home.hero_title")} />}
-            </h1>
-            <p className="mt-5 text-lg text-charcoal-light md:text-xl">
-              {content["home.hero_subtitle"] ?? <TextPlaceholder label={placeholder("home.hero_subtitle")} />}
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center md:justify-start">
-              <Link href="/events" className={buttonClasses({ size: "lg" })}>{text("home.hero_button_primary")}</Link>
-              <Link href="/about" className={buttonClasses({ variant: "secondary", size: "lg" })}>{text("home.hero_button_secondary")}</Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* 2. The next event, as high up the page as it can go              */}
-      {/* ---------------------------------------------------------------- */}
-      {events.length > 0 ? (
-        <section id="events" className="py-16">
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {eventStrings.heading}
-            </h2>
-
+    <PageTransition>
+      <div className="flex flex-col">
+        {/* ---------------------------------------------------------------- */}
+        {/* 1. Hero — her, not a decorative glyph                            */}
+        {/* ---------------------------------------------------------------- */}
+        <section className="px-4 pt-8 pb-16 md:pt-16">
+          <div className="mx-auto grid w-full max-w-6xl items-center gap-8 md:grid-cols-2 md:gap-16">
             {/*
-              One card at a time, the rest a swipe away.
-
-              This section used to show three events at once: a large card and
-              two small ones beneath it. The two that mattered least took two
-              thirds of the section, and the card that earns the booking had to
-              share the fold with them. Every event now gets the same full-width
-              card, and the order above decides which one is standing there when
-              the page opens.
-
-              The cards are rendered here, on the server, and handed to the
-              carousel as children — so all of them are in the HTML with their
-              photographs, prices and links whether or not the JavaScript
-              arrives, and whether or not the visitor is a crawler.
-            */}
-            <EventCarousel
-              count={events.length}
-              listLabel={eventStrings.list}
-              previousLabel={eventStrings.previous}
-              nextLabel={eventStrings.next}
-              positionLabel={eventStrings.position}
-            >
-              {events.map((event) => (
-                // Deliberately no classes on the <li>: its width and its snap
-                // position come from `.event-carousel-track > li`, beside the
-                // container that measures them. See app/globals.css.
-                <li key={event.id}>
-                  <EventFeatureCard
-                    event={event}
-                    locale={locale}
-                    linkText={text("home.event_card_link")}
-                    availability={availability.get(event.id)}
+             * On a phone the headline comes first and the photograph follows;
+             * on desktop the photograph moves back to the left column.
+             *
+             * A 3:4 portrait at full mobile width is about 520px tall, so
+             * image-first meant a visitor arriving from Instagram saw a whole
+             * screen of photo and had to scroll before learning what the site
+             * even was. Leading with the headline also helps Largest Contentful
+             * Paint, since text renders immediately while the image is still
+             * downloading.
+             */}
+            <div className="order-2 relative mx-auto w-full max-w-md md:order-1 md:mx-0">
+              {content["home.hero_image"] ? (
+                <div className="relative aspect-[4/5] overflow-hidden rounded-3xl shadow-xl md:aspect-[3/4]">
+                  <Image
+                    src={content["home.hero_image"]}
+                    alt={content["home.hero_image_alt"] ?? ""}
+                    fill
+                    sizes="(max-width: 768px) 90vw, 45vw"
+                    className="object-cover"
+                    // The hero image is the largest thing on screen, so it is the
+                    // Largest Contentful Paint element. `priority` tells Next to
+                    // preload it instead of waiting for layout.
+                    priority
                   />
-                </li>
-              ))}
-            </EventCarousel>
+                </div>
+              ) : (
+                <ImagePlaceholder
+                  label={placeholder("home.hero_image")}
+                  aspect="aspect-[4/5] md:aspect-[3/4]"
+                />
+              )}
+            </div>
 
-            <div className="mt-8 text-center">
-              <Link href="/events" className={buttonClasses({ variant: "secondary" })}>
-                {text("home.events_button")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Link>
+            <div className="order-1 text-center md:order-2 md:text-left">
+              <h1 className="font-serif text-4xl leading-tight text-charcoal md:text-6xl">
+                {content["home.hero_title"] ?? <TextPlaceholder label={placeholder("home.hero_title")} />}
+              </h1>
+              <p className="mt-5 text-lg text-charcoal-light md:text-xl">
+                {content["home.hero_subtitle"] ?? <TextPlaceholder label={placeholder("home.hero_subtitle")} />}
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center md:justify-start">
+                <Link href="/events" className={buttonClasses({ size: "lg" })}>{text("home.hero_button_primary")}</Link>
+                <Link href="/about" className={buttonClasses({ variant: "secondary", size: "lg" })}>{text("home.hero_button_secondary")}</Link>
+              </div>
             </div>
           </div>
         </section>
-      ) : (
-        <section id="events" className="py-16">
-          <div className="mx-auto max-w-6xl px-4 text-center">
+
+        {/* ---------------------------------------------------------------- */}
+        {/* 2. The next event, as high up the page as it can go              */}
+        {/* ---------------------------------------------------------------- */}
+        {events.length > 0 ? (
+          <section id="events" className="py-16">
+            <div className="mx-auto max-w-6xl px-4">
+              <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+                {eventStrings.heading}
+              </h2>
+
+              {/*
+                One card at a time, the rest a swipe away.
+
+                This section used to show three events at once: a large card and
+                two small ones beneath it. The two that mattered least took two
+                thirds of the section, and the card that earns the booking had to
+                share the fold with them. Every event now gets the same full-width
+                card, and the order above decides which one is standing there when
+                the page opens.
+
+                The cards are rendered here, on the server, and handed to the
+                carousel as children — so all of them are in the HTML with their
+                photographs, prices and links whether or not the JavaScript
+                arrives, and whether or not the visitor is a crawler.
+              */}
+              <EventCarousel
+                count={events.length}
+                listLabel={eventStrings.list}
+                previousLabel={eventStrings.previous}
+                nextLabel={eventStrings.next}
+                positionLabel={eventStrings.position}
+              >
+                {events.map((event) => (
+                  // Deliberately no classes on the <li>: its width and its snap
+                  // position come from `.event-carousel-track > li`, beside the
+                  // container that measures them. See app/globals.css.
+                  <li key={event.id}>
+                    <EventFeatureCard
+                      event={event}
+                      locale={locale}
+                      linkText={text("home.event_card_link")}
+                      availability={availability.get(event.id)}
+                    />
+                  </li>
+                ))}
+              </EventCarousel>
+
+              <div className="mt-8 text-center">
+                <Link href="/events" className={buttonClasses({ variant: "secondary" })}>
+                  {text("home.events_button")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section id="events" className="py-16">
+            <div className="mx-auto max-w-6xl px-4 text-center">
+              <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
+                {text("home.events_title")}
+              </h2>
+              <p className="mt-3 text-charcoal-light">{text("home.events_empty")}</p>
+            </div>
+          </section>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* 3. Her story — the research is unanimous that people book a       */}
+        {/*    teacher rather than a studio                                   */}
+        {/* ---------------------------------------------------------------- */}
+        <section className="py-16">
+          <div className="mx-auto max-w-3xl px-4 text-center">
             <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
-              {text("home.events_title")}
+              {text("home.intro_title")}
             </h2>
-            <p className="mt-3 text-charcoal-light">{text("home.events_empty")}</p>
-          </div>
-        </section>
-      )}
-
-      {/* ---------------------------------------------------------------- */}
-      {/* 3. Her story — the research is unanimous that people book a       */}
-      {/*    teacher rather than a studio                                   */}
-      {/* ---------------------------------------------------------------- */}
-      <section className="py-16">
-        <div className="mx-auto max-w-3xl px-4 text-center">
-          <h2 className="font-serif text-3xl text-charcoal md:text-4xl">
-            {text("home.intro_title")}
-          </h2>
-          {content["home.intro"] ? (
-            <div
-              className={`${TEXT_TYPOGRAPHY} mx-auto mt-5 text-lg`}
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["home.intro"]) }}
-            />
-          ) : (
-            <div className="mt-5">
-              <TextPlaceholder label={placeholder("home.intro")} />
-            </div>
-          )}
-          <div className="mt-8">
-            <Link href="/about" className={buttonClasses({ variant: "secondary" })}>
-                {text("home.intro_button")}
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* 4. Testimonials                                                   */}
-      {/* ---------------------------------------------------------------- */}
-      {testimonials && testimonials.length > 0 && (
-        <section className="py-16">
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {text("home.testimonials_title")}
-            </h2>
-            <div className="mt-8 grid gap-5 md:grid-cols-3">
-              {testimonials.map((item) => (
-                <TestimonialCard key={item.id} item={item} locale={locale} />
-              ))}
-            </div>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link href="/testimonials" className={buttonClasses({ variant: "secondary" })}>
-                {text("home.testimonials_button")}
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link href="/testimonials/share" className={buttonClasses({ variant: "ghost" })}>
-                {text("home.testimonials_share")}
-              </Link>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ---------------------------------------------------------------- */}
-      {/* 5. FAQ — answers the practical worries that stall a booking       */}
-      {/* ---------------------------------------------------------------- */}
-      {faqs.length > 0 && (
-        <section className="py-16">
-          <div className="mx-auto max-w-3xl px-4">
-            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {text("home.faq_title")}
-            </h2>
+            {content["home.intro"] ? (
+              <div
+                className={`${TEXT_TYPOGRAPHY} mx-auto mt-5 text-lg`}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["home.intro"]) }}
+              />
+            ) : (
+              <div className="mt-5">
+                <TextPlaceholder label={placeholder("home.intro")} />
+              </div>
+            )}
             <div className="mt-8">
-              <FaqList faqs={faqs} />
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ---------------------------------------------------------------- */}
-      {/* 6. Recent writing                                                 */}
-      {/* ---------------------------------------------------------------- */}
-      {posts && posts.length > 0 && (
-        <section className="py-16">
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
-              {text("home.blog_title")}
-            </h2>
-            <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {posts.map((post) => (
-                <li key={post.id} className="min-w-0">
-                  <PostCard
-                    post={post}
-                    locale={locale}
-                    headingLevel={3}
-                    readingTime={(minutes) => tBlog("reading_time", { minutes })}
-                  />
-                </li>
-              ))}
-            </ul>
-            <div className="mt-8 text-center">
-              <Link href="/blog" className={buttonClasses({ variant: "secondary" })}>
-                  {text("home.blog_button")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              <Link href="/about" className={buttonClasses({ variant: "secondary" })}>
+                  {text("home.intro_button")}
+                  <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>
             </div>
           </div>
         </section>
-      )}
 
-    </div>
+        {/* ---------------------------------------------------------------- */}
+        {/* 4. Testimonials                                                   */}
+        {/* ---------------------------------------------------------------- */}
+        {testimonials && testimonials.length > 0 && (
+          <section className="py-16">
+            <div className="mx-auto max-w-6xl px-4">
+              <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+                {text("home.testimonials_title")}
+              </h2>
+              <div className="mt-8 grid gap-5 md:grid-cols-3">
+                {testimonials.map((item) => (
+                  <TestimonialCard key={item.id} item={item} locale={locale} />
+                ))}
+              </div>
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <Link href="/testimonials" className={buttonClasses({ variant: "secondary" })}>
+                  {text("home.testimonials_button")}
+                  <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Link>
+                <Link href="/testimonials/share" className={buttonClasses({ variant: "ghost" })}>
+                  {text("home.testimonials_share")}
+                </Link>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* 5. FAQ — answers the practical worries that stall a booking       */}
+        {/* ---------------------------------------------------------------- */}
+        {faqs.length > 0 && (
+          <section className="py-16">
+            <div className="mx-auto max-w-3xl px-4">
+              <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+                {text("home.faq_title")}
+              </h2>
+              <div className="mt-8">
+                <FaqList faqs={faqs} />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
+        {/* 6. Recent writing                                                 */}
+        {/* ---------------------------------------------------------------- */}
+        {posts && posts.length > 0 && (
+          <section className="py-16">
+            <div className="mx-auto max-w-6xl px-4">
+              <h2 className="text-center font-serif text-3xl text-charcoal md:text-4xl">
+                {text("home.blog_title")}
+              </h2>
+              <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {posts.map((post) => (
+                  <li key={post.id} className="min-w-0">
+                    <PostCard
+                      post={post}
+                      locale={locale}
+                      headingLevel={3}
+                      readingTime={(minutes) => tBlog("reading_time", { minutes })}
+                    />
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 text-center">
+                <Link href="/blog" className={buttonClasses({ variant: "secondary" })}>
+                    {text("home.blog_button")} <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                  </Link>
+              </div>
+            </div>
+          </section>
+        )}
+
+      </div>
+    </PageTransition>
   );
 }
 

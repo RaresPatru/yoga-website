@@ -40,7 +40,7 @@ function Outcome({
   whatsappLabel?: string;
 }) {
   return (
-    <GlassCard hover={false} className="sticky top-24 text-center">
+    <GlassCard hover={false} floating className="sticky top-24 text-center">
       <div
         className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
           tone === "success" ? "bg-success/10" : "bg-warning/10"
@@ -339,7 +339,7 @@ export function EventRegistration({
   );
 
   return (
-    <GlassCard hover={false} className="sticky top-24">
+    <GlassCard hover={false} floating className="sticky top-24">
       <div className="mb-6 text-center">
         <p className="text-3xl font-semibold text-rose-deep">
           {price === 0 ? t("free") : formatPrice(price, currency, locale)}

@@ -1798,3 +1798,121 @@ list: the ids are read when she presses an action. In an inbox, messages keep
 arriving, and one that came in while she was choosing would be archived or
 deleted without ever being seen. So the list remembers when the newest message
 it knew of arrived, and "all that match" stops there.
+
+---
+
+## Speed and motion
+
+### The server runs in Paris, beside the database
+
+Measured on 29 September 2026: Vercel ran the site's functions in `iad1`
+(Washington, D.C.), its default, and the database is in Supabase's
+`eu-west-3` (Paris). Every read crossed the Atlantic and back, and a page
+makes one to three rounds of reads, one after another. From Romania, the live
+site took 0.78–1.11 s to start answering on the home page and 0.38–0.63 s
+on the others; about 0.1 s of that is connecting. A local build with 85 ms
+added to every database request answered in the same pattern: about 0.13 s
+for a page with one round, 0.36 s for the home page's three.
+
+`vercel.json` now names `cdg1` (Paris), so each read is a few milliseconds
+instead of a crossing. Visitors are in Romania, and a request enters Vercel at
+the edge nearest them either way; the distance that matters is the one
+repeated for every read, between the function and the database. The home
+page also reads in two rounds instead of three.
+
+PostHog was not the wait: it loads in the browser, after the page (below).
+
+### No loading screens: a veil over slow clicks instead
+
+The plan had lotus loading screens (`loading.tsx`) on the list pages as well
+as the veil. Only the veil was built:
+
+- **Once React shows a loading screen, it keeps it for at least 0.3 s**
+  (`globalMostRecentFallbackTime + 300` in react-dom), so every click to a
+  list would have shown the lotus for a third of a second even when the page
+  was ready in a twentieth. With the server beside the database, that is
+  slower than no loading screen at all.
+- **A loading screen is a Suspense boundary,** so the response starts before
+  the page has run: `/events?page=999` would answer 200 instead of 404 unless
+  the proxy counted the archive first.
+- **It could never cover an event or a post,** whose pages must be able to
+  answer 404, and those are the pages a card leads to.
+
+The veil covers every slow click on every page: nothing for 150 ms, then the
+page washes pale and stops taking taps, then at 450 ms the lotus turns. A
+quick page shows none of it, and the top bar stays above it, so choosing
+somewhere else is still one tap away.
+
+### Page transitions are React's, one boundary in every page
+
+The old page fades out (150 ms), the new one fades in rising a few pixels
+(300 ms, starting at 60 ms), and the photograph of an event or a post glides
+from the card to the top of its page (420 ms). The top bar does not move.
+
+Each page wraps its content in a React `<ViewTransition>` rather than the
+layout doing it once, because a layout stays put between pages and a
+boundary that stays put never enters or exits. The photographs are pairs of
+named boundaries: the name is the event's or the post's, and it is on the page
+only once.
+
+- **Back and forward do not animate.** The browser has already shown the other
+  page by the time the site hears of it, and on an iPhone the swipe is its own
+  animation; a fade after it would show the page being left, then fade back.
+- **With less motion, nothing animates,** and the old page's picture is made
+  invisible: with the animations off, the browser would otherwise draw the old
+  page and the new one over each other for the few frames it takes to finish
+  (about 0.1 s in Chromium).
+- **Old pictures are made invisible, never `display: none`.** WebKit crashes
+  the whole page on `display: none` there if anything asks for the page's
+  animations while the picture's group is animating, and React animates the
+  root's group itself. Three crashes in three on a bare page; `opacity: 0`,
+  none.
+- **What stays on top is named and stacked:** the pages, then the veil fading
+  out, then the photograph, then the top bar. The bar's name is on its
+  `<nav>`, not on `<header>`: a named element is a backdrop root, and on the
+  header it would leave the bar's glass nothing behind it to blur.
+
+A browser without the API (Safari before 18) shows the new page, as before.
+
+### The FAQ opens in CSS where it can, and by script in Safari
+
+The accordion stays native `<details>`: the answers are in the HTML for search
+engines, and the keyboard and screen readers get it for nothing. Chromium can
+animate one to its natural height (`interpolate-size` and
+`::details-content`); Safari cannot, and Safari is most of the people reading
+it, so there `components/faq-accordion.tsx` takes the tap and animates the
+height with the Web Animations API. Both take 320 ms on the same curve, and
+neither runs for someone who asked for less motion.
+
+The frame lost its `overflow: hidden` and its blur: a blurred element is drawn
+on a layer of its own, where its clipping and its rounded corners do not
+always agree between browsers, and the blur was over a flat cream page.
+
+### Glass only on what floats
+
+Rares's rule (24 September): the blur stays on what floats over other content
+(the fixed top bar, "Înapoi sus", the sticky booking panel, dialogs, the
+admin's sticky bars and overlays) and comes off what rests on the page:
+cards, buttons, inputs, the FAQ, the admin's sign-in card. Over the flat
+cream page it blurred nothing and cost each element a compositing layer.
+`GlassCard` blurs only when passed `floating`, and
+`tests/ui-consistency.spec.ts` lists every file allowed to ask for a blur, so
+a new one is a decision rather than a habit.
+
+### PostHog: public pages only, after the page, never from this machine
+
+It is rendered by the public layout alone, so the admin panel never loads it
+and her own work is never counted. It is not part of any page's JavaScript:
+it is fetched once the page has loaded and the browser has a quiet moment, so
+on a phone it never competes with the page. On localhost it does not load at
+all, so a development server and the test suite stay out of her statistics
+(the local half of audit S6, done ahead of phase 11).
+
+### "Înapoi sus" comes and goes with the top bar
+
+It appears once the first screen has scrolled away, and from then on it hides
+while the page is read downwards and returns when it is scrolled up, with the
+bar. Always shown, it sat on whatever was in the bottom corner of a phone,
+the last FAQ's + among them; someone looking for the top scrolls up anyway.
+It moves keyboard focus to the start of the content, as "Sari la conținut"
+does, because the button it leaves is about to disappear.

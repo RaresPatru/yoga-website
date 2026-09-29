@@ -10,12 +10,24 @@ interface GlassCardProps {
    * Whether the card lifts under a pointer.
    *
    * The rule is affordance, not decoration: a card lifts if and only if the
-   * whole card is a link. Admin list rows pass `false` because they are
-   * containers with their own buttons inside — lifting one would promise a click
-   * that does nothing, and once some non-clickable cards move, the lift stops
-   * meaning anything anywhere.
+   * whole card is a link. The forms and the booking panel pass `false` because
+   * they are containers with their own buttons inside — lifting one would
+   * promise a click that does nothing, and once some non-clickable cards move,
+   * the lift stops meaning anything anywhere.
    */
   hover?: boolean;
+  /**
+   * Whether the card floats: it stays put while the page moves (the sticky
+   * booking panel) or opens over the page (a dialog). Only a floating card
+   * blurs what is behind it.
+   *
+   * A card resting on the flat cream page gets no blur, because blurring a
+   * flat colour returns the same colour: the filter changes nothing you can
+   * see, but it gives every card its own compositing layer, which costs a
+   * phone memory and frame time and makes Chrome render the card's text
+   * without subpixel smoothing (CLAUDE.md).
+   */
+  floating?: boolean;
 }
 
 /**
@@ -73,8 +85,8 @@ const HOVER_SPRING: Transition = {
 const HOVER_SCALE = 1.02;
 
 /**
- * The card used for everything on this site: dashboard tiles, event and blog
- * cards, admin list rows.
+ * The public site's card: events, posts, testimonials and the forms, plus the
+ * admin's saved WhatsApp links dialog.
  *
  * IT SCALES, AND SCALING A CARD SCALES THE TEXT IN IT.
  *
@@ -100,7 +112,7 @@ const HOVER_SCALE = 1.02;
  *
  * So the thing to protect is the overshoot, not the scale.
  * tests/ui-consistency.spec.ts asserts the settled value is exactly 1.02 and
- * that the peak never passes 1.025 — if somebody retunes the spring into a
+ * that the peak stays under 1.021 — if somebody retunes the spring into a
  * bouncy one, the text starts wobbling again and that test is what catches it.
  *
  * IF THE GROWTH EVER DOES NEED TO GO
@@ -133,7 +145,7 @@ const HOVER_SCALE = 1.02;
  *
  * This component already does the animation; anything added on top fights it.
  */
-export function GlassCard({ children, className, hover = true }: GlassCardProps) {
+export function GlassCard({ children, className, hover = true, floating = false }: GlassCardProps) {
   // `whileHover` is JavaScript, so unlike the `motion-safe:` variants used on
   // buttons it does not respect the OS setting on its own. Without this, someone
   // who has asked their phone to reduce motion still gets every card lifting and
@@ -154,15 +166,16 @@ export function GlassCard({ children, className, hover = true }: GlassCardProps)
       // Only for the cards that actually animate, though. A transform is not
       // free even at identity: it makes the element a containing block for any
       // `position: fixed` descendant, which would silently anchor a fixed child
-      // to the card instead of the viewport. About twenty call sites pass
-      // `hover={false}` — both modals, the contact form, the sticky
-      // registration panel, every admin list row — and none of them can ever
+      // to the card instead of the viewport. The cards that are not links pass
+      // `hover={false}` — the WhatsApp links dialog, the forms, the sticky
+      // registration panel, the testimonials — and none of them can ever
       // acquire a transform, so none of them need to be defended against one.
       style={lift ? { scale: 1, y: 0 } : undefined}
       whileHover={lift ? { scale: HOVER_SCALE } : undefined}
       transition={HOVER_SPRING}
       className={cn(
-        "rounded-2xl border border-white/30 bg-white/60 p-6 shadow-lg shadow-black/5 backdrop-blur-xl",
+        "rounded-2xl border border-white/30 bg-white/60 p-6 shadow-lg shadow-black/5",
+        floating && "backdrop-blur-xl",
         "transition-shadow duration-300 hover:shadow-xl hover:shadow-black/10",
         className
       )}

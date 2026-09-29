@@ -182,7 +182,7 @@ export async function Footer({ locale }: { locale: string }) {
         text, so the obligation is met in substance and nothing invented
         stands in for the official artwork.
       */}
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 border-t border-sage/15 px-6 py-5 md:flex-row md:justify-between">
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 border-t border-sage/15 px-6 pb-20 pt-5 md:flex-row md:justify-between">
         <nav aria-label={t("legal")}>
           <ul className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
             {(["privacy", "terms", "cookies"] as const).map((page) => (

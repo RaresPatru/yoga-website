@@ -44,7 +44,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           aria-describedby={describedBy}
           className={cn(
             "w-full rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal",
-            "placeholder:text-charcoal-light/50 backdrop-blur-sm",
+            "placeholder:text-charcoal-light/50",
             // `transition-colors`, not `transition-all`. Colour is the only
             // thing here that changes, and `all` also animates layout
             // properties — including, since Tailwind v4, `outline-color`, which

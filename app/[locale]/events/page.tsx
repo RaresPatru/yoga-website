@@ -9,6 +9,7 @@ import { absoluteUrl } from "@/lib/site-config";
 import { EventCard } from "@/components/events/event-card";
 import { Pagination } from "@/components/ui/pagination";
 import type { Metadata } from "next";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 /** Twelve fills one, two or three columns evenly (the same as the blog). */
 const PAST_PER_PAGE = 12;
@@ -92,55 +93,57 @@ export default async function EventsPage({ searchParams }: Props) {
   const labels = { free: t("free"), ongoing: t("ongoing") };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12">
-      <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
-      <p className="mt-2 text-charcoal-light">{t("subtitle")}</p>
+    <PageTransition>
+      <div className="mx-auto max-w-7xl px-4 py-12">
+        <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
+        <p className="mt-2 text-charcoal-light">{t("subtitle")}</p>
 
-      {page === 1 &&
-        (!events.length ? (
-          <p className="mt-8 text-charcoal-light">{t("no_events")}</p>
-        ) : (
-          <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {events.map((event) => (
-              <li key={event.id} className="min-w-0">
-                <EventCard
-                  event={event}
-                  locale={locale}
-                  phase={eventPhase(event.starts_at, event.ends_at, now.getTime())}
-                  availability={availability.get(event.id)}
-                  labels={labels}
-                />
-              </li>
-            ))}
-          </ul>
-        ))}
+        {page === 1 &&
+          (!events.length ? (
+            <p className="mt-8 text-charcoal-light">{t("no_events")}</p>
+          ) : (
+            <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {events.map((event) => (
+                <li key={event.id} className="min-w-0">
+                  <EventCard
+                    event={event}
+                    locale={locale}
+                    phase={eventPhase(event.starts_at, event.ends_at, now.getTime())}
+                    availability={availability.get(event.id)}
+                    labels={labels}
+                  />
+                </li>
+              ))}
+            </ul>
+          ))}
 
-      {past && past.length > 0 && (
-        <section className={page === 1 ? "mt-20" : "mt-10"} aria-labelledby="events-archive">
-          <h2 id="events-archive" className="font-serif text-3xl text-charcoal">
-            {t("archive_title")}
-          </h2>
-          <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {past.map((event) => (
-              <li key={event.id} className="min-w-0">
-                <EventCard event={event} locale={locale} phase="ended" labels={labels} headingLevel={3} />
-              </li>
-            ))}
-          </ul>
-          <Pagination
-            className="mt-12"
-            page={page}
-            pageCount={pageCount}
-            href={(p) => (p === 1 ? `/${locale}/events#events-archive` : `/${locale}/events?page=${p}#events-archive`)}
-            labels={{
-              label: tp("label"),
-              previous: tp("previous"),
-              next: tp("next"),
-              page: (p) => tp("page", { page: p }),
-            }}
-          />
-        </section>
-      )}
-    </div>
+        {past && past.length > 0 && (
+          <section className={page === 1 ? "mt-20" : "mt-10"} aria-labelledby="events-archive">
+            <h2 id="events-archive" className="font-serif text-3xl text-charcoal">
+              {t("archive_title")}
+            </h2>
+            <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {past.map((event) => (
+                <li key={event.id} className="min-w-0">
+                  <EventCard event={event} locale={locale} phase="ended" labels={labels} headingLevel={3} />
+                </li>
+              ))}
+            </ul>
+            <Pagination
+              className="mt-12"
+              page={page}
+              pageCount={pageCount}
+              href={(p) => (p === 1 ? `/${locale}/events#events-archive` : `/${locale}/events?page=${p}#events-archive`)}
+              labels={{
+                label: tp("label"),
+                previous: tp("previous"),
+                next: tp("next"),
+                page: (p) => tp("page", { page: p }),
+              }}
+            />
+          </section>
+        )}
+      </div>
+    </PageTransition>
   );
 }

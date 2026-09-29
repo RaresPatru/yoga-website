@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Clock, MapPin, Users } from "lucide-react";
 import { ShareButton } from "@/components/ui/share-button";
 import { EventDateLink } from "@/components/events/event-date-link";
+import { PhotoTransition } from "@/components/layout/view-transitions";
 import { RichHtml } from "@/components/rich-html";
 import { TEXT_TYPOGRAPHY } from "@/lib/article-typography";
 import { META_LINK } from "@/lib/meta-link";
@@ -66,17 +67,19 @@ export function EventView({
     <div className="grid gap-12 md:grid-cols-5">
       <div className="min-w-0 md:col-span-3">
         {data.imageUrl && (
-          <div className="relative mb-8 aspect-video overflow-hidden rounded-3xl bg-sage/10">
-            <Image
-              src={data.imageUrl}
-              unoptimized={!canOptimise(data.imageUrl)}
-              alt={data.title}
-              fill
-              sizes="(max-width: 768px) 100vw, 60vw"
-              className="object-cover"
-              priority
-            />
-          </div>
+          <PhotoTransition kind="event" slug={data.slug}>
+            <div className="relative mb-8 aspect-video overflow-hidden rounded-3xl bg-sage/10">
+              <Image
+                src={data.imageUrl}
+                unoptimized={!canOptimise(data.imageUrl)}
+                alt={data.title}
+                fill
+                sizes="(max-width: 768px) 100vw, 60vw"
+                className="object-cover"
+                priority
+              />
+            </div>
+          </PhotoTransition>
         )}
 
         {status}

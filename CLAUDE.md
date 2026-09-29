@@ -95,6 +95,12 @@ wrong.
   location. A placeholder `SITE_LOCALITY = "Cluj-Napoca"` once reached the
   structured data on every page; it was removed on 25 September 2026, and the
   area she serves is an optional field she fills in herself.
+- **The server runs in Paris, beside the database.** `vercel.json` names
+  `cdg1`; Supabase is in `eu-west-3`. Until 29 September 2026 Vercel's default,
+  Washington, put an ocean between them, crossed twice by every read, and that
+  was most of the wait between pages (DECISIONS.md, "The server runs in
+  Paris"). A page's reads happen in rounds, one after another, so keep them
+  in one region and keep the rounds few (`Promise.all`).
 - **Status, 22 September 2026: pre-launch.** Production is publicly reachable
   but only Rares uses it, to test. There are no real customers and no real
   personal data in it, and Stripe is a test sandbox. Still treat it as live: it
@@ -193,6 +199,10 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   `notFound()` deeper down could no longer set 404 — every missing event
   answered 200 with a "not found" body. Keep boundaries around the component
   that actually needs one (`useSearchParams`), never around the whole app.
+  A `loading.tsx` is such a boundary around its page, which is why there are
+  none: the list pages call `notFound()` for `?page=999` too
+  (`tests/transitions.spec.ts` checks). Slow clicks get the veil instead
+  (`components/layout/navigation-feedback.tsx`).
 - **`<Button asChild>` does nothing from a Server Component.** It clones its
   child, which needs `isValidElement()`; across the RSC boundary the child is a
   serialised reference, so it silently renders a `<button>` wrapping your link.
@@ -284,8 +294,9 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   the window on them. Measured on 28 September 2026: closing the window 50 to
   100 ms after the prefetches start logs it, while closing sooner (the
   requests never arrive) or later (they have finished) does not. Every full
-  run since Phase 0 printed it between 42 and 96 times, always with digest
-  `3080431700`, and every one of those runs was green. A visitor who closes a
+  run since Phase 0 printed it between 42 and 109 times (the count grows with
+  the suite), always with digest `3080431700`, and every one of those runs was
+  green. A visitor who closes a
   page a moment after opening it would print the same line in Vercel's logs.
 - **Pin `next` exactly and keep `@next/swc-*` in step with it.** Vercel runs
   `npm install`, not `npm ci`, so a floating range can resolve there to a version
@@ -394,6 +405,22 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   16. A test that asserts on that property fails against a browser engine that
   the audience never runs. Check `CSS.supports` in the engine before believing
   a Playwright-WebKit result about CSS support.
+- **WebKit crashes on `display: none` for a view transition's old picture.**
+  `::view-transition-old(x) { display: none }`, the usual way to drop one (the
+  Next.js guide does it for a still header), takes the whole page down in
+  WebKit when anything calls `document.getAnimations()` while the picture's
+  group is animating, and React animates the root's group itself. Make the
+  picture `opacity: 0` instead (app/globals.css, "PAGE TRANSITIONS").
+- **Playwright's WebKit does not draw view transitions** in its screenshots or
+  videos, though it runs them: a WebKit screenshot mid-transition shows the new
+  page, finished. Check `document.getAnimations()` for the
+  `::view-transition` pseudo-elements instead, and judge the look in Chromium
+  (`Animation.setPlaybackRate` over CDP slows it down to watch).
+- **A `view-transition-name` may be on the page only once, and it makes a
+  backdrop root.** Two elements with one name and the browser skips the whole
+  transition. And a named element's descendants lose their backdrop blur
+  (measured in Chromium; Playwright's WebKit draws no backdrop blur at all), so
+  the top bar's name is on its glass `<nav>`, not on `<header>`.
 - **Vercel's functions will not `require()` an ES module, even on Node 24.**
   `next start` on Node 24 loads such a dependency without complaint. The same
   build on Vercel answers 500 with `ERR_REQUIRE_ESM`. That is why

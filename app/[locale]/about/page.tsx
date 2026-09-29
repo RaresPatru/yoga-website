@@ -11,6 +11,7 @@ import { sanitizeHtml } from "@/lib/sanitize";
 import { TEXT_TYPOGRAPHY } from "@/lib/article-typography";
 import { buildPageMetadata, toDescription } from "@/lib/metadata";
 import { absoluteUrl } from "@/lib/site-config";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 /**
  * About page.
@@ -80,69 +81,71 @@ export default async function AboutPage({
     : null;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
-      {personSchema && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(personSchema) }}
-        />
-      )}
+    <PageTransition>
+      <div className="mx-auto max-w-5xl px-4 py-12">
+        {personSchema && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(personSchema) }}
+          />
+        )}
 
-      <div className="grid gap-10 md:grid-cols-5 md:gap-14">
-        <div className="md:col-span-2">
-          <div className="md:sticky md:top-24">
-            {content["about.portrait"] ? (
-              <div className="relative aspect-[3/4] overflow-hidden rounded-3xl shadow-xl">
-                <Image
-                  src={content["about.portrait"]}
-                  alt={content["about.portrait_alt"] ?? personName ?? ""}
-                  fill
-                  sizes="(max-width: 768px) 90vw, 40vw"
-                  className="object-cover"
-                  priority
-                />
-              </div>
-            ) : (
-              <ImagePlaceholder label={placeholderName("about.portrait", locale)} />
-            )}
-          </div>
-        </div>
-
-        <div className="md:col-span-3">
-          <h1 className="font-serif text-4xl text-charcoal md:text-5xl">{title}</h1>
-
-          {content["about.body"] ? (
-            <div
-              className={`${TEXT_TYPOGRAPHY} mt-6`}
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["about.body"]) }}
-            />
-          ) : (
-            <div className="mt-6">
-              <TextPlaceholder label={placeholderName("about.body", locale)} />
+        <div className="grid gap-10 md:grid-cols-5 md:gap-14">
+          <div className="md:col-span-2">
+            <div className="md:sticky md:top-24">
+              {content["about.portrait"] ? (
+                <div className="relative aspect-[3/4] overflow-hidden rounded-3xl shadow-xl">
+                  <Image
+                    src={content["about.portrait"]}
+                    alt={content["about.portrait_alt"] ?? personName ?? ""}
+                    fill
+                    sizes="(max-width: 768px) 90vw, 40vw"
+                    className="object-cover"
+                    priority
+                  />
+                </div>
+              ) : (
+                <ImagePlaceholder label={placeholderName("about.portrait", locale)} />
+              )}
             </div>
-          )}
+          </div>
 
-          {content["about.credentials"] && (
-            <GlassCard hover={false} className="mt-10">
-              <h2 className="font-serif text-xl text-charcoal">
-                {text("about.credentials_title")}
-              </h2>
+          <div className="md:col-span-3">
+            <h1 className="font-serif text-4xl text-charcoal md:text-5xl">{title}</h1>
+
+            {content["about.body"] ? (
               <div
-                className={`${TEXT_TYPOGRAPHY} mt-4`}
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["about.credentials"]) }}
+                className={`${TEXT_TYPOGRAPHY} mt-6`}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["about.body"]) }}
               />
-            </GlassCard>
-          )}
+            ) : (
+              <div className="mt-6">
+                <TextPlaceholder label={placeholderName("about.body", locale)} />
+              </div>
+            )}
 
-          <div className="mt-10 flex flex-wrap gap-3">
-            <Link href="/events" className={buttonClasses({ size: "lg" })}>
-                {text("about.button_primary")}
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Link>
-            <Link href="/contact" className={buttonClasses({ variant: "secondary", size: "lg" })}>{text("about.button_secondary")}</Link>
+            {content["about.credentials"] && (
+              <GlassCard hover={false} className="mt-10">
+                <h2 className="font-serif text-xl text-charcoal">
+                  {text("about.credentials_title")}
+                </h2>
+                <div
+                  className={`${TEXT_TYPOGRAPHY} mt-4`}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(content["about.credentials"]) }}
+                />
+              </GlassCard>
+            )}
+
+            <div className="mt-10 flex flex-wrap gap-3">
+              <Link href="/events" className={buttonClasses({ size: "lg" })}>
+                  {text("about.button_primary")}
+                  <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Link>
+              <Link href="/contact" className={buttonClasses({ variant: "secondary", size: "lg" })}>{text("about.button_secondary")}</Link>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }

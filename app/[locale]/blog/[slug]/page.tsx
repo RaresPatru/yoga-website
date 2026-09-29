@@ -8,6 +8,7 @@ import { getSiteContent, getSiteName } from "@/lib/site-content";
 import { localisePost } from "@/lib/blog";
 import { Article } from "@/components/blog/article";
 import type { Metadata } from "next";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 async function getPost(slug: string) {
   const { data } = await createPublicClient()
@@ -86,30 +87,33 @@ export default async function BlogPostPage({
   };
 
   return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
-      />
-      <Article
-        locale={locale}
-        view={{
-          ...view,
-          author,
-          html: view.content
-            ? sanitizeArticleHtml(view.content, {
-                // The placeholder stays in, for sanitizeArticleHtml to fill per video.
-                play: te("play", { provider: "{provider}" }),
-                note: te("note", { provider: "{provider}" }),
-              })
-            : null,
-        }}
-        labels={{
-          back: t("back"),
-          by: (name) => t("by", { author: name }),
-          readingTime: (minutes) => t("reading_time", { minutes }),
-        }}
-      />
-    </>
+    <PageTransition>
+      <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
+        />
+        <Article
+          locale={locale}
+          slug={slug}
+          view={{
+            ...view,
+            author,
+            html: view.content
+              ? sanitizeArticleHtml(view.content, {
+                  // The placeholder stays in, for sanitizeArticleHtml to fill per video.
+                  play: te("play", { provider: "{provider}" }),
+                  note: te("note", { provider: "{provider}" }),
+                })
+              : null,
+          }}
+          labels={{
+            back: t("back"),
+            by: (name) => t("by", { author: name }),
+            readingTime: (minutes) => t("reading_time", { minutes }),
+          }}
+        />
+      </>
+    </PageTransition>
   );
 }

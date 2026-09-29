@@ -3,6 +3,7 @@ import { ArrowLeft, Clock } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { canOptimise } from "@/lib/image-src";
 import { ShareButton } from "@/components/ui/share-button";
+import { PhotoTransition } from "@/components/layout/view-transitions";
 import { RichHtml } from "@/components/rich-html";
 import { ARTICLE_TYPOGRAPHY } from "@/lib/article-typography";
 import { formatPostDate } from "@/lib/blog";
@@ -32,10 +33,13 @@ export interface ArticleView {
 export function Article({
   view,
   locale,
+  slug,
   labels,
 }: {
   view: ArticleView;
   locale: string;
+  /** The post's address, so its cover can glide in from the card that opened it. The preview has none. */
+  slug?: string;
   labels: { back: string; by: (author: string) => string; readingTime: (minutes: number) => string };
 }) {
   return (
@@ -49,17 +53,19 @@ export function Article({
 
       <header>
         {view.picture && (
-          <div className="relative mb-8 aspect-[3/2] overflow-hidden rounded-2xl">
-            <Image
-              src={view.picture}
-              unoptimized={!canOptimise(view.picture)}
-              alt=""
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 48rem"
-              className="object-cover"
-            />
-          </div>
+          <CoverTransition slug={slug}>
+            <div className="relative mb-8 aspect-[3/2] overflow-hidden rounded-2xl">
+              <Image
+                src={view.picture}
+                unoptimized={!canOptimise(view.picture)}
+                alt=""
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 48rem"
+                className="object-cover"
+              />
+            </div>
+          </CoverTransition>
         )}
         <h1 className="font-serif text-3xl leading-tight text-charcoal break-words md:text-5xl md:leading-[1.1]">
           {view.title}
@@ -84,5 +90,16 @@ export function Article({
 
       {view.html && <RichHtml html={view.html} className={`${ARTICLE_TYPOGRAPHY} blog-content mt-10`} />}
     </article>
+  );
+}
+
+/** The cover, glided in from the post's card when there is a post to match. */
+function CoverTransition({ slug, children }: { slug?: string; children: React.ReactNode }) {
+  return slug ? (
+    <PhotoTransition kind="post" slug={slug}>
+      {children}
+    </PhotoTransition>
+  ) : (
+    children
   );
 }

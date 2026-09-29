@@ -17,7 +17,8 @@
     "share": "Share",
     "copied": "Link copied!",
     "copy_failed": "Copy the link from the address bar",
-    "skip_to_content": "Skip to content"
+    "skip_to_content": "Skip to content",
+    "loading_page": "Loading the page…"
   },
   "home": {
     "free": "Free"

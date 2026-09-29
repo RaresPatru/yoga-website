@@ -3,6 +3,7 @@ import { Clock } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { canOptimise } from "@/lib/image-src";
 import { GlassCard } from "@/components/ui/glass-card";
+import { PhotoTransition } from "@/components/layout/view-transitions";
 import { formatPostDate, localisePost, type CardPost } from "@/lib/blog";
 
 /**
@@ -37,16 +38,18 @@ export function PostCard({
         {view.picture && (
           // Inside the card's radius rather than bleeding to its edge; the
           // event card explains why (components/events/event-feature-card.tsx).
-          <div className="relative -mx-3 -mt-3 mb-5 aspect-[3/2] overflow-hidden rounded-xl">
-            <Image
-              src={view.picture}
-              unoptimized={!canOptimise(view.picture)}
-              alt=""
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              className="object-cover"
-            />
-          </div>
+          <PhotoTransition kind="post" slug={post.slug}>
+            <div className="relative -mx-3 -mt-3 mb-5 aspect-[3/2] overflow-hidden rounded-xl">
+              <Image
+                src={view.picture}
+                unoptimized={!canOptimise(view.picture)}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                className="object-cover"
+              />
+            </div>
+          </PhotoTransition>
         )}
         <Heading className="font-serif text-xl leading-snug text-charcoal break-words">{view.title}</Heading>
         {view.subtitle && (

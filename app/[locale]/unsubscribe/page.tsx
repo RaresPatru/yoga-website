@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { buttonClasses } from "@/lib/button-styles";
 import { getSiteName } from "@/lib/site-content";
 import { GlassCard } from "@/components/ui/glass-card";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 /** Reached only from an email: nothing here for a search engine. */
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -37,45 +38,47 @@ export default async function UnsubscribePage({ params, searchParams }: Props) {
   const state = query.done ? "done" : query.invalid || !token ? "invalid" : "ask";
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-16">
-      <GlassCard hover={false}>
-        {state === "ask" && (
-          <>
-            <h1 className="font-serif text-3xl text-charcoal">{t("title")}</h1>
-            <p className="mt-3 text-charcoal-light">{t("ask", { site: siteName })}</p>
-            <p className="mt-2 text-sm text-charcoal-light">{t("still_bookings")}</p>
-            <form method="post" action="/api/unsubscribe" className="mt-6">
-              <input type="hidden" name="token" value={token} />
-              <input type="hidden" name="locale" value={locale === "en" ? "en" : "ro"} />
-              <input type="hidden" name="from" value="page" />
-              <button type="submit" className={buttonClasses()}>
-                {t("button")}
-              </button>
-            </form>
-          </>
-        )}
-        {state === "done" && (
-          <>
-            <h1 className="font-serif text-3xl text-charcoal">{t("done_title")}</h1>
-            <p className="mt-3 text-charcoal-light" role="status">
-              {t("done", { site: siteName })}
-            </p>
-            <p className="mt-2 text-sm text-charcoal-light">{t("changed_mind")}</p>
-            <Link href="/" className={buttonClasses({ variant: "secondary", className: "mt-6" })}>
-              {t("home")}
-            </Link>
-          </>
-        )}
-        {state === "invalid" && (
-          <>
-            <h1 className="font-serif text-3xl text-charcoal">{t("invalid_title")}</h1>
-            <p className="mt-3 text-charcoal-light">{t("invalid")}</p>
-            <Link href="/contact" className={buttonClasses({ variant: "secondary", className: "mt-6" })}>
-              {t("contact")}
-            </Link>
-          </>
-        )}
-      </GlassCard>
-    </div>
+    <PageTransition>
+      <div className="mx-auto max-w-xl px-4 py-16">
+        <GlassCard hover={false}>
+          {state === "ask" && (
+            <>
+              <h1 className="font-serif text-3xl text-charcoal">{t("title")}</h1>
+              <p className="mt-3 text-charcoal-light">{t("ask", { site: siteName })}</p>
+              <p className="mt-2 text-sm text-charcoal-light">{t("still_bookings")}</p>
+              <form method="post" action="/api/unsubscribe" className="mt-6">
+                <input type="hidden" name="token" value={token} />
+                <input type="hidden" name="locale" value={locale === "en" ? "en" : "ro"} />
+                <input type="hidden" name="from" value="page" />
+                <button type="submit" className={buttonClasses()}>
+                  {t("button")}
+                </button>
+              </form>
+            </>
+          )}
+          {state === "done" && (
+            <>
+              <h1 className="font-serif text-3xl text-charcoal">{t("done_title")}</h1>
+              <p className="mt-3 text-charcoal-light" role="status">
+                {t("done", { site: siteName })}
+              </p>
+              <p className="mt-2 text-sm text-charcoal-light">{t("changed_mind")}</p>
+              <Link href="/" className={buttonClasses({ variant: "secondary", className: "mt-6" })}>
+                {t("home")}
+              </Link>
+            </>
+          )}
+          {state === "invalid" && (
+            <>
+              <h1 className="font-serif text-3xl text-charcoal">{t("invalid_title")}</h1>
+              <p className="mt-3 text-charcoal-light">{t("invalid")}</p>
+              <Link href="/contact" className={buttonClasses({ variant: "secondary", className: "mt-6" })}>
+                {t("contact")}
+              </Link>
+            </>
+          )}
+        </GlassCard>
+      </div>
+    </PageTransition>
   );
 }

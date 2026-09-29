@@ -28,7 +28,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 6 | Testimonials and verified reviews | done, 28 Sep |
 | 7 | Emails: editor, preview, test sends, announcements | done, 28 Sep |
 | 8 | Messages: unread, starred, archive, letter view | done, 29 Sep |
-| 9 | Public polish and speed: loader, transitions, FAQ, blur, back to top | not started |
+| 9 | Public polish and speed: loader, transitions, FAQ, blur, back to top | done, 29 Sep |
 | 10 | Stripe: the money path | not started |
 | 11 | PostHog analytics | not started |
 
@@ -161,6 +161,11 @@ on `/admin` for no reason. So it will load later and only on public pages.
 - **Reading data in parallel.**
 - **Moving server and database into one region** if they are apart. Checking
   that needs Rares (see [Needs Rares](#needs-rares)).
+
+**What Phase 9 found:** they were apart, the server in Washington and the
+database in Paris, and that was most of the wait. The server now runs in
+Paris. The lotus became part of the veil rather than a loading screen of its
+own. [Phase 9](#phase-9-public-polish-and-speed) has the numbers.
 
 ### How bad is the wordmark scrolling to the top?
 
@@ -1143,35 +1148,120 @@ production build: 646 passed, 11 skipped, none failed.
 
 ### Phase 9: Public polish and speed
 
-- [ ] **Measure first.** Time the server work per page and compare the server
+- [x] **Measure first.** Time the server work per page and compare the server
   and database regions.
-- [ ] **Loading screens** with the lotus on list pages. They sit in route
+- [x] ~~**Loading screens** with the lotus on list pages. They sit in route
   groups so `/blog/[slug]` and `/events/[slug]` still answer 404 for a
-  missing page.
-- [ ] **A veil** appears after 0.15 seconds on any slower click and blocks
+  missing page.~~ Replaced by the veil below, which covers every slow click on
+  every page; the reasons are under "How it turned out".
+- [x] **A veil** appears after 0.15 seconds on any slower click and blocks
   double taps.
-- [ ] **PostHog loads later,** and only on public pages (I19).
-- [ ] **View transitions:**
+- [x] **PostHog loads later,** and only on public pages (I19).
+- [x] **View transitions:**
   - the breath fade on every page
   - the header stays still
   - event and post photos glide into their page
   - reduced motion respected
-- [ ] **The back-to-top button.**
-- [ ] **FAQ:**
+- [x] **The back-to-top button.**
+- [x] **FAQ:**
   - the border fixed and checked in both browser engines
   - opening and closing animated, with a WebKit fallback
   - reduced motion respected
   - the stale comment about rich results corrected (I24)
-- [ ] **Blur** comes off static cards, buttons, inputs and the FAQ. It stays on
+- [x] **Blur** comes off static cards, buttons, inputs and the FAQ. It stays on
   the fixed header, drawers, dialogs, popovers, the sticky booking panel and
   the admin overlays.
 
+**How it turned out** (29 September 2026). The full suite passed on a production
+build: 700 passed, 11 skipped, none failed.
+
+- **The wait was the ocean.** Vercel ran the site in Washington (`iad1`, its
+  default) and the database is in Paris (`eu-west-3`), so every read crossed
+  the Atlantic and back, and a page makes one to three rounds of reads, one
+  after another. Measured from here on the live site: the home page took
+  0.78–1.11 s to start answering, the others 0.38–0.63 s. A local build with
+  85 ms added to every read showed the same pattern (0.13 s for one round,
+  0.36 s for three). `vercel.json` now runs the site in Paris (`cdg1`), next to
+  the database; it applies from the next deployment. PostHog was not part of
+  the wait.
+- **Reading in parallel.** The home page reads in two rounds instead of three,
+  and an ended event's page in two instead of three. The seats on the events
+  list and on an event's page need the events first, so those stay two.
+- **No loading screens; the lotus lives in the veil.** Once React shows a
+  loading screen it holds it for at least 0.3 s, so with the server beside the
+  database every click to a list would have been slower with one than
+  without. A loading screen would also have made `?page=999` answer 200, and
+  it could never cover an event or a post. The veil covers every slow click:
+  nothing for 0.15 s, then the page washes pale and stops taking taps, and at
+  0.45 s a lotus, seen from above, turns while a wave of rose runs round its
+  petals. The top bar stays above the veil. With less motion the lotus stops
+  turning and the wave slows.
+- **The breath and the glide.** The page being left fades out and the new one
+  rises in, in about a third of a second, under a top bar that does not
+  move; an event's or a post's photograph glides from the card to the top of
+  its page. Back, forward and an iPhone's swipe change the page in one frame,
+  because the browser has already shown the other page by then. With less
+  motion, nothing animates.
+- **"Înapoi sus"** appears once the first screen has scrolled away and comes
+  and goes with the top bar, so it never sits on the corner of the page while
+  she reads down it. It glides to the top, or jumps with less motion, and
+  hands keyboard focus to the start of the content.
+- **The FAQ** has a plain frame now: no blur, nothing clipped, and a hairline
+  as strong as the frame. An answer unfolds and folds back in 320 ms, in CSS
+  on Chromium and through a small script on Safari and Firefox, and is simply
+  there with less motion. Answers keep the line breaks she types. The comment
+  claiming Google shows the questions as rich results says what is true now
+  (I24).
+- **Blur:** off every card, button, input and the FAQ, and off the admin's
+  sign-in card; on the top bar, "Înapoi sus", the sticky booking panel, the
+  dialogs and the admin's sticky bars and overlays. `GlassCard` blurs only
+  when told it floats.
+- **PostHog** is rendered by the public layout alone, fetched once the page has
+  loaded and gone quiet, and never loaded on localhost, so local runs and the
+  test suite no longer count as her visitors (the local half of S6, ahead of
+  phase 11).
+
 **Tests**
 
-- `transitions.spec.ts`: the veil on a slow navigation; missing pages still
-  return 404.
-- `ui-consistency.spec.ts` is updated.
-- Back to top and the FAQ are tested with and without reduced motion.
+- `transitions.spec.ts` (new):
+  - the veil on a slow navigation: it waits, takes the taps and leaves with
+    the new page
+  - no veil for a link to the same page or to another site
+  - the photograph's glide and the page's breath, and a still top bar
+  - back and forward without a transition
+  - less motion: nothing moves, and the lotus stops turning
+  - missing pages still answer 404
+- `faq.spec.ts` (new): an answer unfolds and folds back, or appears at once
+  with less motion, in each engine's own way; line breaks; the frame.
+- `back-to-top.spec.ts` (new): the first screen, going with the top bar, the
+  glide and the focus, a short page, less motion.
+- `analytics.spec.ts` (new): the public layout alone renders it, the library
+  is fetched rather than bundled, and a local page sends it nothing.
+- `ui-consistency.spec.ts`: every file allowed to ask for a blur is listed,
+  and cards, buttons, fields and the FAQ are checked without one while the top
+  bar and the booking panel keep it.
+
+**Found along the way**
+
+- **WebKit crashes on the usual way to hide a transition's old picture.**
+  `::view-transition-old(...) { display: none }`, which the Next.js guide uses
+  for a still header, takes the whole page down in WebKit when anything asks
+  for the page's animations while the transition runs. Reproduced on a bare
+  page, three crashes in three. The site makes the picture invisible instead.
+- **Playwright's WebKit does not draw view transitions** in its screenshots or
+  videos, although it runs them: the animations are all there in
+  `document.getAnimations()`. The motion was checked by eye in Chromium; on an
+  iPhone it is worth a look on the preview.
+- **A transition's pictures are not clipped.** Cropped from 3:2 to 16:9, the
+  card's photograph showed its cut-off part as a pale box around the frame
+  until the pair was clipped.
+- **FAQ answers lost their line breaks** on the page, as event descriptions
+  once did (B6).
+- **`GlassCard`'s comments** described admin tiles and rows it no longer draws,
+  and a test bound of 1.025 that the test had already tightened to 1.021.
+- **Phase 8's letter test on the phone could measure mid-slide.** It read the
+  dialog's position without waiting for its 220 ms slide, and one full run
+  caught it 3 px from the edge. It waits for the slide to finish now.
 
 ### Phase 10: Stripe
 
@@ -1213,11 +1303,13 @@ production build: 646 passed, 11 skipped, none failed.
   bookings. The drafts suggest defaults.
 - **Her name as search engines should show it,** and the area she serves if she
   wants one published.
-- **Where the server and database run:**
-  - the region under Vercel → Project → Settings → Functions → Function Region
-  - the region under Supabase → Project Settings → General
-
-  If they differ, pages wait longer than they need to.
+- **Where the server and database run:** answered in Phase 9, nothing to look
+  up. They were apart (Vercel in Washington, Supabase in Paris), and
+  `vercel.json` now runs the site in Paris from the next deployment. On a
+  preview, the `x-vercel-id` response header should name `cdg1` as its second
+  region.
+- **The page transitions on an iPhone,** on the preview: Playwright's WebKit
+  runs them but does not draw them in its screenshots.
 - **Vercel settings:**
   - Phase 5: add a `CRON_SECRET` environment variable (a random string of at
     least 16 characters). Until it is set, the daily job refuses to run.

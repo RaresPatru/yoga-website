@@ -1639,6 +1639,43 @@ computed columns as impossible to write in the generated types. That had been a
 runtime-only trap, written up as a warning in CLAUDE.md; the compiler catches
 it now.
 
+### Phase 9: the wait between pages, measured before it was dressed
+
+**Rares asked why pages paused before changing, and whether PostHog was the
+culprit.** The plan answered with a spinning lotus, but its first line was to
+measure. Two read-only questions to the Vercel and Supabase command-line tools
+settled it: the site's server ran in Washington, its database in Paris. Every
+read crossed the Atlantic twice, and a page reads in up to three rounds, one
+after another. The live home page took about a second to start answering.
+PostHog was innocent; it loads in the browser, after the page. One line in
+`vercel.json` moves the server to Paris, which a lotus could never have done.
+
+**The measurement also changed the plan.** A loading screen per list page
+looked like the obvious answer, until reading React's source showed that a
+loading screen, once shown, stays for at least 0.3 s: with the server beside
+the database, every click would have been slower with it. It would also have
+cost `?page=999` its 404. So the lotus went into a veil that appears only on a
+slow click: nothing for 0.15 s, then the page washes pale and stops taking
+taps, then the lotus turns. A quick page shows none of it.
+
+**Motion that answers a tap.** The page breathes out and the next one breathes
+in; an event's photograph glides from its card to the top of its page; the
+top bar stays still. "Înapoi sus" arrives with the bar when she scrolls up.
+The FAQ unfolds, in CSS where Chromium can and through a small script on
+Safari, which cannot, and which most of her visitors use.
+
+**The bug that only showed under a test harness.** The usual way to hide the
+old picture of a view transition, `display: none`, crashed WebKit outright
+once the test began watching the page's animations. Stripped to a bare page, it
+crashed three times in three, and `opacity: 0` never did. A visitor's Safari
+might never meet the condition; the site does not bet on it.
+
+**And the camera that could not see.** Playwright's WebKit runs view
+transitions but leaves them out of its screenshots and videos, so for a while
+the transitions looked absent on the iPhone engine. Listing the page's running
+animations showed they were all there. The look was judged in Chromium, and an
+iPhone on the preview gets the last word.
+
 ---
 
 ## Decisions worth defending

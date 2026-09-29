@@ -55,7 +55,7 @@ export function buttonClasses({
       // label on every call to action was effectively low-vision text.
       "bg-rose-deep text-white hover:bg-rose-deeper shadow-lg shadow-rose-deep/20":
         variant === "primary",
-      "border border-sage/40 bg-white/70 text-charcoal hover:bg-white hover:border-sage-deep/40 backdrop-blur-sm":
+      "border border-sage/40 bg-white/70 text-charcoal hover:bg-white hover:border-sage-deep/40":
         variant === "secondary",
       /*
        * THE HOVER USED TO BE `bg-white/40`, WHICH IS NOT A COLOUR ON THIS SITE.

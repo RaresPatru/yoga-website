@@ -19,6 +19,7 @@ import {
 } from "@/components/testimonials/testimonial-card";
 import { BookingClosed, EventView } from "@/components/events/event-view";
 import type { Metadata } from "next";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 /**
  * Event detail page — a server component.
@@ -121,13 +122,21 @@ export default async function EventDetailPage({
   const te = await getTranslations({ locale, namespace: "embed" });
   const supabase = createPublicClient();
 
-  // Seat count comes from the aggregate view, which exposes numbers but no
-  // personal data, so it is readable without being logged in.
-  const { data: availability } = await supabase
-    .from("event_availability")
-    .select("taken")
-    .eq("event_id", event.id)
-    .maybeSingle();
+  const [{ data: availability }, { data: testimonials }] = await Promise.all([
+    // Seat count comes from the aggregate view, which exposes numbers but no
+    // personal data, so it is readable without being logged in.
+    supabase.from("event_availability").select("taken").eq("event_id", event.id).maybeSingle(),
+    // Once it is over, what the people who came said about it. The read policy
+    // returns only the approved ones she has not hidden. Read alongside the
+    // seats rather than after them: one round trip instead of two.
+    phase === "ended"
+      ? supabase
+          .from("testimonials")
+          .select(PUBLIC_TESTIMONIAL_COLUMNS)
+          .eq("event_id", event.id)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: null }),
+  ]);
   const taken = availability?.taken ?? 0;
   /*
    * NULL or 0 capacity is sold out, not unlimited — see
@@ -135,17 +144,6 @@ export default async function EventDetailPage({
    * where it is actually enforced. This line only decides what the page says.
    */
   const isFull = !event.max_participants || taken >= event.max_participants;
-
-  // Once it is over, what the people who came said about it. The read policy
-  // returns only the approved ones she has not hidden.
-  const { data: testimonials } =
-    phase === "ended"
-      ? await supabase
-          .from("testimonials")
-          .select(PUBLIC_TESTIMONIAL_COLUMNS)
-          .eq("event_id", event.id)
-          .order("created_at", { ascending: false })
-      : { data: null };
 
   /*
    * Null when she has not pinned the place, or when what she typed was neither
@@ -237,65 +235,67 @@ export default async function EventDetailPage({
     );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12">
-      <script
-        type="application/ld+json"
-        // Serialised JSON only; no user input reaches this as markup.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
-      />
+    <PageTransition>
+      <div className="mx-auto max-w-7xl px-4 py-12">
+        <script
+          type="application/ld+json"
+          // Serialised JSON only; no user input reaches this as markup.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
+        />
 
-      <EventView
-        locale={locale}
-        status={
-          phase === "upcoming" ? null : (
-            <p className="mb-3 inline-flex rounded-full bg-sage/15 px-3 py-1 text-sm font-medium text-sage-deep">
-              {phase === "ongoing" ? t("În desfășurare", "Under way") : t("Încheiat", "Ended")}
-            </p>
-          )
-        }
-        data={{
-          slug: event.slug,
-          title,
-          imageUrl: event.image_url,
-          descriptionHtml: description
-            ? sanitizeArticleHtml(description, {
-                // The placeholder stays in, for sanitizeArticleHtml to fill per video.
-                play: te("play", { provider: "{provider}" }),
-                note: te("note", { provider: "{provider}" }),
-              })
-            : null,
-          schedule,
-          location: event.location,
-          map: map ? { href: map.href } : null,
-          seats: phase === "upcoming" ? { taken, capacity: event.max_participants, isFull } : null,
-          calendar: {
+        <EventView
+          locale={locale}
+          status={
+            phase === "upcoming" ? null : (
+              <p className="mb-3 inline-flex rounded-full bg-sage/15 px-3 py-1 text-sm font-medium text-sage-deep">
+                {phase === "ongoing" ? t("În desfășurare", "Under way") : t("Încheiat", "Ended")}
+              </p>
+            )
+          }
+          data={{
+            slug: event.slug,
             title,
-            description: description || "",
-            date: event.date,
-            time: event.time,
-            location: event.location || "",
-            endDate: event.end_date,
-            endTime: event.end_time,
-            url: absoluteUrl(`/${locale}/events/${encodeURIComponent(event.slug)}`),
-          },
-        }}
-        aside={aside}
-      >
-        {testimonials && testimonials.length > 0 && (
-          <section className="mt-12" aria-labelledby="event-testimonials">
-            <h2 id="event-testimonials" className="font-serif text-2xl text-charcoal">
-              {t("Ce au spus participanții", "What participants said")}
-            </h2>
-            <ul className="mt-6 space-y-4">
-              {(testimonials as unknown as PublicTestimonial[]).map((item) => (
-                <li key={item.id}>
-                  <TestimonialCard item={item} locale={locale} showEvent={false} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </EventView>
-    </div>
+            imageUrl: event.image_url,
+            descriptionHtml: description
+              ? sanitizeArticleHtml(description, {
+                  // The placeholder stays in, for sanitizeArticleHtml to fill per video.
+                  play: te("play", { provider: "{provider}" }),
+                  note: te("note", { provider: "{provider}" }),
+                })
+              : null,
+            schedule,
+            location: event.location,
+            map: map ? { href: map.href } : null,
+            seats: phase === "upcoming" ? { taken, capacity: event.max_participants, isFull } : null,
+            calendar: {
+              title,
+              description: description || "",
+              date: event.date,
+              time: event.time,
+              location: event.location || "",
+              endDate: event.end_date,
+              endTime: event.end_time,
+              url: absoluteUrl(`/${locale}/events/${encodeURIComponent(event.slug)}`),
+            },
+          }}
+          aside={aside}
+        >
+          {testimonials && testimonials.length > 0 && (
+            <section className="mt-12" aria-labelledby="event-testimonials">
+              <h2 id="event-testimonials" className="font-serif text-2xl text-charcoal">
+                {t("Ce au spus participanții", "What participants said")}
+              </h2>
+              <ul className="mt-6 space-y-4">
+                {(testimonials as unknown as PublicTestimonial[]).map((item) => (
+                  <li key={item.id}>
+                    <TestimonialCard item={item} locale={locale} showEvent={false} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </EventView>
+      </div>
+    </PageTransition>
   );
 }

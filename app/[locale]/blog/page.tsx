@@ -7,6 +7,7 @@ import { CARD_COLUMNS, POSTS_PER_PAGE, pageFrom } from "@/lib/blog";
 import { PostCard } from "@/components/blog/post-card";
 import { Pagination } from "@/components/ui/pagination";
 import type { Metadata } from "next";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 type Props = {
   params: Promise<{ locale: string }>;
@@ -48,38 +49,40 @@ export default async function BlogPage({ searchParams }: Props) {
   if (page > pageCount) notFound();
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12">
-      <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
+    <PageTransition>
+      <div className="mx-auto max-w-7xl px-4 py-12">
+        <h1 className="font-serif text-4xl text-charcoal">{t("title")}</h1>
 
-      {!posts?.length ? (
-        <p className="mt-4 text-charcoal-light">{t("no_posts")}</p>
-      ) : (
-        <>
-          <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {posts.map((post) => (
-              <li key={post.id} className="min-w-0">
-                <PostCard
-                  post={post}
-                  locale={locale}
-                  readingTime={(minutes) => t("reading_time", { minutes })}
-                />
-              </li>
-            ))}
-          </ul>
-          <Pagination
-            className="mt-12"
-            page={page}
-            pageCount={pageCount}
-            href={(p) => (p === 1 ? `/${locale}/blog` : `/${locale}/blog?page=${p}`)}
-            labels={{
-              label: tp("label"),
-              previous: tp("previous"),
-              next: tp("next"),
-              page: (p) => tp("page", { page: p }),
-            }}
-          />
-        </>
-      )}
-    </div>
+        {!posts?.length ? (
+          <p className="mt-4 text-charcoal-light">{t("no_posts")}</p>
+        ) : (
+          <>
+            <ul className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {posts.map((post) => (
+                <li key={post.id} className="min-w-0">
+                  <PostCard
+                    post={post}
+                    locale={locale}
+                    readingTime={(minutes) => t("reading_time", { minutes })}
+                  />
+                </li>
+              ))}
+            </ul>
+            <Pagination
+              className="mt-12"
+              page={page}
+              pageCount={pageCount}
+              href={(p) => (p === 1 ? `/${locale}/blog` : `/${locale}/blog?page=${p}`)}
+              labels={{
+                label: tp("label"),
+                previous: tp("previous"),
+                next: tp("next"),
+                page: (p) => tp("page", { page: p }),
+              }}
+            />
+          </>
+        )}
+      </div>
+    </PageTransition>
   );
 }
