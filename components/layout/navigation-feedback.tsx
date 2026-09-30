@@ -106,6 +106,28 @@ function Veil() {
   );
 }
 
+/**
+ * Keeps the screen in every page transition.
+ *
+ * The breath is the root's animation (app/globals.css, "PAGE TRANSITIONS"),
+ * and React drops the root from a transition in which only <ViewTransition>
+ * boundaries changed: it writes `view-transition-name: none` on <html> and
+ * hides the root's picture, so that a change inside one boundary does not
+ * fade the whole page. A page change is exactly such a commit, and whether
+ * React judged it so varied from one navigation to the next (Chromium lost the
+ * breath where WebKit kept it). React leaves the root alone when <html>
+ * already names itself, so it does, once.
+ */
+function useTransitionRoot() {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.viewTransitionName = "root";
+    return () => {
+      root.style.viewTransitionName = "";
+    };
+  }, []);
+}
+
 /** Marks back and forward navigations, which the page transitions leave alone. */
 function useHistoryNavigationMark() {
   useEffect(() => {
@@ -124,6 +146,7 @@ function useHistoryNavigationMark() {
 }
 
 export function NavigationFeedback() {
+  useTransitionRoot();
   useHistoryNavigationMark();
   return (
     // useSearchParams() needs a boundary, and it wraps this alone: around the

@@ -416,6 +416,17 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   page, finished. Check `document.getAnimations()` for the
   `::view-transition` pseudo-elements instead, and judge the look in Chromium
   (`Animation.setPlaybackRate` over CDP slows it down to watch).
+- **A named element is pictured whole for a view transition, so never name
+  anything taller than the screen.** Each page's content was once named for
+  the page fade: on Linux WebKit a navigation then waited a median of 1.6 to
+  3.4 s for its pictures and 2 in 24 hung. The fade is the root's (the
+  screen), and a page's `<ViewTransition>` has the class `none`
+  (`components/layout/view-transitions.tsx`).
+- **React drops the root from a transition in which only `<ViewTransition>`
+  boundaries changed** (it writes `view-transition-name: none` on `<html>`),
+  unless `<html>` names itself inline. The public layout does
+  (`components/layout/navigation-feedback.tsx`); without it the page fade
+  came and went between navigations.
 - **A `view-transition-name` may be on the page only once, and it makes a
   backdrop root.** Two elements with one name and the browser skips the whole
   transition. And a named element's descendants lose their backdrop blur

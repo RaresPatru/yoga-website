@@ -13,27 +13,56 @@ import { deleteFaqsByQuestion, seedFaq, unique } from "./helpers";
 const hydrated = (page: Page) => page.locator("next-route-announcer").waitFor({ state: "attached" });
 
 /**
- * Taps the question and records the height of its box on every frame for
- * `ms`, from inside the page, so no frame is missed between the tap and the
- * first sample.
+ * Taps the question and returns the heights its box went through, the last
+ * being where it came to rest.
+ *
+ * Two engines, two ways of looking:
+ *
+ * - Where the script animates it (Safari, Firefox), its animation is paused
+ *   half way and measured there. Sampling frame by frame missed the unfold on
+ *   CI's Linux WebKit, where a busy page drew three frames in 0.7 s.
+ * - Where CSS does it (Chromium), the transition runs on ::details-content,
+ *   which Chromium reports neither through getAnimations() nor with
+ *   transition events, so the box is read on every frame for 0.6 s. Chromium
+ *   draws those frames, on CI too.
  */
-function toggleAndSample(item: Locator, ms: number): Promise<number[]> {
-  return item.evaluate(
-    (details, ms) =>
-      new Promise<number[]>((resolve) => {
-        const samples: number[] = [];
-        const start = performance.now();
-        details.querySelector("summary")!.click();
-        const tick = () => {
-          samples.push(Math.round(details.getBoundingClientRect().height));
-          if (performance.now() - start < ms) requestAnimationFrame(tick);
-          else resolve(samples);
-        };
-        requestAnimationFrame(tick);
-      }),
-    ms
-  );
+function toggle(item: Locator): Promise<number[]> {
+  return item.evaluate(async (details) => {
+    details.querySelector("summary")!.click();
+    const scripted = document
+      .getAnimations()
+      .filter((animation) => (animation.effect as KeyframeEffect | null)?.target === details);
+    if (scripted.length) {
+      for (const animation of scripted) {
+        animation.pause();
+        animation.currentTime = 160;
+      }
+      const midway = Math.round(details.getBoundingClientRect().height);
+      await Promise.all(
+        scripted.map((animation) => {
+          animation.finish();
+          return animation.finished.catch(() => undefined);
+        })
+      );
+      // The script closes the <details> once its animation has finished.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return [midway, Math.round(details.getBoundingClientRect().height)];
+    }
+    const heights: number[] = [];
+    const start = performance.now();
+    await new Promise<void>((resolve) => {
+      const tick = () => {
+        heights.push(Math.round(details.getBoundingClientRect().height));
+        if (performance.now() - start < 600) requestAnimationFrame(tick);
+        else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+    return heights;
+  });
 }
+
+const height = (item: Locator) => item.evaluate((d) => Math.round(d.getBoundingClientRect().height));
 
 test.describe("the FAQ", () => {
   let question: string;
@@ -53,25 +82,25 @@ test.describe("the FAQ", () => {
 
   test("an answer unfolds under its question and folds back", async ({ page }) => {
     await item(page).scrollIntoViewIfNeeded();
-    const closed = Math.round(await item(page).evaluate((d) => d.getBoundingClientRect().height));
+    const closed = await height(item(page));
 
-    const opening = await toggleAndSample(item(page), 700);
-    const open = opening[opening.length - 1];
+    const opening = await toggle(item(page));
+    await expect(item(page)).toHaveJSProperty("open", true);
+    await expect(item(page).locator(".faq-answer")).toBeVisible();
+    const open = await height(item(page));
     expect(open, "open, it holds the answer").toBeGreaterThan(closed + 20);
     expect(
       opening.some((h) => h > closed + 2 && h < open - 2),
       `it passes through the heights in between: ${opening.join(", ")}`
     ).toBe(true);
-    await expect(item(page)).toHaveJSProperty("open", true);
-    await expect(item(page).locator(".faq-answer")).toBeVisible();
 
-    const closing = await toggleAndSample(item(page), 700);
+    const closing = await toggle(item(page));
     expect(
       closing.some((h) => h > closed + 2 && h < open - 2),
       `and back through them: ${closing.join(", ")}`
     ).toBe(true);
-    expect(closing[closing.length - 1]).toBe(closed);
     await expect(item(page)).toHaveJSProperty("open", false);
+    expect(await height(item(page))).toBe(closed);
   });
 
   /** She types answers in a plain box, so a line break she types is one she means. */
@@ -102,12 +131,16 @@ test.describe("the FAQ", () => {
 
     test("an answer is simply there, and simply gone", async ({ page }) => {
       await item(page).scrollIntoViewIfNeeded();
-      const closed = Math.round(await item(page).evaluate((d) => d.getBoundingClientRect().height));
-      const opening = await toggleAndSample(item(page), 300);
-      const open = opening[opening.length - 1];
+      const closed = await height(item(page));
+
+      const opening = await toggle(item(page));
+      await expect(item(page)).toHaveJSProperty("open", true);
+      const open = await height(item(page));
       expect(open).toBeGreaterThan(closed + 20);
       expect(opening.every((h) => h === open), `no heights in between: ${opening.join(", ")}`).toBe(true);
-      const closing = await toggleAndSample(item(page), 300);
+
+      const closing = await toggle(item(page));
+      await expect(item(page)).toHaveJSProperty("open", false);
       expect(closing.every((h) => h === closed), `none on the way back either: ${closing.join(", ")}`).toBe(true);
     });
   });

@@ -1952,18 +1952,23 @@ body {
  * post glides from the card that was tapped to its place on the new page.
  *
  * React runs these through the browser's View Transitions API
- * (components/layout/view-transitions.tsx): the content of every page is a
- * <ViewTransition> with the classes `page-in` and `page-out`, and each
+ * (components/layout/view-transitions.tsx): the content of every page is an
+ * unnamed <ViewTransition> whose arrival starts the transition, and each
  * photograph one named after its event or post, with the class
  * `photo-glide`. A browser without the API (Safari before 18) simply shows
  * the new page, as before.
+ *
+ * The breath is the root's: the picture of the screen as a whole. A page's
+ * content is not pictured on its own, because a named element is captured
+ * whole, and a page several screens tall made a picture WebKit took seconds
+ * to draw (view-transitions.tsx has the numbers).
  *
  * WHAT IS LAYERED OVER WHAT
  *
  * While a transition runs, the browser draws pictures of the old and new
  * states in a layer over the page, each named part in its own group, and it
  * paints named groups over everything unnamed. So each part that has to
- * stay on top is named and stacked here: the pages at the bottom, then the
+ * stay on top is named and stacked here: the screen at the bottom, then the
  * veil fading away, then the photograph, then the top bar.
  *
  * The name of the bar is on its <nav>, not on <header>: a named element is
@@ -1974,11 +1979,11 @@ body {
  * new page, which is not visible yet: the same rule as the veil.
  */
 @layer components {
-  ::view-transition-old(.page-out) {
+  ::view-transition-old(root) {
     animation: page-out 150ms ease-in both;
   }
 
-  ::view-transition-new(.page-in) {
+  ::view-transition-new(root) {
     animation: page-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1) 60ms both;
   }
 

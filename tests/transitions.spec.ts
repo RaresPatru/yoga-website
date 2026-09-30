@@ -30,12 +30,20 @@ async function slowNavigations(page: Page, ms: number) {
 
 type Seen = { pseudo: string; name: string; duration: number };
 
-/** Records every view-transition animation the page runs from now on. */
+/**
+ * Records every view-transition animation the page runs from now on.
+ *
+ * Read the moment each transition is ready (React calls
+ * document.startViewTransition, wrapped here), when all of its animations
+ * exist, and on every frame besides. The frames alone are not enough: on CI's
+ * Linux WebKit a busy page can draw three in 0.7 s, fewer than one per
+ * transition.
+ */
 async function recordTransitions(page: Page) {
   await page.evaluate(() => {
     const seen: { pseudo: string; name: string; duration: number }[] = [];
     (window as unknown as { __transitions: typeof seen }).__transitions = seen;
-    const watch = () => {
+    const note = () => {
       for (const animation of document.getAnimations()) {
         const pseudo = (animation.effect as KeyframeEffect | null)?.pseudoElement ?? "";
         if (!pseudo.startsWith("::view-transition")) continue;
@@ -43,6 +51,17 @@ async function recordTransitions(page: Page) {
         const duration = Number(animation.effect?.getComputedTiming().duration ?? 0);
         if (!seen.some((s) => s.pseudo === pseudo && s.name === name)) seen.push({ pseudo, name, duration });
       }
+    };
+    const start = document.startViewTransition?.bind(document);
+    if (start) {
+      document.startViewTransition = ((update: Parameters<typeof start>[0]) => {
+        const transition = start(update);
+        transition.ready.then(note, () => {});
+        return transition;
+      }) as typeof document.startViewTransition;
+    }
+    const watch = () => {
+      note();
       requestAnimationFrame(watch);
     };
     requestAnimationFrame(watch);
@@ -152,6 +171,14 @@ test.describe("pages breathe from one to the next", () => {
       const seen = await transitions(page);
       expect(seen.some((t) => t.name === "page-out" && t.duration > 0), "the old page fades out").toBe(true);
       expect(seen.some((t) => t.name === "page-in" && t.duration > 0), "the new page fades in").toBe(true);
+      // Only the screen and what floats over it are pictured. A named page
+      // is pictured whole, several screens tall, which cost WebKit seconds a
+      // navigation (components/layout/view-transitions.tsx).
+      const pictured = [...new Set(seen.map((t) => t.pseudo.replace(/^.*\((.+)\)$/, "$1")))];
+      expect(
+        pictured.filter((name) => !/^(root|site-header|nav-veil|(event|post)-photo-.+)$/.test(name) && name !== "::view-transition"),
+        `pictured: ${pictured.join(", ")}`
+      ).toEqual([]);
       expect(
         seen.filter((t) => t.pseudo.includes("(site-header)")),
         "the top bar is not animated"

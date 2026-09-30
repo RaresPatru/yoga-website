@@ -1676,6 +1676,19 @@ the transitions looked absent on the iPhone engine. Listing the page's running
 animations showed they were all there. The look was judged in Chromium, and an
 iPhone on the preview gets the last word.
 
+**CI failed the first push, and the failure pointed somewhere else.** A new
+FAQ test had watched the answer unfold frame by frame, and on CI's Linux WebKit
+the page drew three frames in 0.7 s: it saw the answer already open. Replaying
+the new tests in Playwright's Linux image turned up something worse. One
+navigation in five hung for seconds inside the view transition, and logging
+each step showed where: WebKit was taking its picture of the page. Each page's
+content had been named for the fade, and a named element is pictured whole,
+which for a page several screens tall is an enormous image. Fading the picture
+of the screen instead took the median wait from 1.6–3.4 s to 0.45–0.62 s, and
+the hangs went away. Moving the fade there ran into React dropping the
+screen's picture from some navigations and not others (Chromium lost the fade
+where WebKit kept it); naming `<html>` explicitly makes React leave it alone.
+
 ---
 
 ## Decisions worth defending

@@ -1843,18 +1843,30 @@ page washes pale and stops taking taps, then at 450 ms the lotus turns. A
 quick page shows none of it, and the top bar stays above it, so choosing
 somewhere else is still one tap away.
 
-### Page transitions are React's, one boundary in every page
+### Page transitions are React's; the screen breathes, not the page
 
-The old page fades out (150 ms), the new one fades in rising a few pixels
+The old view fades out (150 ms), the new one fades in rising a few pixels
 (300 ms, starting at 60 ms), and the photograph of an event or a post glides
 from the card to the top of its page (420 ms). The top bar does not move.
 
-Each page wraps its content in a React `<ViewTransition>` rather than the
-layout doing it once, because a layout stays put between pages and a
-boundary that stays put never enters or exits. The photographs are pairs of
-named boundaries: the name is the event's or the post's, and it is on the page
-only once.
-
+- **What breathes is the root: the picture of the screen.** Each page wraps its
+  content in a React `<ViewTransition>` whose arrival starts the transition
+  (in every page, because a layout stays put between pages and never
+  enters), but whose class is `none`, so the page is not pictured on its own.
+  The first version pictured each page's content, and a named element is
+  captured whole: a page several screens tall. On Linux WebKit, drawing
+  without a GPU, a navigation then waited a median of 1.6 to 3.4 s for its
+  pictures, once 83 s, and 2 in 24 stalled outright; with the screen alone,
+  a median of 0.45 to 0.62 s and none in 36. On a phone the whole-page
+  picture would cost memory on every tap even where it was quick.
+- **`<html>` names itself.** When a commit changes only what is inside
+  `<ViewTransition>` boundaries, React drops the root from the transition, so
+  that a change in one part does not fade the page. A page change is such a
+  commit, and React judged it differently from one navigation to the next.
+  React leaves the root alone when `<html>` carries a name of its own, so the
+  public layout sets one (`components/layout/navigation-feedback.tsx`).
+- **The photographs are pairs of named boundaries:** the name is the event's
+  or the post's, and it is on the page only once.
 - **Back and forward do not animate.** The browser has already shown the other
   page by the time the site hears of it, and on an iPhone the swipe is its own
   animation; a fade after it would show the page being left, then fade back.
@@ -1867,7 +1879,7 @@ only once.
   animations while the picture's group is animating, and React animates the
   root's group itself. Three crashes in three on a bare page; `opacity: 0`,
   none.
-- **What stays on top is named and stacked:** the pages, then the veil fading
+- **What stays on top is named and stacked:** the screen, then the veil fading
   out, then the photograph, then the top bar. The bar's name is on its
   `<nav>`, not on `<header>`: a named element is a backdrop root, and on the
   header it would leave the bar's glass nothing behind it to blur.

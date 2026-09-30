@@ -1196,12 +1196,14 @@ build: 700 passed, 11 skipped, none failed.
   0.45 s a lotus, seen from above, turns while a wave of rose runs round its
   petals. The top bar stays above the veil. With less motion the lotus stops
   turning and the wave slows.
-- **The breath and the glide.** The page being left fades out and the new one
+- **The breath and the glide.** The view being left fades out and the new one
   rises in, in about a third of a second, under a top bar that does not
   move; an event's or a post's photograph glides from the card to the top of
-  its page. Back, forward and an iPhone's swipe change the page in one frame,
-  because the browser has already shown the other page by then. With less
-  motion, nothing animates.
+  its page. What breathes is the screen, not the page: pictured whole, a page
+  several screens tall took WebKit seconds to capture on every navigation.
+  Back, forward and an iPhone's swipe change the page in one frame, because
+  the browser has already shown the other page by then. With less motion,
+  nothing animates.
 - **"Înapoi sus"** appears once the first screen has scrolled away and comes
   and goes with the top bar, so it never sits on the corner of the page while
   she reads down it. It glides to the top, or jumps with less motion, and
@@ -1261,7 +1263,22 @@ build: 700 passed, 11 skipped, none failed.
   and a test bound of 1.025 that the test had already tightened to 1.021.
 - **Phase 8's letter test on the phone could measure mid-slide.** It read the
   dialog's position without waiting for its 220 ms slide, and one full run
-  caught it 3 px from the edge. It waits for the slide to finish now.
+  caught it 3 px from the edge; it was also what failed CI for phase 8. It
+  waits for the slide to finish now.
+- **Pictured whole, a page stalled WebKit.** The first push animated each
+  page's content, so each transition pictured a page several screens tall.
+  CI's run passed the transitions but not a new FAQ test, whose frames a busy
+  page had starved (three in 0.7 s), and in Playwright's Linux image, drawing
+  without a GPU, 2 navigations in 24 hung inside the transition and the rest
+  waited a median of 1.6 to 3.4 s. Picturing the screen instead: a median of
+  0.45 to 0.62 s and no hang in 36, and the Linux checks passed 35 in 35. The
+  tests that watched motion frame by frame now pause it, or check what was
+  asked for, instead.
+- **React drops the root from a transition** in which only
+  `<ViewTransition>` boundaries changed, which a page change is, and once the
+  breath moved to the root, whether it did so varied between navigations:
+  Chromium lost the breath where WebKit kept it. `<html>` names itself now,
+  which React respects.
 
 ### Phase 10: Stripe
 

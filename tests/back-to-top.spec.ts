@@ -11,23 +11,26 @@ const hydrated = (page: Page) => page.locator("next-route-announcer").waitFor({ 
 
 const button = (page: Page) => page.getByRole("button", { name: "Înapoi sus" });
 
-/** Presses the button from inside the page and records scrollY on every frame for `ms`. */
-function pressAndSample(page: Page, ms: number): Promise<number[]> {
-  return page.evaluate(
-    (ms) =>
-      new Promise<number[]>((resolve) => {
-        const samples: number[] = [];
-        const start = performance.now();
-        document.querySelector<HTMLButtonElement>(".back-to-top")!.click();
-        const tick = () => {
-          samples.push(Math.round(window.scrollY));
-          if (performance.now() - start < ms) requestAnimationFrame(tick);
-          else resolve(samples);
-        };
-        requestAnimationFrame(tick);
-      }),
-    ms
-  );
+/**
+ * Presses the button and returns how it asked the browser to scroll.
+ *
+ * The scroll itself is the browser's; what the button decides is where to
+ * and whether smoothly, so that is what is checked, with where the page ends
+ * up. Watching the glide frame by frame is at the mercy of how many frames a
+ * busy page gets drawn, which on CI's Linux WebKit was three in 0.7 s.
+ */
+function press(page: Page): Promise<ScrollToOptions[]> {
+  return page.evaluate(() => {
+    const asked: ScrollToOptions[] = [];
+    const scrollTo = window.scrollTo.bind(window);
+    window.scrollTo = ((...args: [ScrollToOptions] | [number, number]) => {
+      if (typeof args[0] === "object") asked.push(args[0]);
+      return (scrollTo as (...a: unknown[]) => void)(...args);
+    }) as typeof window.scrollTo;
+    document.querySelector<HTMLButtonElement>(".back-to-top")!.click();
+    window.scrollTo = scrollTo;
+    return asked;
+  });
 }
 
 /** Scrolled past the first screen, with the top bar (and so the button) showing. */
@@ -75,11 +78,9 @@ test.describe("Înapoi sus", () => {
     await page.goto("/ro");
     await hydrated(page);
     await pastTheFirstScreen(page);
-    const from = await page.evaluate(() => Math.round(window.scrollY));
 
-    const ys = await pressAndSample(page, 1500);
-    expect(ys[ys.length - 1]).toBe(0);
-    expect(ys.some((y) => y > 0 && y < from), `it passes through the page: ${ys.join(", ")}`).toBe(true);
+    expect(await press(page)).toEqual([{ top: 0, behavior: "smooth" }]);
+    await expect.poll(() => page.evaluate(() => Math.round(window.scrollY))).toBe(0);
     expect(await page.evaluate(() => document.activeElement?.id)).toBe("main-content");
     await expect(button(page)).toBeHidden();
   });
@@ -99,8 +100,9 @@ test.describe("Înapoi sus", () => {
       await page.goto("/ro");
       await hydrated(page);
       await pastTheFirstScreen(page);
-      const ys = await pressAndSample(page, 300);
-      expect(ys.every((y) => y === 0), `no stops on the way: ${ys.join(", ")}`).toBe(true);
+      expect(await press(page)).toEqual([{ top: 0, behavior: "auto" }]);
+      // "auto" with nothing smoothing it is a jump: there on the next line.
+      expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(0);
     });
   });
 });
