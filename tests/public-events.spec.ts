@@ -3,6 +3,7 @@ import {
   bucharestDate,
   seedEvent,
   deleteEventBySlug,
+  eventsBySlug,
   seedRegistrationFor,
   registrationsFor,
   registerDirectly,
@@ -1052,12 +1053,19 @@ test.describe("when an event ends", () => {
    * The duration column could express neither: 2880 minutes modulo a day is
    * zero, so the page printed "09:00 - 09:00" unless specially guarded, and a
    * week meant asking her to type 10080.
+   *
+   * The weekend is the one the clocks go back (the last Sunday of October), so
+   * its Sunday has 25 hours. This test once seeded dates 23 to 25 days ahead
+   * and counted two days and seven hours, and CI failed it on 30 September
+   * 2026, when those dates reached that weekend and the entry was, correctly,
+   * an hour longer. It is checked on the clock now, on a weekend that always
+   * crosses the change.
    */
   test("a multi-day event keeps its full length in the calendar", async ({ page, request }) => {
     const event = await seedEvent({
-      date: inDays(23),
+      date: "2099-10-23",
       time: "09:00",
-      end_date: inDays(25),
+      end_date: "2099-10-25",
       end_time: "16:00",
     });
     try {
@@ -1070,9 +1078,12 @@ test.describe("when an event ends", () => {
       ).text();
       const start = ics.match(/DTSTART:(\d{8}T\d{6})Z/)![1];
       const end = ics.match(/DTEND:(\d{8}T\d{6})Z/)![1];
-      // Two days and seven hours: 09:00 on the first morning to 16:00 on the
-      // third afternoon, not the ninety minutes every entry used to get.
-      expect((Date.parse(toIso(end)) - Date.parse(toIso(start))) / 60000).toBe(2 * 1440 + 420);
+      // 09:00 on the first morning to 16:00 on the third afternoon, on the
+      // clock in Romania, not the ninety minutes every entry used to get...
+      expect([inRomania(start), inRomania(end)]).toEqual(["2099-10-23 09:00", "2099-10-25 16:00"]);
+      // ...which is two days and eight hours, not seven: the clocks went back
+      // in between.
+      expect((Date.parse(toIso(end)) - Date.parse(toIso(start))) / 60000).toBe(2 * 1440 + 480);
     } finally {
       await deleteEventBySlug(event.slug);
     }
@@ -1145,6 +1156,24 @@ function toIso(compact: string): string {
     9,
     11
   )}:${compact.slice(11, 13)}:${compact.slice(13, 15)}Z`;
+}
+
+/** `20991025T140000` (UTC) -> `2099-10-25 16:00`, what a clock in Romania shows then. */
+function inRomania(compact: string): string {
+  const part = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Bucharest",
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+      .formatToParts(new Date(toIso(compact)))
+      .map((p) => [p.type, p.value])
+  );
+  return `${part.year}-${part.month}-${part.day} ${part.hour}:${part.minute}`;
 }
 
 function escapeForRegExp(value: string): string {
@@ -1375,6 +1404,42 @@ test.describe("the .ics is a valid RFC 5545 file", () => {
           (stamp("DTEND") - stamp("DTSTART")) / 60000,
           JSON.stringify(overrides)
         ).toBe(expected);
+      } finally {
+        await deleteEventBySlug(event.slug);
+      }
+    }
+  });
+
+  /**
+   * On the nights the clocks change, the file and the database still agree on
+   * when an event starts and ends.
+   *
+   * The file's times are worked out in JavaScript (`zonedWallClockToUtc`), the
+   * database's by Postgres, and bookings close by the database's. The first
+   * version put everything from 01:00 to 03:00 on those nights an hour out.
+   * 03:30 in October happens twice and 03:30 in March never happens; both
+   * sides take the later instant, which reads 03:30 in winter time and 04:30
+   * in summer time.
+   */
+  test("its times agree with the database's, even on the nights the clocks change", async ({ request }) => {
+    for (const [date, time, reads] of [
+      ["2099-10-25", "01:30", "01:30"], // the clocks go back at 04:00: still summer time
+      ["2099-10-25", "03:30", "03:30"], // happens twice: the second one, in winter time
+      ["2099-03-29", "02:30", "02:30"], // the clocks go forward at 03:00: still winter time
+      ["2099-03-29", "03:30", "04:30"], // never happens: the clocks skip from 03:00 to 04:00
+    ] as const) {
+      const event = await seedEvent({ date, time, end_time: `${time.slice(0, 3)}45` });
+      try {
+        const ics = await (
+          await request.get(`/api/calendar/event/${event.slug}?locale=ro`)
+        ).text();
+        const stamp = (name: string) => ics.match(new RegExp(`${name}:(\\d{8}T\\d{6})Z`))![1];
+        const [row] = await eventsBySlug(event.slug);
+        expect(
+          [stamp("DTSTART"), stamp("DTEND")].map((s) => new Date(toIso(s)).toISOString()),
+          `${date} ${time}`
+        ).toEqual([new Date(row.starts_at).toISOString(), new Date(row.ends_at).toISOString()]);
+        expect(inRomania(stamp("DTSTART")), `${date} ${time}`).toBe(`${date} ${reads}`);
       } finally {
         await deleteEventBySlug(event.slug);
       }

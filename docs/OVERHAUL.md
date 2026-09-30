@@ -1279,6 +1279,24 @@ build: 700 passed, 11 skipped, none failed.
   breath moved to the root, whether it did so varied between navigations:
   Chromium lost the breath where WebKit kept it. `<html>` names itself now,
   which React respects.
+- **A calendar test assumed every day has 24 hours.** It seeded a weekend 23
+  to 25 days ahead and expected two days and seven hours. Run on 30 September
+  2026, that weekend was the one the clocks go back, the calendar entry was
+  rightly an hour longer, and CI failed it in both engines. It now uses a
+  weekend in 2099 that crosses the change on every run, and reads the start
+  and end on the clock in Romania.
+- **Times from 01:00 to 03:00 on the two nights the clocks change came out an
+  hour off** in the calendar file, the structured data and the home page's
+  test of whether an event has started. `zonedWallClockToUtc`
+  (`lib/utils.ts`) read the offset at the wrong instant: 01:30 on 25 October
+  2026 became 02:30. Bookings close by the database's `starts_at`, which
+  Postgres gets right, so only the calendar and the page were out. It now
+  tries the offsets either side of a change and keeps the one that really
+  reads as the wall clock, and where a reading happens twice or never it
+  takes the later instant, as Postgres does. Compared with Postgres every 15
+  minutes over three days around each change in 2026 and 2099, 1,728
+  readings: the old version disagreed on 40, the new one on none. A test
+  compares the calendar file with the database on both nights.
 
 ### Phase 10: Stripe
 

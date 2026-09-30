@@ -296,7 +296,8 @@ There is no built-in "parse this as if in zone X", so the conversion works
 backwards using `Intl`, which knows every zone's rules including daylight
 saving: pretend the wall clock is UTC, ask what that instant reads as in
 Bucharest, and the difference is the offset. Verified across both daylight-saving
-transitions.
+transitions, though not in the small hours of the changeover nights, where it
+was an hour out until Phase 9 found it.
 
 The previous plan file listed this as fixed. It was not.
 
@@ -1688,6 +1689,16 @@ of the screen instead took the median wait from 1.6–3.4 s to 0.45–0.62 s, an
 the hangs went away. Moving the fade there ran into React dropping the
 screen's picture from some navigations and not others (Chromium lost the fade
 where WebKit kept it); naming `<html>` explicitly makes React leave it alone.
+
+**The second push failed CI on a test that assumed every day has 24 hours.**
+A calendar test seeded a weekend 23 to 25 days ahead and expected two days and
+seven hours; run on 30 September, that weekend was the one the clocks go back,
+and the entry was rightly an hour longer. Reading the converter behind it
+found a real bug in hours nobody had tried: `zonedWallClockToUtc` read the
+zone's offset at the wrong instant, so from 01:00 to 03:00 on both changeover
+nights the calendar file was an hour out from the database. Swept every 15
+minutes against Postgres, the old version disagreed 40 times in 1,728
+readings and the new one never.
 
 ---
 

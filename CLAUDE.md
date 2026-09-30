@@ -178,6 +178,14 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   them, and the post editor writes only the fields in `POST_FIELDS`
   (`lib/admin/blog.ts`). That CLI also writes the file unformatted, so don't
   hand-format it: the next regeneration would undo it.
+- **An event's times are worked out twice, and the two must agree.** Postgres
+  computes `starts_at` and `ends_at`, which bookings close by; the calendar
+  file, the structured data and the home page use `zonedWallClockToUtc`
+  (`lib/utils.ts`). Until 30 September 2026 the second was an hour out from
+  01:00 to 03:00 on the nights the clocks change. In a test, check an event's
+  times on the clock in Romania, not as a count of hours: dates seeded
+  relative to today reach a changeover weekend four days a year, which is how
+  a calendar test expecting two days and seven hours failed CI.
 - **Next.js writes the layout's `<title>` after a page's effects on a full
   load.** A client page that sets `document.title` in an effect sees it
   replaced by the metadata title a moment later. In the admin panel use
