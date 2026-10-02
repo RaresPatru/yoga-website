@@ -310,6 +310,15 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   `npm install`, not `npm ci`, so a floating range can resolve there to a version
   CI never saw. A caret on `next` beside literal `optionalDependencies` pins
   installed two different versions of the same native binary at once.
+- **An exact version in `overrides` freezes that package for good.** Neither
+  `npm update` nor `npm audit fix` will move it, so the version that cleared
+  one advisory is the one the next advisory flags, and `npm audit` then counts
+  every package above it: `brace-expansion` pinned at 5.0.9 in July showed as
+  15 high vulnerabilities on 2 October 2026, all in the lint tools
+  (`npm audit --omit=dev` said 0). Override with a caret range, and delete the
+  override once the parents' own ranges reach a fixed version. `npm audit fix`
+  answered with a downgrade of `typescript-eslint` that fixed nothing, and
+  `--force` offered `eslint-config-next` 15; never run `--force`.
 - **`npm run dev` reads the *local* database; `npm run dev:prod` reads
   production.** `.env` holds the production values and `.env.local` overrides the
   three Supabase ones with the Docker stack, which Next resolves in that order.
