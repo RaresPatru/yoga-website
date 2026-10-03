@@ -813,11 +813,11 @@ export async function publishEventDraftAs(eventId: string, changes: Record<strin
 export async function waitingEntry(id: string) {
   const { data, error } = await (await serviceClient())
     .from("waiting_list")
-    .select("id, notified_at, claim_expires_at, claimed_at, removed_at")
+    .select("id, email, notified_at, claim_expires_at, claimed_at, removed_at")
     .eq("id", id)
     .single();
   if (error) throw new Error(`waitingEntry failed: ${error.message}`);
-  return data as { id: string; notified_at: string | null; claim_expires_at: string | null; claimed_at: string | null; removed_at: string | null };
+  return data as { id: string; email: string; notified_at: string | null; claim_expires_at: string | null; claimed_at: string | null; removed_at: string | null };
 }
 
 export async function deleteRegistration(id: string) {
@@ -1127,4 +1127,59 @@ export async function putRecipients(
     { onConflict: "announcement_id,email" }
   );
   if (error) throw new Error(`putRecipients failed: ${error.message}`);
+}
+
+/** How long an unpaid booking holds its seat, in minutes: the database's pending_hold_interval(). */
+export async function pendingHoldMinutes(): Promise<number> {
+  const { data, error } = await (await serviceClient()).rpc("pending_hold_interval");
+  if (error) throw new Error(`pendingHoldMinutes failed: ${error.message}`);
+  const [hours, minutes] = String(data).split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/** Gives a booking a cancel link whose token the test knows, as a confirmation email would (only its hash is stored). */
+export async function setCancelToken(registrationId: string, token: string) {
+  const { createHash } = await import("node:crypto");
+  const { error } = await (await serviceClient())
+    .from("registrations")
+    .update({ cancel_token_hash: createHash("sha256").update(token).digest("hex") })
+    .eq("id", registrationId);
+  if (error) throw new Error(`setCancelToken failed: ${error.message}`);
+}
+
+/** The notices her dashboard shows for a booking, oldest first. */
+export async function noticesFor(registrationId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("admin_notifications")
+    .select("*")
+    .eq("registration_id", registrationId)
+    .order("created_at");
+  if (error) throw new Error(`noticesFor failed: ${error.message}`);
+  return (data ?? []) as Array<{ id: string; kind: string; details: Record<string, unknown>; seen_at: string | null; source_id: string | null }>;
+}
+
+/** Marks every notice seen, so a test starts from a dashboard with none. */
+export async function clearNotices() {
+  const { error } = await (await serviceClient())
+    .from("admin_notifications")
+    .update({ seen_at: new Date().toISOString() })
+    .is("seen_at", null);
+  if (error) throw new Error(`clearNotices failed: ${error.message}`);
+}
+
+/** Changes a booking's columns directly, for states the site reaches only over time (a lapsed hold, an old payment). */
+export async function updateRegistration(id: string, patch: Record<string, unknown>) {
+  const { error } = await (await serviceClient()).from("registrations").update(patch).eq("id", id);
+  if (error) throw new Error(`updateRegistration failed: ${error.message}`);
+}
+
+/** Every booking on an event with every column, newest first. */
+export async function bookingsOn(eventId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("registrations")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`bookingsOn failed: ${error.message}`);
+  return (data ?? []) as Array<Record<string, unknown>>;
 }

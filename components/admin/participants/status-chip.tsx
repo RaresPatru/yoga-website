@@ -13,6 +13,7 @@ const STYLE: Record<ParticipantStatus, string> = {
   abandoned: "bg-charcoal/5 text-charcoal-light",
   refund_requested: "bg-warning/10 text-warning",
   refunded: "bg-charcoal/5 text-charcoal-light",
+  cancelled: "bg-charcoal/5 text-charcoal-light",
   waitlist: "bg-rose/10 text-rose-deep",
   offers: "bg-rose/15 text-rose-deep",
   removed: "bg-charcoal/5 text-charcoal-light",

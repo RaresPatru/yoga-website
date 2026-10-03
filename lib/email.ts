@@ -6,6 +6,7 @@ import { siteUrl } from "@/lib/site-config";
 import { fillHtml, fillText, type EmailLocale, type TemplateType } from "@/lib/email-content";
 import { renderEmail } from "@/lib/email-layout";
 import { loadEmailSettings, type EmailSettings } from "@/lib/email-brand";
+import { usesLocalDatabase } from "@/lib/local-database";
 
 /**
  * Sending the site's emails: where they go, who they are from, and what
@@ -69,11 +70,9 @@ export function senderOf(settings: EmailSettings): Sender {
   return { fromName: settings.brand.siteName, replyTo: settings.replyTo };
 }
 
-const LOCAL_DATABASE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/;
-
 /** Whether this run's emails go to the local mailbox rather than to Resend. */
 export function usesLocalMailbox(): boolean {
-  return LOCAL_DATABASE.test(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+  return usesLocalDatabase();
 }
 
 /** The local stack's mailbox (`[local_smtp]` in supabase/config.toml). */

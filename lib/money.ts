@@ -53,6 +53,22 @@ export function formatPrice(price: number, currency: string | null | undefined, 
 }
 
 /**
+ * An amount Stripe charged, as text: `amount` in the smallest unit (bani,
+ * cents), so 13950 RON is "139,50 RON". Whole amounts drop the decimals like
+ * formatPrice does; a promotion code can leave a fraction, which is shown
+ * rather than rounded away, since it is what left their account.
+ */
+export function formatPaid(amount: number, currency: string | null | undefined, locale: string) {
+  const major = amount / 100;
+  const whole = Number.isInteger(major);
+  const text = new Intl.NumberFormat(locale === "ro" ? "ro-RO" : "en-GB", {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2,
+  }).format(major);
+  return `${text} ${toCurrency(currency?.toUpperCase())}`;
+}
+
+/**
  * The amount Stripe wants: minor units, as an integer.
  *
  * All four supported currencies are two-decimal, so this is × 100 across the

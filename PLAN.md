@@ -66,14 +66,19 @@ She fills it in herself at `/admin/content` — no developer needed.
 
 ### Verification that has never run against production
 
-- [ ] **One Stripe test payment, end to end, on the current code.** One was
-      made in August (docs/JOURNEY.md, 4.5) and found three problems; the
-      payment, expiry and waiting-list code has changed a lot since, and no
-      automated test sends a Stripe webhook.
-- [ ] **Subscribe the webhook endpoint to `charge.refunded`**, then test a
-      refund. The handler exists, but Stripe never sends it the event, so a
-      refund does not free the seat or notify the waiting list yet.
-- [ ] Confirm the Stripe webhook endpoint points at the production domain.
+- [ ] **One Stripe test payment, end to end, on the deployed site.** Done
+      locally against the sandbox on 3 October 2026 (Phase 10: card and
+      Revolut Pay through Stripe's real payment page, turning back, resuming,
+      giving the place up, and the cancel link's automatic refund for both),
+      and the suite now drives the webhook with signed events. What has not
+      run is a payment on a deployment, which needs Phase 10's migration in
+      production first.
+- [x] **The webhook endpoint is subscribed to `charge.refunded`** (checked
+      through the API on 3 October 2026, beside `checkout.session.completed`
+      and `.expired`), and to `refund.failed` since 3 October 2026.
+- [x] The Stripe webhook endpoint points at the production deployment
+      (`yoga-website-nine-psi.vercel.app/api/stripe/webhook`, checked 3
+      October 2026). It moves when a custom domain arrives.
 - [ ] Check the site in Instagram's in-app browser on a real iPhone. WebKit is
       covered by the test suite; the webview itself is not.
 

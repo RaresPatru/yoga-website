@@ -23,7 +23,44 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "admins": {
+            "admin_notifications": {
+                  Row: {
+                    "created_at": string,"details": NonNullable<Json>,"event_id": string | null,"id": string,"kind": string,"registration_id": string | null,"seen_at": string | null,"source_id": string | null
+                  }
+                  Insert: {
+                    "created_at"?: string,"details"?: NonNullable<Json>,"event_id"?: string | null,"id"?: string,"kind": string,"registration_id"?: string | null,"seen_at"?: string | null,"source_id"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"details"?: NonNullable<Json>,"event_id"?: string | null,"id"?: string,"kind"?: string,"registration_id"?: string | null,"seen_at"?: string | null,"source_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "admin_notifications_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "admin_event_overview"
+      referencedColumns: ["event_id"]
+    },{
+      foreignKeyName: "admin_notifications_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "event_availability"
+      referencedColumns: ["event_id"]
+    },{
+      foreignKeyName: "admin_notifications_event_id_fkey"
+      columns: ["event_id"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "admin_notifications_registration_id_fkey"
+      columns: ["registration_id"]
+isOneToOne: false
+      referencedRelation: "registrations"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"admins": {
                   Row: {
                     "created_at": string,"email": string | null,"user_id": string
                   }
@@ -216,13 +253,13 @@ isOneToOne: false
                   ]
                 },"registrations": {
                   Row: {
-                    "admin_note": string | null,"created_at": string,"email": string,"event_id": string,"full_name": string,"id": string,"locale": string,"marketing_consent_at": string | null,"note_consent_at": string | null,"participant_note": string | null,"payment_status": string,"phone": string,"refund_requested_at": string | null,"removal_reason": string | null,"removed_at": string | null,"stripe_session_id": string | null,"user_id": string | null,"holds_seat": boolean | null
+                    "admin_note": string | null,"amount_paid": number | null,"cancel_token_hash": string | null,"cancelled_at": string | null,"checkout_started_at": string | null,"created_at": string,"discount_code": string | null,"email": string,"event_id": string,"full_name": string,"id": string,"locale": string,"marketing_consent_at": string | null,"note_consent_at": string | null,"paid_currency": string | null,"participant_note": string | null,"payment_status": string,"phone": string,"refund_failed_at": string | null,"refund_requested_at": string | null,"refunded_at": string | null,"removal_reason": string | null,"removed_at": string | null,"stripe_payment_intent_id": string | null,"stripe_session_id": string | null,"user_id": string | null,"holds_seat": boolean | null
                   }
                   Insert: {
-                    "admin_note"?: string | null,"created_at"?: string,"email": string,"event_id": string,"full_name": string,"id"?: string,"locale"?: string,"marketing_consent_at"?: string | null,"note_consent_at"?: string | null,"participant_note"?: string | null,"payment_status"?: string,"phone": string,"refund_requested_at"?: string | null,"removal_reason"?: string | null,"removed_at"?: string | null,"stripe_session_id"?: string | null,"user_id"?: string | null
+                    "admin_note"?: string | null,"amount_paid"?: number | null,"cancel_token_hash"?: string | null,"cancelled_at"?: string | null,"checkout_started_at"?: string | null,"created_at"?: string,"discount_code"?: string | null,"email": string,"event_id": string,"full_name": string,"id"?: string,"locale"?: string,"marketing_consent_at"?: string | null,"note_consent_at"?: string | null,"paid_currency"?: string | null,"participant_note"?: string | null,"payment_status"?: string,"phone": string,"refund_failed_at"?: string | null,"refund_requested_at"?: string | null,"refunded_at"?: string | null,"removal_reason"?: string | null,"removed_at"?: string | null,"stripe_payment_intent_id"?: string | null,"stripe_session_id"?: string | null,"user_id"?: string | null
                   }
                   Update: {
-                    "admin_note"?: string | null,"created_at"?: string,"email"?: string,"event_id"?: string,"full_name"?: string,"id"?: string,"locale"?: string,"marketing_consent_at"?: string | null,"note_consent_at"?: string | null,"participant_note"?: string | null,"payment_status"?: string,"phone"?: string,"refund_requested_at"?: string | null,"removal_reason"?: string | null,"removed_at"?: string | null,"stripe_session_id"?: string | null,"user_id"?: string | null
+                    "admin_note"?: string | null,"amount_paid"?: number | null,"cancel_token_hash"?: string | null,"cancelled_at"?: string | null,"checkout_started_at"?: string | null,"created_at"?: string,"discount_code"?: string | null,"email"?: string,"event_id"?: string,"full_name"?: string,"id"?: string,"locale"?: string,"marketing_consent_at"?: string | null,"note_consent_at"?: string | null,"paid_currency"?: string | null,"participant_note"?: string | null,"payment_status"?: string,"phone"?: string,"refund_failed_at"?: string | null,"refund_requested_at"?: string | null,"refunded_at"?: string | null,"removal_reason"?: string | null,"removed_at"?: string | null,"stripe_payment_intent_id"?: string | null,"stripe_session_id"?: string | null,"user_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -419,7 +456,7 @@ isOneToOne: false
                   ]
                 },"admin_dashboard": {
                   Row: {
-                    "active_events": number | null,"draft_posts": number | null,"pending_payments": number | null,"pending_testimonials": number | null,"unread_messages": number | null
+                    "active_events": number | null,"draft_posts": number | null,"pending_payments": number | null,"pending_testimonials": number | null,"refund_requests": number | null,"unread_messages": number | null,"unseen_notices": number | null
                   }
                   Relationships: [
                     
@@ -433,7 +470,7 @@ isOneToOne: false
                   ]
                 },"admin_participants": {
                   Row: {
-                    "admin_note": string | null,"archived": boolean | null,"created_at": string | null,"email": string | null,"email_key": string | null,"event_date": string | null,"event_ends_at": string | null,"event_id": string | null,"event_starts_at": string | null,"event_title": string | null,"full_name": string | null,"id": string | null,"kind": string | null,"locale": string | null,"marketing_consent_at": string | null,"note_consent_at": string | null,"offer_expires_at": string | null,"participant_note": string | null,"payment_status": string | null,"phone": string | null,"refund_requested_at": string | null,"removal_reason": string | null,"removed_at": string | null,"search_text": string | null,"status": string | null
+                    "admin_note": string | null,"amount_paid": number | null,"archived": boolean | null,"cancelled_at": string | null,"created_at": string | null,"discount_code": string | null,"email": string | null,"email_key": string | null,"event_currency": string | null,"event_date": string | null,"event_ends_at": string | null,"event_id": string | null,"event_price": number | null,"event_starts_at": string | null,"event_title": string | null,"full_name": string | null,"id": string | null,"kind": string | null,"locale": string | null,"marketing_consent_at": string | null,"note_consent_at": string | null,"offer_expires_at": string | null,"paid_currency": string | null,"paid_online": boolean | null,"participant_note": string | null,"payment_status": string | null,"phone": string | null,"refund_failed_at": string | null,"refund_requested_at": string | null,"refunded_at": string | null,"removal_reason": string | null,"removed_at": string | null,"search_text": string | null,"status": string | null
                   }
                   Relationships: [
                     
@@ -606,4 +643,3 @@ export const Constants = {
           }
         }
 } as const
-

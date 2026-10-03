@@ -26,10 +26,11 @@ import type { PostHog } from "posthog-js";
 
 /**
  * The query parameters that are keys, not places: a waiting-list claim
- * (?claim=) and a link to write a testimonial (?token=). Whoever holds one can
- * use it, so none leaves this site in an analytics event.
+ * (?claim=), a link to write a testimonial or to cancel a booking (?token=),
+ * and the Stripe checkout a visitor came back from (?checkout=). Whoever holds
+ * one can use it, so none leaves this site in an analytics event.
  */
-const SECRET_PARAMS = ["claim", "token"];
+const SECRET_PARAMS = ["claim", "token", "checkout"];
 
 function withoutSecrets(url: string): string {
   return url.replace(new RegExp(`([?&])(${SECRET_PARAMS.join("|")})=[^&#]*`, "g"), "$1$2=redacted");

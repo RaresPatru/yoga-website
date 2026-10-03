@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
-import { createCheckoutSession, type CheckoutLocale } from "@/lib/stripe-checkout";
+import { openCheckout, type CheckoutLocale } from "@/lib/stripe-checkout";
+import { fulfilCheckout } from "@/lib/payments";
 import { hasStarted, registerForEvent } from "@/lib/register-for-event";
 
 /**
@@ -13,20 +14,25 @@ import { hasStarted, registerForEvent } from "@/lib/register-for-event";
  * link can claim, which is fine — the link only ever goes to the address they
  * signed up with, and the worst case is that a seat they wanted goes to them.
  *
- * Three checks that were previously missing:
+ * Checks before a claim:
  *
  *   1. Was a link ever actually issued for this entry? (`notified_at`)
  *   2. Is it still inside the 24-hour window? (`claim_expires_at`)
  *   3. Is the event free? A paid event must go through Stripe, not be handed
  *      over gratis.
  *
- * And two answers that are not errors:
+ * And answers that are not errors:
  *
  *   - The event has started: bookings are closed, the link with them.
  *   - Somebody booked the seat first. The seat was never reserved: a claim
  *     link is a head start, not a hold. They see an apology, and their offer
  *     is withdrawn rather than left running, which puts them back where they
  *     were, at the front of the queue, for the next seat that opens.
+ *   - They already hold a seat with this address (one per email per event,
+ *     audit B3): they are told so, and taken off the waiting list, where
+ *     they would only be offered a second seat.
+ *   - They claimed a paid seat, turned back at Stripe and pressed the link
+ *     again: they are sent back to their checkout, while it holds the seat.
  */
 export async function POST(
   req: Request,
@@ -56,9 +62,8 @@ export async function POST(
     // defeats that, leaving every field typed as an error object.
     const { data: entry, error: findError } = await supabase
       .from("waiting_list")
-      .select("id, event_id, full_name, email, phone, locale, participant_note, note_consent_at, marketing_consent_at, admin_note, notified_at, claim_expires_at, events!inner(id, slug, title_ro, title_en, price, currency, published, starts_at)")
+      .select("id, event_id, full_name, email, phone, locale, participant_note, note_consent_at, marketing_consent_at, admin_note, notified_at, claim_expires_at, claimed_at, claimed_registration_id, events!inner(id, slug, title_ro, title_en, price, currency, published, starts_at)")
       .eq("id", token)
-      .is("claimed_at", null)
       .is("removed_at", null)
       .maybeSingle();
 
@@ -67,6 +72,14 @@ export async function POST(
         { error: "Invalid or expired claim link" },
         { status: 404 }
       );
+    }
+
+    // Supabase types an embedded relation as an array; the !inner join means
+    // exactly one row.
+    const event = Array.isArray(entry.events) ? entry.events[0] : entry.events;
+
+    if (entry.claimed_at) {
+      return resumeClaim(entry.claimed_registration_id, event, entry.email, locale);
     }
 
     // Never notified means this id was never handed out as a claim token.
@@ -89,10 +102,6 @@ export async function POST(
         { status: 410 } // 410 Gone: it existed, it is finished
       );
     }
-
-    // Supabase types an embedded relation as an array; the !inner join means
-    // exactly one row.
-    const event = Array.isArray(entry.events) ? entry.events[0] : entry.events;
 
     if (!event?.published) {
       return NextResponse.json({ error: "Event not available" }, { status: 404 });
@@ -140,6 +149,15 @@ export async function POST(
         if (resetError) console.error("Could not return the claim to the queue:", resetError);
         return NextResponse.json({ error: booking.reason, code: "taken" }, { status: 409 });
       }
+      // Already booked with this address: the waiting list has nothing more
+      // to offer them, and a live offer would hold back a seat from others.
+      if (booking.code === "already_registered") {
+        const { error: removeError } = await supabase
+          .from("waiting_list")
+          .update({ removed_at: new Date().toISOString(), removal_reason: "Avea deja un loc la eveniment." })
+          .eq("id", token);
+        if (removeError) console.error("Could not take a booked person off the waiting list:", removeError);
+      }
       return NextResponse.json({ error: booking.reason, code: booking.code }, { status: 409 });
     }
 
@@ -174,13 +192,10 @@ export async function POST(
         })
         .eq("id", token);
 
-    /** Undoes the held seat when the rest of the flow cannot be completed. */
-    const releaseSeat = () =>
-      supabase.from("registrations").delete().eq("id", registration.id);
-
     if (!isPaid) {
       await markClaimed();
       await sendConfirmationEmail({
+        registrationId: registration.id,
         eventId: entry.event_id,
         fullName: entry.full_name,
         email: entry.email,
@@ -193,37 +208,88 @@ export async function POST(
     // Paid: hand back a Stripe Checkout URL for the page to redirect to. The
     // seat is held by the 'pending' registration in the meantime, and released
     // by the checkout.session.expired webhook if they never pay.
-    let checkoutUrl: string;
     try {
-      checkoutUrl = await createCheckoutSession({
+      const opening = await openCheckout({
         event,
         registrationId: registration.id,
         email: entry.email,
         locale,
+        previousSessionId: booking.sessionId,
       });
+      // Only now is the one-time link considered used.
+      await markClaimed();
+      if ("paid" in opening) {
+        await fulfilCheckout(opening.session);
+        return NextResponse.json({ success: true, paid: true });
+      }
+      return NextResponse.json({ success: true, checkoutUrl: opening.url });
     } catch (stripeError) {
       // Stripe is down or misconfigured. Give the seat back and leave the claim
       // link unspent so they can try again, rather than stranding a pending
       // registration that can never be paid for.
       console.error("Stripe session creation failed during claim:", stripeError);
-      await releaseSeat();
+      if (!booking.resumed) {
+        await supabase.from("registrations").delete().eq("id", registration.id).eq("payment_status", "pending");
+      }
       return NextResponse.json(
         {
           error:
             locale === "en"
               ? "We couldn't start the payment. Please try again."
               : "Nu am putut iniția plata. Încearcă din nou.",
+          code: "stripe",
         },
         { status: 502 }
       );
     }
-
-    // Only now is the one-time link considered used.
-    await markClaimed();
-
-    return NextResponse.json({ success: true, checkoutUrl });
   } catch (error) {
     console.error("Claim spot error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+/**
+ * A link pressed again after it was used. A paid claim whose checkout still
+ * holds the seat sends them back to pay; a claim that became a booking says
+ * so; anything else is a spent link.
+ */
+async function resumeClaim(
+  registrationId: string | null,
+  event: { id: string; slug: string; title_ro: string; title_en: string | null; price: number; currency: string; starts_at: string },
+  email: string,
+  locale: CheckoutLocale
+) {
+  const spent = NextResponse.json({ error: "Invalid or expired claim link" }, { status: 404 });
+  if (!registrationId) return spent;
+
+  const { data: booking, error } = await createAdminClient()
+    .from("registrations")
+    .select("id, payment_status, stripe_session_id, removed_at, cancelled_at, holds_seat")
+    .eq("id", registrationId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!booking || booking.removed_at || booking.cancelled_at) return spent;
+
+  if (booking.payment_status === "free" || booking.payment_status === "completed") {
+    return NextResponse.json({ error: "Already booked", code: "already_registered" }, { status: 409 });
+  }
+  if (booking.payment_status !== "pending" || !booking.holds_seat || hasStarted(event.starts_at)) return spent;
+
+  try {
+    const opening = await openCheckout({
+      event,
+      registrationId: booking.id,
+      email,
+      locale,
+      previousSessionId: booking.stripe_session_id,
+    });
+    if ("paid" in opening) {
+      await fulfilCheckout(opening.session);
+      return NextResponse.json({ success: true, paid: true });
+    }
+    return NextResponse.json({ success: true, checkoutUrl: opening.url });
+  } catch (stripeError) {
+    console.error("Could not reopen a claimed checkout:", stripeError);
+    return NextResponse.json({ error: "Payment could not start", code: "stripe" }, { status: 502 });
   }
 }

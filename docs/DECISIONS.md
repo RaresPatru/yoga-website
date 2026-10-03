@@ -122,7 +122,10 @@ worst kind of bug: a page saying "8/10 spots" beside a button answering "this
 event is full".
 
 `pending` **is** counted — that is someone in Stripe checkout right now, holding
-the seat until they pay or the session expires.
+the seat until they pay or the session expires. Since Phase 10 a booking its
+participant cancelled through their link holds no seat either, and an unpaid
+one is held from its last checkout (`checkout_started_at`); the rule lives in
+`holds_seat()`, below.
 
 ### A `register_for_event` function instead of count-then-insert
 
@@ -1800,6 +1803,158 @@ deleted without ever being seen. So the list remembers when the newest message
 it knew of arrived, and "all that match" stops there.
 
 ---
+
+## Payments
+
+### The booking opens the payment; the browser never names a booking to pay for
+
+`/api/register` books a paid seat as `pending` and creates the Stripe Checkout
+session in the same request, answering with the page to pay on. It used to
+answer with the booking's id, and the browser then asked `/api/stripe/checkout`
+to start a payment for that id. That second endpoint took any id it was sent,
+in any state (audit B11), and the time between the two requests left a seat
+held with nothing to pay for it, which is the case the one-hour hold was
+invented to clean up. A waiting-list claim works the same way.
+
+### One payable session per booking, recorded by compare-and-set
+
+A booking keeps its current session in `stripe_session_id` from the moment the
+session exists. Someone who comes back is sent to that session while it is
+open, in their language and with five minutes left; otherwise it is expired
+first, so the old page stops taking money before a new one exists. A new
+session is recorded only if the booking still holds the session the request
+started from. Two tabs at once both create one; the second to record loses,
+expires its own, and follows the first. An expired session frees the seat only
+while it is still the booking's current one: Stripe sends
+`checkout.session.expired` for a session the site expired itself, which would
+otherwise delete a booking that had moved on to a newer session.
+
+Whatever gets past all that is caught where the money arrives: a payment for a
+booking already paid, or removed meanwhile, is refunded in full at once and
+reported to her (`payment_returned`).
+
+### One seat per email per event, decided in the booking function
+
+Rares' rule (3 October 2026): nobody books for a friend; the friend books with
+their own address. `register_for_event()` applies it under the lock it already
+takes on the event, which is what makes it hold: a check in the API would race
+with itself. An address whose seat still counts is refused
+(`already_registered`). An address with an unpaid checkout carries on with
+that booking, taking the details it just sent, rather than holding a second
+seat; the API then sends it back to its session. Removed, cancelled and
+refunded bookings do not count, so those people may book again.
+
+No unique index enforces it. An unpaid booking stops counting after its hold
+without changing any column, and an index cannot see time. It also cannot be
+added to production without first deleting the duplicates Rares' own testing
+may have left, which a migration should not do on its own.
+
+### A hold counts from the last checkout
+
+An unpaid booking holds its seat for `pending_hold_interval()` (an hour) from
+`checkout_started_at`, which every new session for it moves forward. Before,
+the hour ran from `created_at`, so someone who came back after 40 minutes got
+a fresh 30-minute session on a hold with 20 minutes left, and the seat could
+be sold under them before they paid. A hold is moved forward only while it
+still holds the seat: one that lapsed may already be someone else's, and only
+`register_for_event()`, under the lock, may give it back.
+
+### The return page records the payment too
+
+Stripe's fulfilment guide asks for both: the webhook, because the visitor may
+never come back, and the page they come back to, because a webhook can be
+late. `fulfilCheckout()` (`lib/payments.ts`) is safe to run twice, and at the
+same moment: only a booking still `pending` changes, Postgres lets one of two
+simultaneous updates through, and the one that changed it sends the
+confirmation. Stripe waits up to ten seconds for the webhook before sending the
+visitor back, so the page usually finds the booking paid already.
+
+### Payment methods are listed in the code, not left to Stripe's settings
+
+`payment_method_types` names card (with Apple Pay and Link, which Stripe shows
+beside cards) and, for lei and euro, Revolut Pay. Leaving the choice to her
+Stripe Dashboard would let a method whose money arrives days later (SEPA
+debit, a bank transfer) appear at checkout. A seat cannot wait days for an
+answer: the hold would lapse and the seat be sold, and then the money would
+arrive. Both listed methods answer at once. The cost is that a new method
+needs a line of code; the benefit is that the booking rules never meet one
+they were not written for.
+
+### Every session names the database that made it
+
+The Stripe sandbox is one account shared by every copy of the site: a laptop,
+the test suite, previews and production all create sessions in it, and Stripe
+sends each session's events to every endpoint listening. A session's metadata
+carries `db` ("local", or the production database's host), and the webhook
+acts only on its own. Without it, production would look for a laptop's
+booking, find nothing, and, with the rule that money without a seat is
+refunded, refund the laptop's test payment; `stripe listen` on a laptop would
+do the same to production's.
+
+### Refunds: full only, through Stripe, marked before they are made
+
+Rares' rule (3 October 2026): never partial. A refund is made against the
+payment with no amount, so Stripe returns all of it. The booking is marked as
+having a refund asked for before Stripe is called, which is how the webhook
+tells the site's own refunds from one she made in her Stripe Dashboard: only
+the second kind is news to her. An idempotency key makes a double press one
+refund. A partial refund she makes in Stripe anyway leaves the booking as it
+is (audit B10).
+
+### Cancelling: automatic until 48 hours before, then her decision
+
+Rares' rules of 3 October 2026, provisional until the instructor confirms them,
+and written down once, in `lib/cancel-rules.ts`, which the cancel page, the
+server and the confirmation email all read. Up to 48 hours before the start,
+the link cancels and refunds in full. After that it cancels, frees the seat
+and leaves the refund to her. Once the event has begun it cancels nothing.
+The law leaves the window to her: the 14-day right of withdrawal does not
+apply to leisure services booked for a date (Directive 2011/83/EU art. 16(l),
+OUG 34/2014 art. 16 lit. l), as long as the terms say so before booking, and
+the booking form links them now.
+
+The cancellation is made first and the refund after. A refund Stripe refuses
+leaves a cancelled booking waiting for her as a refund requested, rather than
+undoing what the person asked for.
+
+### The cancel link is a token, and only a button uses it
+
+The confirmation email carries a random token; the booking keeps its SHA-256,
+as the testimonial and unsubscribe links do, and each confirmation sent makes
+a new one. The link opens a page that changes nothing; its button posts a
+form. Mail scanners open every link in an email, and a link that cancelled on
+its own would cancel bookings nobody meant to cancel.
+
+### Notices for what happened without her
+
+`admin_notifications` records what she would otherwise not know: someone
+cancelled (and what became of the money), a refund made in Stripe, a refund
+that failed, a payment returned. Her own actions are not recorded: she was
+there. Each notice has a `source_id` (the cancellation, the Stripe charge,
+refund or session) with a unique index, because the webhook and the return
+page can report the same thing. The dashboard shows the unseen ones above
+everything; seen ones are deleted after 90 days.
+
+### Promotion codes live in Stripe
+
+A code is a Stripe coupon behind a promotion code, made from the admin panel
+so she never needs Stripe's Dashboard for it. Stripe applies it on its payment
+page and counts its uses, so the site keeps no table of codes, only, on each
+booking, the amount actually charged and the code used. Every session allows
+codes. A code cannot be tied to one event, because each checkout names its own
+line rather than a stored Stripe product.
+
+### The test suite talks to a stand-in for Stripe
+
+CI has no Stripe account, on purpose, so every paid path used to stop at
+"Invalid API Key", and the money path was the least tested part of the site.
+`tests/fake-stripe.ts` answers the calls the site makes, keeps what it
+creates, serves a payment page with Plătește and Înapoi, and signs its
+webhooks with the suite's secret. The site reaches it through
+`STRIPE_API_BASE`, which `lib/stripe.ts` honours only against the local
+database and with a test key, so no setting on a deployment can send a payment
+anywhere but Stripe. The flows were also run once against the real sandbox
+(JOURNEY.md), because a stand-in proves the site's logic, not Stripe's.
 
 ## Speed and motion
 

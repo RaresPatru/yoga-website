@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   Calendar,
   Check,
   ChevronRight,
   ExternalLink,
   FileText,
+  HandCoins,
   MessageSquare,
   Plus,
   Star,
@@ -14,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { adminErrorKey, must } from "@/lib/admin/db";
+import { adminErrorKey, must, toAdminError } from "@/lib/admin/db";
 import { countSentence } from "@/lib/admin/plural";
 import { useAdminData } from "@/lib/admin/use-admin-data";
 import { buttonClasses } from "@/lib/button-styles";
@@ -22,6 +24,8 @@ import { cn, EVENT_TIME_ZONE, formatEventSchedule } from "@/lib/utils";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 import { useDocumentTitle } from "@/components/admin/shell/admin-site";
 import { PageHeader } from "@/components/admin/ui/page-header";
+import { useToast } from "@/components/admin/ui/toaster";
+import { Notices, NOTICE_COLUMNS, type NoticeRow } from "@/components/admin/notices";
 
 /**
  * The dashboard: what is waiting for her, and the next event.
@@ -63,6 +67,16 @@ const ROWS = [
     message: "admin.dash.payments",
     href: "/admin/registrations?status=pending",
     icon: Users,
+    tone: "todo",
+  },
+  // Refunds asked for and not yet decided: through a cancel link less than 48
+  // hours before the start, one that Stripe could not make automatically, or
+  // one she marked herself.
+  {
+    key: "refunds",
+    message: "admin.dash.refunds",
+    href: "/admin/registrations?status=refund_requested",
+    icon: HandCoins,
     tone: "todo",
   },
   {
@@ -107,12 +121,14 @@ function relativeDay(date: string, locale: "ro" | "en", now: Date): string {
 export default function AdminDashboard() {
   const { t, locale } = useAdminLocale();
   useDocumentTitle(t("admin.dashboard"));
+  const toast = useToast();
+  const [markingSeen, setMarkingSeen] = useState(false);
 
-  const { data, loading, error } = useAdminData(async () => {
+  const { data, loading, error, reload } = useAdminData(async () => {
     const supabase = createClient();
     const now = new Date();
 
-    const [counts, next] = await Promise.all([
+    const [counts, next, unseen] = await Promise.all([
       supabase.from("admin_dashboard").select("*").single(),
       // Soonest first among the events that have not ended, so one already
       // under way comes before one that has not started.
@@ -124,9 +140,17 @@ export default function AdminDashboard() {
         .order("starts_at", { ascending: true })
         .limit(1)
         .maybeSingle(),
+      // What happened without her and she has not seen yet, newest first.
+      supabase
+        .from("admin_notifications")
+        .select(NOTICE_COLUMNS)
+        .is("seen_at", null)
+        .order("created_at", { ascending: false })
+        .limit(30),
     ]);
 
     const event = must(next);
+    const notices = (must(unseen) ?? []) as unknown as NoticeRow[];
     let seats: { taken: number; capacity: number | null } | null = null;
     let pending: { waiting: number; payments: number } | null = null;
 
@@ -148,13 +172,37 @@ export default function AdminDashboard() {
     const totals: Record<RowKey, number> = {
       events: c?.active_events ?? 0,
       registrations: c?.pending_payments ?? 0,
+      refunds: c?.refund_requests ?? 0,
       messages: c?.unread_messages ?? 0,
       testimonials: c?.pending_testimonials ?? 0,
       blog: c?.draft_posts ?? 0,
     };
 
-    return { totals, event, seats, pending, now };
+    return { totals, event, seats, pending, now, notices };
   });
+
+  /** Clears the notices she has read: they stop showing, and go from the database 90 days later. */
+  const markSeen = async () => {
+    if (!data?.notices.length) return;
+    setMarkingSeen(true);
+    try {
+      must(
+        await createClient()
+          .from("admin_notifications")
+          .update({ seen_at: new Date().toISOString() })
+          .in(
+            "id",
+            data.notices.map((n) => n.id)
+          )
+          .select("id")
+      );
+      reload();
+    } catch (failure) {
+      toast.error(t(adminErrorKey(toAdminError(failure))));
+    } finally {
+      setMarkingSeen(false);
+    }
+  };
 
   const header = <PageHeader title={t("admin.dashboard")} />;
 
@@ -180,13 +228,15 @@ export default function AdminDashboard() {
     );
   }
 
-  const { totals, event, seats, pending, now } = data;
+  const { totals, event, seats, pending, now, notices } = data;
   const schedule = event ? formatEventSchedule(event, locale) : null;
   const started = event ? Date.parse(event.starts_at) <= now.getTime() : false;
 
   return (
     <div>
       {header}
+
+      <Notices notices={notices} busy={markingSeen} onSeen={markSeen} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
         <ul className="divide-y divide-sage/15 overflow-hidden rounded-2xl border border-sage/25 bg-warm-white">

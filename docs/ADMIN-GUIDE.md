@@ -16,7 +16,8 @@ cunoștințe tehnice pentru nimic din ce urmează.
 5. [Testimoniale](#5-testimoniale)
 6. [Mesaje de la vizitatori](#6-mesaje)
 7. [Email-uri și anunțuri](#7-email-uri-și-anunțuri)
-8. [Când ceva nu merge](#8-când-ceva-nu-merge)
+8. [Coduri de reducere](#8-coduri-de-reducere)
+9. [Când ceva nu merge](#9-când-ceva-nu-merge)
 
 ---
 
@@ -197,7 +198,8 @@ Site-ul numără singur locurile ocupate. Când se umple:
 - pe site apare **„Locuri epuizate”**;
 - formularul de înscriere e înlocuit cu **lista de așteptare**.
 
-Dacă se eliberează un loc — cineva nu finalizează plata, sau (după ce restituirile sunt activate în Stripe) ceri o restituire —
+Dacă se eliberează un loc — cineva nu finalizează plata, își anulează singur
+înscrierea, primește banii înapoi sau îl scoți tu de pe eveniment —
 prima persoană de pe listă primește automat un email cu un link valabil **24 de
 ore**. Dacă nu îl folosește, linkul expiră, dar locul rămâne liber și oricine se
 poate înscrie normal.
@@ -244,13 +246,60 @@ Starea plății:
 | Etichetă | Ce înseamnă |
 |---|---|
 | Gratuit | Eveniment fără plată. Locul e confirmat. |
-| În așteptare | A început plata dar nu a finalizat-o încă. Locul e rezervat temporar. |
-| Plătit | Banii au intrat. Locul e confirmat. |
-| Restituit | Ai returnat banii. Locul se eliberează automat după ce restituirile sunt activate în Stripe (încă nu sunt). |
+| Plată în așteptare | A început plata dar nu a finalizat-o încă. Locul e rezervat temporar, cel mult o oră. |
+| Plătit | Banii au intrat. Locul e confirmat. În panoul persoanei vezi cât a plătit și, dacă a folosit unul, codul de reducere. |
+| Rambursare cerută | O rambursare așteaptă decizia ta (vezi mai jos). |
+| Rambursat | Banii s-au întors. Locul s-a eliberat. |
+| S-a retras | Și-a anulat singur înscrierea, din linkul din email. Locul s-a eliberat. |
+| Anulat | L-ai scos tu de pe eveniment. |
 
 > **Datele acestea sunt personale.** Numele, emailurile și telefoanele
 > participantelor sunt vizibile **doar** aici, doar pentru tine. Nu apar nicăieri
 > pe site public. Pe site se vede doar numărul de locuri ocupate.
+
+**Un loc pe adresă de email.** La un eveniment, o adresă poate avea un singur
+loc. Cine vrea să vină cu cineva, îl roagă să se înscrie cu adresa lui.
+
+### Anulări din linkul din email
+
+Fiecare email de confirmare are la final „Dacă nu mai poți veni,
+anulează-ți înscrierea". Linkul deschide o pagină cu înscrierea și un singur
+buton, care spune ce se întâmplă cu banii:
+
+- **Cu cel puțin 48 de ore înainte de eveniment:** „Anulează și primește banii
+  înapoi". Banii se întorc automat, integral, pe cardul sau în contul Revolut
+  cu care s-a plătit. Nu faci nimic.
+- **Mai târziu:** locul se eliberează, iar rambursarea **așteaptă decizia ta**:
+  apare la „Rambursări de aprobat" pe panoul de control.
+- **După ce a început evenimentul** linkul nu mai anulează nimic; pagina îi
+  spune să-ți scrie.
+- **Evenimentele gratuite** se anulează pur și simplu.
+
+Orice anulare apare la **Noutăți**, sus pe panoul de control.
+
+### Rambursări
+
+Deschide persoana din **Înscrieri** și apasă **Rambursează 450 RON** (suma pe
+care a plătit-o). Te întreabă o dată, apoi banii se întorc integral prin Stripe.
+Rambursările sunt mereu integrale. O rambursare nu se mai poate anula.
+
+- **Cineva s-a retras târziu și cere banii?** Ai două butoane:
+  **Rambursează** sau **Nu rambursa**.
+- **O plată făcută pe altă cale** (nu prin Stripe) nu se poate returna de aici:
+  butonul e „Marchează ca rambursat", după ce i-ai dat tu banii.
+- **Rambursezi din Stripe, nu de pe site?** Merge și așa: site-ul află singur,
+  eliberează locul și îți arată la Noutăți.
+- **„Stripe nu a putut returna plata"** apare foarte rar (de obicei la Revolut
+  Pay): banii au revenit în contul tău Stripe și trebuie dați altfel. După ce
+  i-ai dat, apasă **S-a rezolvat**.
+
+### Când cineva își dă locul altcuiva
+
+Termenii spun că un loc plătit se poate ceda prin tine. Deschide persoana și
+apasă **Schimbă datele**: scrie numele, emailul și telefonul noii persoane.
+Bifează „Trimite-i confirmarea" ca să primească emailul cu invitația în
+calendar și propriul link de anulare. Linkul vechi nu mai funcționează. Dacă
+noua adresă are deja un loc la eveniment, nu se poate.
 
 Ca să le scrii celor bifați (sau tuturor celor din lista filtrată), apasă
 **Scrie un anunț** în bara de jos. Vezi [Email-uri și anunțuri](#7-email-uri-și-anunțuri).
@@ -422,8 +471,8 @@ schimbi.
 
 | Email | Când se trimite |
 |---|---|
-| Confirmare înscriere | Imediat ce cineva se înscrie la un eveniment gratuit, sau își ia un loc eliberat la unul. Are atașată invitația pentru calendar. |
-| Confirmare plată | Imediat ce ajunge plata pentru un eveniment cu plată. Are atașată invitația pentru calendar. |
+| Confirmare înscriere | Imediat ce cineva se înscrie la un eveniment gratuit, sau își ia un loc eliberat la unul, și când o trimiți cuiva căruia i-ai dat un loc. Are atașată invitația pentru calendar și linkul personal de anulare. |
+| Confirmare plată | Imediat ce ajunge plata pentru un eveniment cu plată. Are atașată invitația pentru calendar, linkul personal de anulare și data până la care banii se returnează automat. |
 | Pe lista de așteptare | Când cineva intră pe lista de așteptare a unui eveniment complet. |
 | Loc eliberat | Când se eliberează un loc: primii de pe listă primesc un link de rezervare valabil 24 de ore. |
 | Scos de pe lista de așteptare | Doar când bifezi „Trimite-i un email" când scoți pe cineva de pe listă. |
@@ -462,7 +511,33 @@ le trimiți sau le ștergi.
 
 ---
 
-## 8. Când ceva nu merge
+## 8. Coduri de reducere
+
+**Meniu: Coduri de reducere**
+
+Un cod e un cuvânt pe care oamenii îl scriu pe pagina de plată, la „Adăugare
+cod", ca să plătească mai puțin. Îl pui într-un anunț, de exemplu „Cu codul
+VARA10 ai 10% reducere până pe 31 august".
+
+1. Scrie **codul** (litere, cifre și liniuțe; apare cu majuscule).
+2. Alege **Procent** sau **Sumă fixă** (în RON sau EUR) și cât.
+3. Dacă vrei, pune **ultima zi** în care merge și **de câte ori** se poate
+   folosi în total.
+4. Apasă **Creează codul**.
+
+Codul merge la toate evenimentele cu plată; o sumă fixă merge doar la
+evenimentele cu prețul în moneda ei. În listă vezi de câte ori a fost folosit.
+Un cod nu se poate șterge, doar opri (**Oprește**), și îl poți porni din nou.
+Cine a plătit cu un cod are în panoul lui suma plătită și codul.
+
+> **Când anunți o reducere**, ea se socotește față de cel mai mic preț al
+> evenimentului din ultimele 30 de zile, iar codul trebuie să meargă tot timpul
+> pe care l-ai anunțat. Așa cere legea (OG 99/2000). Deci nu ridica prețul
+> chiar înainte de o reducere, și nu opri codul mai devreme decât ai spus.
+
+---
+
+## 9. Când ceva nu merge
 
 **Nu pot intra în panou.** Verifică emailul și parola. Dacă apare mesajul
 „Contul acesta nu are acces la panoul de administrare", contul există dar nu are
@@ -475,9 +550,13 @@ data — evenimentele trecute nu apar în lista principală.
 YouTube sau Vimeo și lipește linkul în editor. Fișierele `.svg` sunt respinse
 intenționat, din motive de siguranță — folosește `.jpg`, `.png` sau `.webp`.
 
-**Cineva a plătit dar înscrierea arată „În așteptare".** Confirmarea vine de la
-procesatorul de plăți și durează de obicei câteva secunde. Dacă rămâne așa mai
-mult de câteva minute, e de verificat tehnic.
+**Cineva a plătit dar înscrierea arată „Plată în așteptare".** Confirmarea vine
+de la Stripe și durează de obicei câteva secunde; se confirmă și când omul se
+întoarce pe site după plată. Dacă rămâne așa mai mult de câteva minute, e de
+verificat tehnic.
+
+**Cineva a plătit de două ori.** Site-ul returnează singur a doua plată,
+integral, și îți arată la Noutăți.
 
 **Am șters din greșeală.** Ștergerile sunt definitive. Ștergerea unui eveniment
 șterge și înscrierile lui. Întreabă înainte dacă nu ești sigură.

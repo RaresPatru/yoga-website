@@ -14,6 +14,7 @@ export type ParticipantStatus =
   | "abandoned"
   | "refund_requested"
   | "refunded"
+  | "cancelled"
   | "waitlist"
   | "offers"
   | "removed";
@@ -25,6 +26,7 @@ export const STATUS_FILTERS: readonly ParticipantStatus[] = [
   "pending",
   "refund_requested",
   "refunded",
+  "cancelled",
   "waitlist",
   "offers",
   "removed",

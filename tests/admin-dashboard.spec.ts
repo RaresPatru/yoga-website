@@ -149,6 +149,8 @@ test.describe("the dashboard page", () => {
       draft_posts: 21,
       unread_messages: 2,
       pending_testimonials: 0,
+      refund_requests: 3,
+      unseen_notices: 0,
     });
     await page.goto("/admin");
 
@@ -156,6 +158,7 @@ test.describe("the dashboard page", () => {
     await expect(row(page, "Evenimente")).toContainText("1 eveniment activ");
     await expect(row(page, "Mesaje")).toContainText("2 mesaje necitite");
     await expect(row(page, "Articole")).toContainText("21 de ciorne");
+    await expect(row(page, "Rambursări")).toContainText("3 rambursări de aprobat");
     await expect(row(page, "Înscrieri")).toContainText("Totul la zi");
     await expect(row(page, "Testimoniale")).toContainText("Totul la zi");
 
@@ -163,6 +166,7 @@ test.describe("the dashboard page", () => {
     await expect(row(page, "Events")).toContainText("1 active event");
     await expect(row(page, "Messages")).toContainText("2 unread messages");
     await expect(row(page, "Blog posts")).toContainText("21 drafts");
+    await expect(row(page, "Refunds")).toContainText("3 refunds to approve");
     await expect(row(page, "Registrations")).toContainText("All caught up");
     await page.getByRole("button", { name: "Treci la română" }).click();
     await expect(row(page, "Evenimente")).toBeVisible();
@@ -173,6 +177,7 @@ test.describe("the dashboard page", () => {
     const links: Array<[string, string]> = [
       ["Evenimente", "/admin/events"],
       ["Înscrieri", "/admin/registrations?status=pending"],
+      ["Rambursări", "/admin/registrations?status=refund_requested"],
       ["Mesaje", "/admin/messages?filter=unread"],
       ["Testimoniale", "/admin/testimonials?tab=pending"],
       ["Articole", "/admin/blog?tab=drafts"],

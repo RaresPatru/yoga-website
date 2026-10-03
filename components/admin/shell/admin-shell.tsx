@@ -14,6 +14,7 @@ import {
   MessageSquare,
   PenLine,
   Star,
+  TicketPercent,
   Users,
   X,
 } from "lucide-react";
@@ -48,7 +49,8 @@ import { SidebarToggleIcon } from "./sidebar-toggle-icon";
 /**
  * Where each section lives, in the order she reaches for them: the events and
  * the people booked on them, then what people have written to her, then her
- * own writing, then the settings she changes least.
+ * own writing, with the discount codes beside the announcements they go in,
+ * then the settings she changes least.
  */
 const NAV_LINKS = [
   { href: "/admin", icon: LayoutDashboard, key: "dashboard" },
@@ -58,6 +60,7 @@ const NAV_LINKS = [
   { href: "/admin/testimonials", icon: Star, key: "testimonials" },
   { href: "/admin/blog", icon: FileText, key: "blog" },
   { href: "/admin/emails", icon: Mail, key: "emails" },
+  { href: "/admin/codes", icon: TicketPercent, key: "codes" },
   { href: "/admin/content", icon: PenLine, key: "content" },
 ] as const;
 

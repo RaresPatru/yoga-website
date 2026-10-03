@@ -1,138 +1,92 @@
 import { NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { sendConfirmationEmail } from "@/lib/send-confirmation-email";
-// Was defined in this file, when a refund or an expired checkout was the only
-// way a seat came back. The admin panel can free seats too now, so the rule
-// about when it is safe to email somebody lives with the function rather than
-// in whichever caller remembers it.
-import { notifyWaitingList } from "@/lib/notify-waiting-list";
 import type Stripe from "stripe";
+import { getStripe } from "@/lib/stripe";
+import {
+  fulfilCheckout,
+  recordRefundFailure,
+  recordStripeRefund,
+  releaseCheckout,
+  sessionOrigin,
+} from "@/lib/payments";
 
+/**
+ * Stripe's reports about payments, signed with the endpoint's secret.
+ *
+ * The events the Stripe Dashboard's endpoint should send, and what each does:
+ *
+ *   checkout.session.completed  A booking is paid: it is marked so and the
+ *                               confirmation goes out (lib/payments.ts). The
+ *                               event page the visitor returns to does the same
+ *                               if it gets there first; the two cannot both.
+ *   checkout.session.expired    A checkout nobody paid: its seat comes back,
+ *                               and goes to the waiting list.
+ *   charge.refunded             A refund. Only a full one frees a seat (audit
+ *                               B10); one made in her Stripe Dashboard is
+ *                               reported to her on the dashboard.
+ *   refund.failed               Stripe could not return a refund (it can happen
+ *                               with Revolut Pay, whose refunds settle within
+ *                               minutes): the booking and a notice say so.
+ *
+ * Also handled if sent: checkout.session.async_payment_succeeded (a payment
+ * method that settles later, which the site does not offer) and the older
+ * refund.updated / charge.refund.updated, for a refund whose status became
+ * failed.
+ *
+ * Every handler is safe to receive twice: Stripe retries an event it thinks
+ * failed, and may send events out of order.
+ */
 export async function POST(req: Request) {
-  const stripe = getStripe();
   const body = await req.text();
-  const signature = req.headers.get("stripe-signature")!;
+  const signature = req.headers.get("stripe-signature");
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  // Without a valid signature this is not Stripe, or the secret does not
+  // match this endpoint's. Stripe retries anything that is not a 2xx, so
+  // events refused while the secret was wrong arrive once it is fixed.
+  let event: Stripe.Event;
+  try {
+    if (!signature || !secret) throw new Error("Missing signature or webhook secret");
+    event = getStripe().webhooks.constructEvent(body, signature, secret);
+  } catch (error) {
+    // The message says enough; the error object carries the whole payload.
+    console.error("Stripe webhook refused:", (error as Error).message);
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
 
   try {
-    const event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
+    switch (event.type) {
+      case "checkout.session.completed":
+      case "checkout.session.async_payment_succeeded":
+        await fulfilCheckout(event.data.object);
+        break;
 
-    const supabase = createAdminClient();
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const registrationId = session.metadata?.registrationId;
-
-      if (registrationId) {
-        // `.select()` returns the row we just changed, so we can email the
-        // right person without a second lookup. The `.eq("payment_status",
-        // "pending")` guard makes this safe to run twice: Stripe retries
-        // webhooks it thinks failed, and without the guard a retry would send a
-        // duplicate confirmation email. On a retry the row is already
-        // 'completed', nothing matches, and we quietly do nothing.
-        const { data: updated } = await supabase
-          .from("registrations")
-          .update({ payment_status: "completed", stripe_session_id: session.id })
-          .eq("id", registrationId)
-          .eq("payment_status", "pending")
-          .select("event_id, full_name, email, locale")
-          .maybeSingle();
-
-        if (updated) {
-          // This is where a paying customer finally gets the calendar invite
-          // and the WhatsApp link — after the money has arrived, not before.
-          await sendConfirmationEmail({
-            eventId: updated.event_id,
-            fullName: updated.full_name,
-            email: updated.email,
-            locale: updated.locale === "en" ? "en" : "ro",
-            templateType: "payment_confirmation",
-          });
+      case "checkout.session.expired": {
+        const session = event.data.object;
+        const registrationId = session.metadata?.registrationId;
+        if (registrationId && sessionOrigin(session) !== "foreign") {
+          await releaseCheckout(session.id, registrationId);
         }
+        break;
       }
+
+      case "charge.refunded":
+        await recordStripeRefund(event.data.object);
+        break;
+
+      case "refund.failed":
+        await recordRefundFailure(event.data.object);
+        break;
+
+      case "refund.updated":
+      case "charge.refund.updated":
+        if (event.data.object.status === "failed") await recordRefundFailure(event.data.object);
+        break;
     }
-
-    if (event.type === "checkout.session.expired") {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const registrationId = session.metadata?.registrationId;
-
-      if (registrationId) {
-        const { data: reg } = await supabase
-          .from("registrations")
-          .delete()
-          .eq("id", registrationId)
-          .eq("payment_status", "pending")
-          .select("event_id")
-          .maybeSingle();
-
-        if (reg) {
-          // Put anyone who claimed this seat back on the waiting list.
-          //
-          // A paid claim marks the waiting-list entry `claimed_at` as soon as
-          // the Stripe session is created — before any payment. If the visitor
-          // then abandons checkout (the common case), the seat is released
-          // here, but without this the person who claimed it would be stranded:
-          // notifyWaitingList only considers entries with `claimed_at is null`,
-          // so they would be permanently off the list, holding a spent link,
-          // with no way back.
-          //
-          // Clearing the claim returns them to their original position, and
-          // because `created_at` is untouched they keep their place in the
-          // queue rather than going to the back of it.
-          await supabase
-            .from("waiting_list")
-            .update({
-              claimed_at: null,
-              claimed_registration_id: null,
-              notified_at: null,
-              claim_expires_at: null,
-            })
-            .eq("claimed_registration_id", registrationId);
-
-          await notifyWaitingList(reg.event_id);
-        }
-      }
-    }
-
-    if (event.type === "charge.refunded") {
-      const charge = event.data.object as Stripe.Charge;
-      const paymentIntent = charge.payment_intent?.toString();
-
-      if (paymentIntent) {
-        const sessions = await stripe.checkout.sessions.list({
-          payment_intent: paymentIntent,
-          limit: 1,
-        });
-
-        const session = Array.isArray(sessions) ? sessions[0] : sessions.data[0];
-        if (session) {
-          const { data: registrations } = await supabase
-            .from("registrations")
-            .select("event_id")
-            .eq("stripe_session_id", session.id)
-            .limit(1);
-
-          if (registrations && registrations.length > 0) {
-            const eventId = registrations[0].event_id;
-
-            await supabase
-              .from("registrations")
-              .update({ payment_status: "refunded" })
-              .eq("stripe_session_id", session.id);
-
-            await notifyWaitingList(eventId);
-          }
-        }
-      }
-    }
-
     return NextResponse.json({ received: true });
-  } catch (err) {
-    console.error("Webhook error:", err);
-    return NextResponse.json({ error: "Webhook error" }, { status: 400 });
+  } catch (error) {
+    // Our side failed (the database, Stripe's API, the mail): 500, so Stripe
+    // sends the event again, for up to three days.
+    console.error(`Stripe webhook ${event.type} (${event.id}) failed:`, error);
+    return NextResponse.json({ error: "Processing failed" }, { status: 500 });
   }
 }

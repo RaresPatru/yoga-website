@@ -29,7 +29,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 7 | Emails: editor, preview, test sends, announcements | done, 28 Sep |
 | 8 | Messages: unread, starred, archive, letter view | done, 29 Sep |
 | 9 | Public polish and speed: loader, transitions, FAQ, blur, back to top | done, 29 Sep |
-| 10 | Stripe: the money path | not started |
+| 10 | Stripe: the money path, Revolut Pay, cancelling, refunds, codes | done, 3 Oct |
 | 11 | PostHog analytics | not started |
 
 ---
@@ -83,8 +83,21 @@ Rares can overturn any of these.
 - **The dashboard's event count** is what the events list's Upcoming tab holds:
   events to come, under way, or over with a payment or refund still pending
   (phase 4; it first counted published events that had not ended).
-- **"Refund requested"** is something she marks for now. A self-service link
-  comes with the Stripe phase.
+- **"Refund requested"** is marked by her, or by someone's own cancel link
+  inside the last 48 hours (Phase 10).
+- **Cancelling sends no email** (Phase 10). The page says what happened and
+  what became of the money, and Stripe sends its own refund receipt once she
+  turns those on: emails are a budget.
+- **A late cancellation frees the seat at once,** while the refund waits for
+  her: they are not coming either way, and the waiting list can use it.
+- **Someone removed, cancelled or refunded may book again** with the same
+  address; only a booking that still holds a seat blocks it.
+- **A code works on every paid event.** Stripe cannot tie a coupon to one
+  event when each checkout names its own line, and a fixed amount works only
+  in its own currency.
+- **Giving a place to someone else is her action** ("Schimbă datele"), not the
+  participant's: the terms say to write to her, and it keeps one person per
+  address on each event.
 - **Toolbar tooltips stay below the buttons** but now paint above the text. The
   toolbar sticks under the admin's top bar while she scrolls, and a tooltip
   above it would disappear behind that bar.
@@ -1300,15 +1313,163 @@ build: 700 passed, 11 skipped, none failed.
 
 ### Phase 10: Stripe
 
-- [ ] **The remaining payment fixes:**
+Rares' answers, 3 October 2026 (provisional until the instructor confirms
+them; the terms draft says the same):
+
+- **One seat per email per event.** Nobody books for a friend; a friend books
+  with their own address (B3).
+- **Refunds are always in full**, never partial (B10).
+- **The cancel link refunds automatically up to 48 hours before the start.**
+  After that the seat is freed and the refund is hers to approve. Once the
+  event has started, the link cancels nothing.
+- **Revolut Pay** beside cards.
+- **She is told on the dashboard** whenever a refund is made or a place opens
+  up without her.
+- **Promotion codes are made in the admin panel,** not in Stripe's Dashboard.
+
+- [x] **The remaining payment fixes:**
   - B2: confirmation after paying
-  - B3: duplicate bookings, once Rares sets the rule
+  - B3: duplicate bookings
   - B10: partial refunds
   - B11: checkout accepting registrations in the wrong state
   - T1: webhook tests with signed events
-  - T2
-- [ ] **A self-service "cancel / request refund" link** in confirmation emails.
-- [ ] **Promotion codes** for announcements.
+  - T2: tests for the money path
+- [x] **A self-service cancel link** in both confirmation emails.
+- [x] **Promotion codes** for announcements, in their own admin screen.
+- [x] **Revolut Pay**, for events priced in lei or euro.
+- [x] **Notices on the dashboard** for cancellations and refunds.
+- [x] **New details on a booking,** for someone who gives their place away.
+
+**How it turned out** (3 October 2026). The full suite passed on a production
+build: 764 passed, 11 skipped, 1 flaky. The flaky test had found a real bug
+(the second item under "Found along the way"); after the fix, its test fails
+without the fix and passes with it, and the 98 payment tests passed again in
+Chromium, phone WebKit and the admin panel. The same flows were then run
+against the Stripe sandbox itself, through its real payment page: card,
+Revolut Pay, turning back, resuming, giving the place up, and cancelling with
+an automatic refund for both methods.
+
+- **The booking opens the payment itself.** `/api/register` books the seat
+  and creates the Stripe Checkout session in one request, and the browser goes
+  straight to it. The old second step, `/api/stripe/checkout`, accepted any
+  registration id it was sent (B11) and is gone. Each booking remembers its
+  current session. A new one is recorded only if the booking still has the
+  session the request started from, so two tabs cannot leave two payable
+  sessions.
+- **Coming back from Stripe** (B2). Both return addresses carry the session's
+  id: Stripe writes it into the cancel address too, which the sandbox
+  confirmed. The event page asks `/api/checkout` what became of it:
+  - **Paid:** "Plata a fost primită", with the WhatsApp group. If Stripe's
+    webhook is late, the page records the payment itself.
+  - **Turned back:** "Plata nu s-a încheiat", the seat held until a given
+    hour, and Reia plata (the same payment page) or Renunță la loc (frees it
+    now).
+  - **Expired, or refunded because the booking was gone:** says so.
+
+  The id is taken out of the address at once, since it is a key to that
+  payment's state.
+- **One seat per email** (B3), decided by `register_for_event()` under the
+  lock on the event. An address that holds a seat is refused, kindly. One
+  whose checkout is unpaid is sent back to that checkout with the details it
+  just sent, rather than given a second seat. The waiting list and a claim
+  link refuse a booked address too. A booking's hold now counts from its
+  last checkout (`checkout_started_at`), so returning to pay gets a fresh
+  hour.
+- **The webhook** handles `checkout.session.completed`, `.expired`,
+  `charge.refunded` and `refund.failed`. Only a full refund frees a seat
+  (B10). A refund made in her Stripe Dashboard is reported to her. Money
+  with no seat behind it is refunded at once: a second payment for one
+  booking, or a payment for a booking she removed meanwhile. A bad
+  signature answers 400; a failure on the site's side answers 500, so
+  Stripe sends the event again. Every session names the database that made
+  it, so the shared sandbox's events from a laptop never touch production
+  and the reverse.
+- **The cancel link.** Both confirmations end with "Dacă nu mai poți veni,
+  anulează-ți înscrierea". The paid one also gives the moment until which
+  the refund is automatic, and drops that line when the moment has passed.
+  The link opens `/ro/booking`, which shows the booking and one button that
+  says what happens to the money: "Anulează și primește banii înapoi" up to
+  48 hours before, "Anulează înscrierea" after. Opening the page changes
+  nothing; only the button does, so mail scanners cannot cancel anyone. If
+  Stripe refuses the automatic refund, the booking is still cancelled and
+  waits for her as a refund requested.
+- **Refunds in the panel.** "Rambursează 450 RON" refunds through Stripe in
+  full, after a dialog that says how much and that it cannot be undone. A
+  booking paid outside Stripe can only be marked refunded, as before. A
+  withdrawal waiting on her shows "Nu rambursa" beside it. A refund Stripe
+  could not make stays a warning until she marks it settled.
+- **Notices.** The dashboard opens with "Noutăți" whenever something
+  happened without her: a cancellation and what became of the money, a
+  refund made in Stripe, a failed refund, a payment returned. Each links to
+  the person; "Marchează ca văzute" clears them. Refunds waiting for her
+  have their own row, "Rambursări".
+- **Coduri de reducere** (`/admin/codes`): a word, a percentage or a fixed
+  amount in lei or euro, an optional last day and number of uses. The codes
+  live in Stripe, which applies them on its payment page and counts each
+  use, so the list shows "Folosiri: 3 din 20". A booking records the amount
+  actually paid and the code used. A one-line reminder states the
+  30-day reference-price rule for announced discounts (OG 99/2000).
+- **Revolut Pay** is offered for RON and EUR: Stripe takes no other currency
+  from an account in Romania, and drops it silently for USD and GBP. Payment
+  methods are listed in the code rather than in her Stripe settings, so a
+  method whose money arrives days later can never appear.
+- **"Schimbă datele"** in the participant panel replaces a booking's name,
+  email and phone, for a correction or for the person a place was given to.
+  The old cancel link stops working, and a tick sends the new person their
+  confirmation.
+- **The terms and privacy drafts** describe the 48-hour rule, cancelling from
+  the email, Revolut Pay, and what a payment leaves behind. A sentence she
+  has reworded is left alone. The booking form now links the terms ("Anularea
+  și rambursarea") beside the privacy policy.
+
+**Tests**
+
+- `tests/fake-stripe.ts` (new): a stand-in for Stripe that the suite's
+  server talks to (`STRIPE_API_BASE`, honoured only against the local
+  database with a test key). It covers sessions, a payment page with
+  Plătește and Înapoi, refunds, coupons and promotion codes, and sends
+  webhooks signed with the suite's secret. Until now every paid path stopped
+  at "Invalid API Key".
+- `stripe-webhook.spec.ts` (new, T1): signature, repeats, unpaid
+  completion, expiry (and the claimant back in line), a replaced session,
+  partial and full refunds, a refund made in Stripe, a failed refund, a
+  double payment, a payment for a removed booking, another copy's session.
+- `booking-payment.spec.ts` (new): paying, turning back and resuming,
+  giving the place up, a late webhook, one seat per email.
+- `booking-cancel.spec.ts` (new): free, early, late, after the start, Stripe
+  refusing, an unknown link, the link in the email.
+- `admin-payments.spec.ts` and `admin-codes.spec.ts` (new): refunds,
+  declining, a failed refund, new details, notices, and codes from making to
+  use at checkout.
+- `checkout-params.spec.ts`: the return addresses, Revolut Pay by currency,
+  codes, the database tag, the hold agreeing with the database, the 48-hour
+  boundary to the millisecond, and amounts with bani.
+- `waiting-list-claim.spec.ts`: a paid claim runs to the end now, in the
+  event's own currency, and resumes; an address already booked leaves the
+  list.
+
+**Found along the way**
+
+- **An expired claim stranded its claimant off the waiting list for good.**
+  The webhook deleted the unpaid booking and then looked for the person who
+  had claimed it by `waiting_list.claimed_registration_id`; that foreign key
+  is `ON DELETE SET NULL`, so the deletion had already cleared the column it
+  searched by. The person stayed "claimed", never offered another seat. The
+  claimant is found before the booking goes now (`releaseCheckout`), and a
+  test lets a claimed checkout expire.
+- **Stripe's report of a refund the site made marked an unpaid booking
+  refunded.** A payment for a booking she removed meanwhile is returned at
+  once; Stripe then reports that refund like any other, and the webhook found
+  the removed booking through its checkout, marked it refunded and told her of
+  a refund "made in Stripe". Only a paid booking can become refunded now. The
+  full suite caught it by timing, in one run of two; the test now sends
+  Stripe's report itself, and fails on the old code every time.
+- **A bad signature and a failure on the site's side both answered 400.**
+  Stripe retries either, so nothing was lost, but its Dashboard and the logs
+  blamed the request for the site's own faults. A failure of ours answers 500
+  now, and only a request that is not Stripe's answers 400.
+- **The payment page showed "Yoga sandbox"** as the business: that is the
+  Stripe account's public name, set in her Stripe settings (Needs Rares).
 
 ### Phase 11: PostHog
 
@@ -1334,8 +1495,8 @@ build: 700 passed, 11 skipped, none failed.
   - her registered address
   - the email address for privacy requests
   - her VAT status
-- **Business decisions:** cancellation and refund windows, and how long to keep
-  bookings. The drafts suggest defaults.
+- **Business decisions:** how long to keep bookings (the drafts suggest a
+  default), and her yes to the cancellation rules below.
 - **Her name as search engines should show it,** and the area she serves if she
   wants one published.
 - **Where the server and database run:** answered in Phase 9, nothing to look
@@ -1356,7 +1517,20 @@ build: 700 passed, 11 skipped, none failed.
   replies go to the sending address.
 - **Before merging to `main`:** run `npx supabase migration list --linked`,
   then `npx supabase db push` for the new migrations.
-- **B3:** one seat per email per event, or may someone book for a friend?
+- **Stripe, before taking real money** (Phase 10):
+  - ~~add `refund.failed` to the webhook endpoint~~ done by Rares on 3 October
+    2026; the endpoint now sends all four events the site handles.
+  - in the live account, which she creates at handover: switch on Revolut Pay
+    (Settings → Payment methods; the sandbox takes it without that), set the
+    public business name, which shows on the payment page ("Yoga sandbox"
+    now), turn on Stripe's receipt and refund emails if she wants them, and
+    give the live webhook endpoint the same four events.
+  - the endpoint is on API version 2026-06-24 and the code's library on
+    2026-08-26. Fields the site reads are the same in both; moving the
+    endpoint up is tidy, not urgent.
+- **The cancellation rules with her:** 48 hours, full refunds only, and her
+  approval after that are Rares' assumptions of 3 October. They live in
+  `lib/cancel-rules.ts` and in the terms draft.
 - **Phase 11:** a PostHog project on the EU cloud.
 
 ---

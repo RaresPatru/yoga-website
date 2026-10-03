@@ -108,6 +108,11 @@ export default defineConfig({
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
         process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
       STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET!,
+      // The stand-in for Stripe that tests/global-setup.ts starts
+      // (tests/fake-stripe.ts). lib/stripe.ts honours it only against the
+      // local database and with a test key, so it can never steer a real
+      // payment.
+      STRIPE_API_BASE: "http://127.0.0.1:12111",
       RESEND_API_KEY: process.env.RESEND_API_KEY!,
       RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL!,
       NEXT_PUBLIC_SITE_URL: "http://localhost:3100",
@@ -203,6 +208,7 @@ export default defineConfig({
         /plural\.spec\.ts/,
         // Server routes and the database, not pages.
         /cron\.spec\.ts/,
+        /stripe-webhook\.spec\.ts/,
         /email-language\.spec\.ts/,
         /plain-text\.spec\.ts/,
         /email-layout\.spec\.ts/,

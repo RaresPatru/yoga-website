@@ -1,4 +1,5 @@
 import { EVENT_TIME_ZONE, formatDate, formatEventSchedule } from "@/lib/utils";
+import { refundDeadline } from "@/lib/cancel-rules";
 
 /**
  * What the site's emails say: which automatic emails exist and when each is
@@ -61,6 +62,11 @@ export const VARIABLES = {
     label: { ro: "Link pentru testimonial", en: "Testimonial link" },
     link: { ro: "Scrie un testimonial", en: "Write a testimonial" },
   },
+  cancel_link: {
+    label: { ro: "Link de anulare", en: "Cancellation link" },
+    link: { ro: "Anulează înscrierea", en: "Cancel your booking" },
+  },
+  refund_until: { label: { ro: "Rambursare automată până la", en: "Automatic refund until" } },
 } as const satisfies Record<string, VariableDef>;
 
 export type VariableName = keyof typeof VARIABLES;
@@ -113,18 +119,18 @@ export const TEMPLATES: Record<TemplateType, TemplateDef> = {
   registration_confirmation: {
     label: { ro: "Confirmare înscriere", en: "Booking confirmation" },
     when: {
-      ro: "Imediat ce cineva se înscrie la un eveniment gratuit, sau își ia un loc eliberat la unul. Are atașată invitația pentru calendar.",
-      en: "As soon as someone books a free event, or takes a freed seat on one. The calendar invitation is attached.",
+      ro: "Imediat ce cineva se înscrie la un eveniment gratuit, sau își ia un loc eliberat la unul, și când trimiți confirmarea cuiva căruia i-ai dat un loc. Are atașată invitația pentru calendar și linkul personal de anulare.",
+      en: "As soon as someone books a free event, or takes a freed seat on one, and when you send it to someone you gave a place to. The calendar invitation and their personal cancellation link come with it.",
     },
-    variables: [...EVENT_VARS, "whatsapp_link"],
+    variables: [...EVENT_VARS, "whatsapp_link", "cancel_link"],
   },
   payment_confirmation: {
     label: { ro: "Confirmare plată", en: "Payment confirmation" },
     when: {
-      ro: "Imediat ce ajunge plata pentru un eveniment cu plată. Are atașată invitația pentru calendar.",
-      en: "As soon as the payment for a paid event comes through. The calendar invitation is attached.",
+      ro: "Imediat ce ajunge plata pentru un eveniment cu plată. Are atașată invitația pentru calendar și linkul personal de anulare.",
+      en: "As soon as the payment for a paid event comes through. The calendar invitation and their personal cancellation link come with it.",
     },
-    variables: [...EVENT_VARS, "whatsapp_link"],
+    variables: [...EVENT_VARS, "whatsapp_link", "cancel_link", "refund_until"],
   },
   waitlist_joined: {
     label: { ro: "Pe lista de așteptare", en: "On the waiting list" },
@@ -323,6 +329,8 @@ export interface EmailEvent {
   end_time: string | null;
   location: string | null;
   whatsapp_group_link?: string | null;
+  /** When it starts, for {{refund_until}}. */
+  starts_at?: string | null;
 }
 
 /** The event's title in the person's language, the Romanian when the English is blank. */
@@ -400,6 +408,19 @@ export function sampleVars(
   const page = vars.event_link || `${siteUrl}/${locale}/events`;
   vars.claim_url = page;
   vars.testimonial_link = `${siteUrl}/${locale}/testimonials`;
+  // A sample's link opens the cancel page with no booking behind it, which
+  // says so: nothing in a preview can cancel anything.
+  vars.cancel_link = `${siteUrl}/${locale}/booking`;
+  if (type === "payment_confirmation") {
+    // As the real email does: empty, and the line left out, once the moment
+    // has passed.
+    const deadline = event?.starts_at ? refundDeadline(event.starts_at) : null;
+    vars.refund_until = !event
+      ? `[${VARIABLES.refund_until.label[locale]}]`
+      : deadline && deadline.getTime() > now.getTime()
+        ? emailMoment(deadline, locale)
+        : "";
+  }
   if (def?.expiresInHours) {
     vars.expires_at = emailMoment(new Date(now.getTime() + def.expiresInHours * 3_600_000), locale);
   }

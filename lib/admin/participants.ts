@@ -2,7 +2,11 @@ import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 import { AdminError, must } from "@/lib/admin/db";
 import { getAuthToken } from "@/lib/get-auth-token";
-import type { ParticipantAction, ParticipantActionResult } from "@/lib/admin/participant-actions";
+import type {
+  ParticipantAction,
+  ParticipantActionResult,
+  ParticipantDetails,
+} from "@/lib/admin/participant-actions";
 import {
   narrowed,
   type ParticipantFilters,
@@ -56,6 +60,19 @@ export interface Participant {
   participantNote: string | null;
   noteConsentAt: string | null;
   adminNote: string | null;
+  /** They cancelled through the link in their confirmation email. */
+  cancelledAt: string | null;
+  refundedAt: string | null;
+  /** Stripe could not return the refund: the money has to reach them another way. */
+  refundFailedAt: string | null;
+  /** What Stripe charged, in the smallest unit of paidCurrency, when known. */
+  amountPaid: number | null;
+  paidCurrency: string | null;
+  discountCode: string | null;
+  /** Paid through Stripe, so a refund can go back through Stripe. */
+  paidOnline: boolean;
+  eventPrice: number;
+  eventCurrency: string;
 }
 
 function participantOf(row: Partial<ViewRow>): Participant {
@@ -82,6 +99,15 @@ function participantOf(row: Partial<ViewRow>): Participant {
     participantNote: row.participant_note ?? null,
     noteConsentAt: row.note_consent_at ?? null,
     adminNote: row.admin_note ?? null,
+    cancelledAt: row.cancelled_at ?? null,
+    refundedAt: row.refunded_at ?? null,
+    refundFailedAt: row.refund_failed_at ?? null,
+    amountPaid: row.amount_paid ?? null,
+    paidCurrency: row.paid_currency ?? null,
+    discountCode: row.discount_code ?? null,
+    paidOnline: Boolean(row.paid_online),
+    eventPrice: row.event_price ?? 0,
+    eventCurrency: row.event_currency ?? "RON",
   };
 }
 
@@ -189,11 +215,22 @@ export async function deleteParticipants(ids: string[]): Promise<number> {
   return deleted;
 }
 
-/** A change that sends email or frees a seat, made by the server (/api/admin/participants/[id]). */
+/** Why the server refused an action, in the words its `code` names. */
+export class ParticipantActionError extends AdminError {
+  constructor(
+    readonly code: string,
+    message: string,
+    kind: "invalid" | "unknown"
+  ) {
+    super(kind, message);
+  }
+}
+
+/** A change that sends email, frees a seat or moves money, made by the server (/api/admin/participants/[id]). */
 export async function participantAction(
   id: string,
   action: ParticipantAction,
-  extra: { reason?: string; email?: boolean } = {}
+  extra: { reason?: string; email?: boolean } & Partial<ParticipantDetails> = {}
 ): Promise<ParticipantActionResult> {
   const response = await fetch(`/api/admin/participants/${id}`, {
     method: "POST",
@@ -202,7 +239,13 @@ export async function participantAction(
   });
   const data = await response.json().catch(() => ({}));
   if (response.status === 401) throw new AdminError("session", "Not signed in as the admin");
-  if (!response.ok) throw new AdminError(response.status === 409 ? "invalid" : "unknown", data.error ?? "Failed");
+  if (!response.ok) {
+    throw new ParticipantActionError(
+      typeof data.code === "string" ? data.code : "unknown",
+      data.error ?? "Failed",
+      response.status === 409 || response.status === 400 ? "invalid" : "unknown"
+    );
+  }
   return data as ParticipantActionResult;
 }
 

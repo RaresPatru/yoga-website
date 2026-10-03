@@ -12,8 +12,8 @@ import { sendTemplateEmail } from "@/lib/email";
  * Adds someone to an event's waiting list.
  *
  * Reached when an event is full. If a spot later opens — a Stripe checkout
- * expires, someone is refunded or removed, or she adds places — the people on
- * this list are emailed a link to claim it, oldest entry first.
+ * expires, someone cancels, is refunded or removed, or she adds places — the
+ * people on this list are emailed a link to claim it, oldest entry first.
  *
  * Refused once the event has started: nobody can be offered a seat after
  * that, so a place in the queue would be a promise nothing can keep.
@@ -96,6 +96,24 @@ export async function POST(req: Request) {
           info: "You are already on the waiting list for this event.",
           code: "already_waiting",
         },
+        { status: 409 }
+      );
+    }
+
+    // One seat per email per event (audit B3): someone who already has one
+    // would only ever be offered a second.
+    const { count: booked } = await supabase
+      .from("registrations")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", eventId)
+      .eq("email", email)
+      .in("payment_status", ["free", "completed"])
+      .is("removed_at", null)
+      .is("cancelled_at", null);
+
+    if (booked && booked > 0) {
+      return NextResponse.json(
+        { error: "Ai deja un loc la acest eveniment.", code: "already_registered" },
         { status: 409 }
       );
     }

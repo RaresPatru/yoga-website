@@ -7,25 +7,33 @@ export type RegisterArgs = Database["public"]["Functions"]["register_for_event"]
 /**
  * Why the database refused a booking. `started` is an event that has begun
  * (bookings close at its start), `full` has no seat left or no capacity set,
- * `unavailable` is a draft, `not_found` does not exist.
+ * `already_registered` an address that already holds a seat on it (one seat
+ * per email per event, audit B3), `unavailable` is a draft, `not_found` does
+ * not exist.
  */
-export type RefusalCode = "not_found" | "unavailable" | "started" | "full" | "invalid";
+export type RefusalCode = "not_found" | "unavailable" | "started" | "full" | "already_registered" | "invalid";
 
-/** A seat was booked (with the new registration's id), or the database refused. */
+/**
+ * A seat was booked, with the registration's id, or the database refused.
+ * `resumed` is the same person's unpaid checkout carrying on rather than a
+ * new booking, with the Stripe session it had (`sessionId`), if any.
+ */
 export type RegisterOutcome =
-  | { ok: true; id: string }
+  | { ok: true; id: string; resumed: boolean; sessionId: string | null }
   | { ok: false; code: RefusalCode; reason: string };
 
-const CODES: readonly RefusalCode[] = ["not_found", "unavailable", "started", "full", "invalid"];
+const CODES: readonly RefusalCode[] = ["not_found", "unavailable", "started", "full", "already_registered", "invalid"];
 
 /**
  * Books a seat through the `register_for_event()` database function.
  *
  * The function locks the event row while it counts, so two people can never
- * both take the last seat. It answers with JSON: `{ success, id }` when a
- * registration was created, or `{ error, code }` when it refused. This turns
- * that JSON into a typed result. A failed call (network, permissions) throws
- * instead, because that is a fault, not an answer.
+ * both take the last seat, and one address can never take two. It answers
+ * with JSON: `{ success, id }` when a registration was created, `{ success,
+ * id, resumed, session_id }` when an unpaid one carries on, or `{ error, code }`
+ * when it refused. This turns that JSON into a typed result. A failed call
+ * (network, permissions) throws instead, because that is a fault, not an
+ * answer.
  */
 export async function registerForEvent(
   supabase: SupabaseClient<Database>,
@@ -34,9 +42,21 @@ export async function registerForEvent(
   const { data, error } = await supabase.rpc("register_for_event", args);
   if (error) throw error;
 
-  const result = (data ?? {}) as { success?: boolean; id?: unknown; error?: unknown; code?: unknown };
+  const result = (data ?? {}) as {
+    success?: boolean;
+    id?: unknown;
+    resumed?: unknown;
+    session_id?: unknown;
+    error?: unknown;
+    code?: unknown;
+  };
   if (result.success === true && typeof result.id === "string") {
-    return { ok: true, id: result.id };
+    return {
+      ok: true,
+      id: result.id,
+      resumed: result.resumed === true,
+      sessionId: typeof result.session_id === "string" ? result.session_id : null,
+    };
   }
   return {
     ok: false,

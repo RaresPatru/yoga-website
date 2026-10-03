@@ -1,7 +1,18 @@
 import type { FullConfig } from "@playwright/test";
+import type { Server } from "node:http";
+import { startFakeStripe } from "./fake-stripe";
 
 /**
- * Warms the server once before any test runs.
+ * Starts the stand-in for Stripe, then warms the server once before any test
+ * runs.
+ *
+ * The stand-in (tests/fake-stripe.ts) lives in this process for the whole
+ * run, and the teardown returned below closes it. The site's server reaches
+ * it through STRIPE_API_BASE (playwright.config.ts). If something already
+ * listens on its port, a stand-in left by an earlier run or one a developer
+ * started, that one is used.
+ *
+ * WARMING
  *
  * Playwright considers the web server "ready" as soon as `/` responds, but
  * every other route is still cold: on a production build each dynamic page
@@ -16,6 +27,14 @@ import type { FullConfig } from "@playwright/test";
  * as a puzzling timeout inside an unrelated spec.
  */
 async function globalSetup(config: FullConfig) {
+  let fakeStripe: Server | null = null;
+  try {
+    fakeStripe = await startFakeStripe();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+    console.warn("[global-setup] The fake Stripe's port is taken; using whatever listens there.");
+  }
+
   const baseURL =
     config.projects[0]?.use?.baseURL ?? "http://localhost:3100";
 
@@ -30,6 +49,7 @@ async function globalSetup(config: FullConfig) {
     "/en/blog",
     "/en/testimonials",
     "/en/contact",
+    "/ro/booking",
     "/admin/login",
     "/sitemap.xml",
     "/robots.txt",
@@ -43,6 +63,10 @@ async function globalSetup(config: FullConfig) {
       // properly. Warming is best effort.
     }
   }
+
+  return async () => {
+    await new Promise<void>((resolve) => (fakeStripe ? fakeStripe.close(() => resolve()) : resolve()));
+  };
 }
 
 export default globalSetup;

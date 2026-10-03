@@ -9,15 +9,22 @@ import { countSentence } from "@/lib/admin/plural";
 import {
   loadParticipant,
   participantAction,
+  ParticipantActionError,
   saveAdminNote,
   type Participant,
 } from "@/lib/admin/participants";
-import { REMOVAL_REASON_MAX, type ParticipantAction } from "@/lib/admin/participant-actions";
+import {
+  REMOVAL_REASON_MAX,
+  type ParticipantAction,
+  type ParticipantDetails,
+} from "@/lib/admin/participant-actions";
 import { announcementVerdict, stopAnnouncements } from "@/lib/admin/emails";
+import { formatPaid, formatPrice } from "@/lib/money";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 import { useConfirm } from "@/components/admin/ui/confirm-dialog";
 import { useToast } from "@/components/admin/ui/toaster";
 import { StatusChip, eventDay, longMoment, shortDay } from "./status-chip";
+import { DetailsDialog } from "./details-dialog";
 import { cn } from "@/lib/utils";
 
 /** How long her note waits after the last keystroke before it saves. */
@@ -117,8 +124,30 @@ export function ParticipantPanel({
 
   const statusLabel = (p: Participant) => t(`admin.participants.status_${p.status}`);
 
-  const act = async (action: ParticipantAction, extra: { reason?: string; email?: boolean } = {}, done?: string) => {
-    if (!person) return;
+  /** What they paid: what Stripe charged when known, else the event's price. */
+  const paidText = (p: Participant) =>
+    p.amountPaid !== null ? formatPaid(p.amountPaid, p.paidCurrency, lang) : formatPrice(p.eventPrice, p.eventCurrency, lang);
+
+  /** What the server said, in her words: Stripe's own message when Stripe refused. */
+  const failureText = (failure: unknown) => {
+    if (failure instanceof ParticipantActionError) {
+      if (failure.code === "stripe") return t("admin.participant.stripe_failed").replace("{reason}", failure.message);
+      if (failure.code === "already_registered") return t("admin.participant.details_taken");
+      if (failure.code === "invalid" && failure.message.startsWith("Invalid")) return t("admin.participant.details_invalid");
+    }
+    return t(adminErrorKey(toAdminError(failure)));
+  };
+
+  const [editing, setEditing] = useState(false);
+  const [detailsError, setDetailsError] = useState("");
+
+  /** Runs an action; resolves true when it went through. */
+  const act = async (
+    action: ParticipantAction,
+    extra: { reason?: string; email?: boolean } & Partial<ParticipantDetails> = {},
+    done?: string
+  ): Promise<boolean> => {
+    if (!person) return false;
     setBusy(true);
     try {
       const result = await participantAction(person.id, action, extra);
@@ -128,11 +157,46 @@ export function ParticipantPanel({
       if (result.offered) toast.info(t("admin.waiting_list_notified").replace("{count}", String(result.offered)));
       reload();
       onChanged();
+      return true;
     } catch (failure) {
-      toast.error(t(adminErrorKey(toAdminError(failure))));
+      if (action === "details") setDetailsError(failureText(failure));
+      else toast.error(failureText(failure));
+      return false;
     } finally {
       setBusy(false);
     }
+  };
+
+  const saveDetails = async (details: ParticipantDetails) => {
+    setDetailsError("");
+    if (await act("details", details, t("admin.participant.details_done"))) setEditing(false);
+  };
+
+  /**
+   * Returns the money: through Stripe, in full, when they paid there (the
+   * dialog says how much and that it cannot be undone); otherwise she marks
+   * that she returned it herself.
+   */
+  const refund = async () => {
+    if (!person) return;
+    const amount = paidText(person);
+    const online = person.paidOnline;
+    const { confirmed } = await confirm({
+      title: online
+        ? t("admin.participant.refund_stripe_title").replace("{amount}", amount)
+        : t("admin.participant.refunded_title"),
+      body: online ? t("admin.participant.refund_stripe_body") : t("admin.participant.refunded_body"),
+      confirmLabel: online
+        ? t("admin.participant.refund_stripe").replace("{amount}", amount)
+        : t("admin.participant.mark_refunded"),
+      tone: online ? "danger" : "default",
+    });
+    if (!confirmed) return;
+    await act(
+      "refunded",
+      {},
+      online ? t("admin.participant.refund_stripe_done").replace("{amount}", amount) : t("admin.participant.refunded_done")
+    );
   };
 
   const remove = async () => {
@@ -165,15 +229,6 @@ export function ParticipantPanel({
     );
   };
 
-  const markRefunded = async () => {
-    const { confirmed } = await confirm({
-      title: t("admin.participant.refunded_title"),
-      body: t("admin.participant.refunded_body"),
-      confirmLabel: t("admin.participant.mark_refunded"),
-    });
-    if (confirmed) await act("refunded", {}, t("admin.participant.refunded_done"));
-  };
-
   const close = () => dialogRef.current?.close();
 
   /** Closing never loses her note: one still waiting to save is saved now. */
@@ -188,6 +243,12 @@ export function ParticipantPanel({
   const heading = "mb-2 font-serif text-lg text-charcoal";
   const noteDeletedOn = person ? new Date(Date.parse(person.eventEndsAt) + 30 * DAY_MS).toISOString() : "";
   const paid = person?.kind === "booking" && (person.status === "paid" || person.status === "refund_requested");
+  // A booking that holds its seat can take new details: a correction, or the
+  // person they gave the place to.
+  const editable =
+    person?.kind === "booking" &&
+    !person.cancelledAt &&
+    (person.status === "paid" || person.status === "free" || person.status === "refund_requested");
   const whatsapp = person ? person.phone.replace(/\D/g, "") : "";
 
   return (
@@ -253,9 +314,29 @@ export function ParticipantPanel({
                   {t("admin.participant.offer_until").replace("{date}", longMoment(person.offerExpiresAt, lang))}
                 </p>
               )}
+              {person.amountPaid !== null && (
+                <p className="mt-1 text-sm text-charcoal-light">
+                  {(person.discountCode ? t("admin.participant.paid_with_code") : t("admin.participant.paid_amount"))
+                    .replace("{amount}", paidText(person))
+                    .replace("{code}", person.discountCode ?? "")}
+                </p>
+              )}
+              {person.cancelledAt && (
+                <p className="mt-1 text-sm text-charcoal-light">
+                  {t("admin.participant.cancelled_on").replace("{date}", longMoment(person.cancelledAt, lang))}
+                </p>
+              )}
               {person.refundRequestedAt && person.status === "refund_requested" && (
                 <p className="mt-1 text-sm text-warning">
-                  {t("admin.participant.refund_requested_on").replace("{date}", shortDay(person.refundRequestedAt, lang))}
+                  {t(person.cancelledAt ? "admin.participant.refund_waits" : "admin.participant.refund_requested_on").replace(
+                    "{date}",
+                    shortDay(person.refundRequestedAt, lang)
+                  )}
+                </p>
+              )}
+              {person.refundedAt && person.status === "refunded" && (
+                <p className="mt-1 text-sm text-charcoal-light">
+                  {t("admin.participant.refunded_on").replace("{date}", shortDay(person.refundedAt, lang))}
                 </p>
               )}
               {person.removedAt && (
@@ -264,6 +345,23 @@ export function ParticipantPanel({
                     .replace("{date}", shortDay(person.removedAt, lang))
                     .replace("{reason}", person.removalReason ?? "")}
                 </p>
+              )}
+              {person.refundFailedAt && (
+                <div role="alert" className="mt-3 rounded-xl border border-error/30 bg-error/5 px-4 py-3 text-sm text-charcoal">
+                  <p>
+                    {t("admin.participant.refund_failed")
+                      .replace("{date}", shortDay(person.refundFailedAt, lang))
+                      .replace("{amount}", paidText(person))}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => act("refund_settled", {}, t("admin.participant.refund_settled_done"))}
+                    className="mt-2 min-h-10 rounded-full text-sm font-medium text-rose-deep underline decoration-rose-deep/40 underline-offset-2 hover:decoration-rose-deep disabled:opacity-50"
+                  >
+                    {t("admin.participant.refund_settle")}
+                  </button>
+                </div>
               )}
             </div>
 
@@ -412,7 +510,7 @@ export function ParticipantPanel({
               </section>
             )}
 
-            {person.status !== "removed" && (
+            {person.status !== "removed" && person.status !== "cancelled" && (
               <section className={cn(section, "mt-auto")} aria-labelledby={`${titleId}-actions`}>
                 <h3 id={`${titleId}-actions`} className={heading}>
                   {t("admin.participant.actions")}
@@ -423,41 +521,71 @@ export function ParticipantPanel({
                       <button
                         type="button"
                         disabled={busy}
+                        onClick={refund}
+                        className="min-h-11 rounded-full px-3 text-sm font-medium text-charcoal hover:bg-sage/15 disabled:opacity-50"
+                      >
+                        {person.paidOnline
+                          ? t("admin.participant.refund_stripe").replace("{amount}", paidText(person))
+                          : t("admin.participant.mark_refunded")}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
                         onClick={() =>
                           person.status === "refund_requested"
-                            ? act("refund_cleared", {}, t("admin.participant.refund_cleared_done"))
+                            ? act(
+                                "refund_cleared",
+                                {},
+                                t(person.cancelledAt ? "admin.participant.refund_declined_done" : "admin.participant.refund_cleared_done")
+                              )
                             : act("refund_requested", {}, t("admin.participant.refund_requested_done"))
                         }
                         className="min-h-11 rounded-full px-3 text-sm font-medium text-charcoal hover:bg-sage/15 disabled:opacity-50"
                       >
                         {person.status === "refund_requested"
-                          ? t("admin.participant.clear_refund_requested")
+                          ? t(person.cancelledAt ? "admin.participant.decline_refund" : "admin.participant.clear_refund_requested")
                           : t("admin.participant.mark_refund_requested")}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={markRefunded}
-                        className="min-h-11 rounded-full px-3 text-sm font-medium text-charcoal hover:bg-sage/15 disabled:opacity-50"
-                      >
-                        {t("admin.participant.mark_refunded")}
                       </button>
                     </>
                   )}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={remove}
-                    className="min-h-11 rounded-full px-3 text-sm font-medium text-error hover:bg-error/10 disabled:opacity-50"
-                  >
-                    {t(person.kind === "booking" ? "admin.participant.remove_booking" : "admin.participant.remove_waitlist")}
-                  </button>
+                  {editable && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setDetailsError("");
+                        setEditing(true);
+                      }}
+                      className="min-h-11 rounded-full px-3 text-sm font-medium text-charcoal hover:bg-sage/15 disabled:opacity-50"
+                    >
+                      {t("admin.participant.details_edit")}
+                    </button>
+                  )}
+                  {!person.cancelledAt && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={remove}
+                      className="min-h-11 rounded-full px-3 text-sm font-medium text-error hover:bg-error/10 disabled:opacity-50"
+                    >
+                      {t(person.kind === "booking" ? "admin.participant.remove_booking" : "admin.participant.remove_waitlist")}
+                    </button>
+                  )}
                 </div>
               </section>
             )}
           </>
         )}
       </div>
+      {editing && person && (
+        <DetailsDialog
+          initial={{ fullName: person.fullName, email: person.email, phone: person.phone }}
+          busy={busy}
+          error={detailsError}
+          onSave={saveDetails}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </dialog>
   );
 }

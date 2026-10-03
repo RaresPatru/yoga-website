@@ -1700,6 +1700,72 @@ nights the calendar file was an hour out from the database. Swept every 15
 minutes against Postgres, the old version disagreed 40 times in 1,728
 readings and the new one never.
 
+### Phase 10: money, and what happens when someone changes their mind
+
+**Rares set the rules before the code.** One seat per email per event, and
+nobody books for a friend. Refunds are always in full. Cancelling from the
+confirmation email refunds automatically up to 48 hours before the start; after
+that, the instructor decides. Revolut Pay beside cards. A notice on her
+dashboard whenever a refund is made or a place opens without her. He asked me
+to say whenever a request of his could have legal consequences, being neither
+a lawyer nor a business owner. The two that did were the cancellation window,
+which the law leaves to the terms because the 14-day right of withdrawal does
+not cover leisure services booked for a date, and announced discounts. Romania
+applies the EU's 30-day reference-price rule to services too, through OG
+99/2000, so the code screen says so. The 48-hour window was ambiguous in
+writing ("48 hours after booking" or "before the event"), so I asked again
+with an example rather than guess which way money moves.
+
+**Revolut Pay turned out to be one word.** Stripe offers it to an account in
+Romania for lei and euro; a test session in the sandbox took
+`["card", "revolut_pay"]` for RON and EUR and quietly dropped it for dollars.
+The payment methods stay listed in the code rather than left to her Stripe
+settings, because a method whose money arrives in days would hold, or lose, a
+seat while nobody knew whether it was paid.
+
+**The checkout used to be two requests, and the gap between them was the
+bug.** The form booked the seat, then asked a second endpoint to start a
+payment for whatever booking id it named. That endpoint took any id in any
+state (B11), and a closed tab between the two requests left a seat held with
+no payment behind it. Now one request books and opens the session. The booking
+remembers its session, and a returning visitor is sent back to it. A
+replacement is recorded only if nobody else replaced it first. Stripe
+confirmed that it writes the session's id into the cancel address as well, so
+someone who turns back sees how long their place is held and can resume or
+let it go.
+
+**A test stand-in for Stripe, because CI should never hold real keys.** Every
+paid path in the suite used to stop at "Invalid API Key", which is why the
+money path was the least tested part of a booking site. `tests/fake-stripe.ts`
+is a small server that answers the calls the site makes, keeps the sessions and
+refunds it creates, serves a payment page, and signs its webhooks the way
+Stripe does. The site reaches it through a variable it honours only against
+the local database with a test key. The first run of the new webhook tests
+passed; the stand-in's own ids needed one fix, because the code screen's route
+checks a code's id the way Stripe shapes it.
+
+**What the tests found was older than this phase.** When a checkout claimed
+from the waiting list expired, the webhook deleted the booking, then looked
+for the claimant by the column the deletion had just cleared
+(`ON DELETE SET NULL`). The person stayed marked as claimed, never offered
+another seat, for as long as the code had existed. Nothing had ever tested an
+expired claim. The full suite (764 passed, 11 skipped) found one more of my
+own, by timing, in one run of two: when the site returned a payment for a
+booking she had removed, Stripe's report of that refund marked the unpaid
+booking refunded. The test now sends that report itself and fails on the
+old code every time.
+
+**Then the real sandbox.** The stand-in proves the site's logic, not Stripe's,
+so the dev server ran against the sandbox with the Stripe CLI forwarding its
+events. Through Stripe's own payment page: a card payment, a Revolut Pay
+payment through Stripe's test authorisation page, turning back with Stripe's
+arrow, resuming the same session, giving the place up, and the cancel link
+refunding both payments with Stripe's `charge.refunded` arriving afterwards
+and changing nothing. The promotion-code calls, written against a newer shape
+of Stripe's API, were checked against it too. The one thing the sandbox
+showed that no test could: the payment page names the business "Yoga
+sandbox", the Stripe account's public name, which only she can change.
+
 ---
 
 ## Decisions worth defending
@@ -1755,10 +1821,12 @@ invite at the correct local time.
 Two things are known-outstanding and are deliberately not fixed in code, because
 neither is a code problem:
 
-- **`charge.refunded` is not subscribed on the Stripe endpoint**, so the refund
-  branch cannot run (4.5). One checkbox in the Stripe dashboard, then worth a
-  refund test — refund → seat freed → waiting list notified has never executed
-  end to end.
+- **The money path has run against the Stripe sandbox, not yet on a
+  deployment.** `charge.refunded` is subscribed now, and Phase 10 ran payment,
+  refund and the freed seat end to end against the sandbox from a local
+  server; the waiting list's part runs in the suite, against the stand-in. A
+  payment on the deployed site waits for Phase 10's migration to reach
+  production.
 - **The launch blocker is content, not engineering.** Her photo, her story, the
   About text, the FAQs and a real business name to replace the placeholder. All
   editable from the admin panel; the list is in

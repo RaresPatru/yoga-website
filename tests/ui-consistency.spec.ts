@@ -367,6 +367,7 @@ test.describe("glass only where something passes behind it", () => {
     "components/admin/content/form-bar.tsx",
     "components/admin/media-library.tsx",
     "components/admin/messages/letter.tsx",
+    "components/admin/participants/details-dialog.tsx",
     "components/admin/participants/participant-panel.tsx",
     "components/admin/rich-text-editor.tsx",
     "components/admin/shell/admin-shell.tsx",

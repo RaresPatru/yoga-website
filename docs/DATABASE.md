@@ -67,7 +67,8 @@ because only one of the two was done.
 | `profiles` | Extra auth fields. | Vestigial — see below | nothing |
 | `content_drafts` | Unpublished changes to a live post or event. | Work in progress | the post and event editors' autosave |
 | `review_invitations` | Personal links to write a testimonial: the token's SHA-256, `expires_at`, `used_at`. | A link is a credential; RLS on, no policy, `service_role` only | `lib/reviews.ts` |
-| `admin_dashboard` | **View.** One row: the dashboard's five counts. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
+| `admin_notifications` | Notices for the dashboard about what happened without her: `cancelled`, `refunded` (in Stripe), `refund_failed`, `payment_returned`, with `details` and `seen_at`. | Admin reads and may set `seen_at` only; only the server inserts | `lib/admin-notices.ts`; the dashboard marks them seen |
+| `admin_dashboard` | **View.** One row: the dashboard's counts, with refunds to decide and notices not yet seen. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_participants` | **View.** Every booking and every unclaimed waiting-list entry, with its event, a status, `archived` and a search text. | `security_invoker`; `select` for `authenticated`, and for `service_role` to work out an announcement's recipients | `/admin/registrations`, `lib/announcement-audience.ts` (reads) |
 | `admin_announcements` | **View.** Every announcement with how many were sent, failed, are pending and were left out. | `security_invoker`; `select` for `authenticated` only | `/admin/emails` (reads) |
@@ -150,6 +151,18 @@ unsubscribes twice has its date moved forward.
 wait for each other (audit B16). The first decides and stamps; the server
 emails; the second withdraws what did not go and records what did.
 
+**Payments** (`20261003000000_payments.sql`). A booking records its current
+Stripe session (`stripe_session_id`, from the moment one is created), the
+payment once it succeeds (`stripe_payment_intent_id`, unique), what was
+charged (`amount_paid` in bani or cents, `paid_currency`, `discount_code`),
+`checkout_started_at` (the start of its current checkout, from which an unpaid
+booking holds its seat), `cancelled_at` (they cancelled through their link),
+`refunded_at`, `refund_failed_at` and `cancel_token_hash` (the SHA-256 of
+their cancel link's token, unique). `waiting_list.claimed_registration_id` is
+`ON DELETE SET NULL`: deleting a booking clears it, so code that must find who
+claimed a booking reads them before the delete (`releaseCheckout` in
+`lib/payments.ts`).
+
 **Private changes.** While a post is live, the editor's autosave writes to
 its row in `content_drafts` (`data` holds the fields by column name), so
 visitors keep reading the published version. Exactly one of `post_id` and
@@ -172,7 +185,7 @@ same set as the post list's Ciorne tab.
 | `register_for_event(...)` | definer, `search_path` pinned | **`service_role` only** |
 | `publish_post_draft(id)`, `publish_event_draft(id)` | invoker | `authenticated` (RLS makes it the admin) |
 | `admin_delete_participants(ids)` | invoker; skips anyone not archived | `authenticated` (RLS makes it the admin) |
-| `daily_cleanup()` | invoker; also deletes lapsed testimonial links | **`service_role` only** (`/api/cron/daily`) |
+| `daily_cleanup()` | invoker; also deletes lapsed testimonial links, and notices seen over 90 days ago | **`service_role` only** (`/api/cron/daily`) |
 | `offer_waiting_list_seats(event, hours)` | definer; locks the event row, counts free seats and live links, stamps the next people in line | **`service_role` only** (`lib/notify-waiting-list.ts`) |
 | `settle_waiting_list_offers(event, sent, unsent)` | definer; withdraws offers whose email failed, records the rest as a batch | **`service_role` only** |
 | `keep_event_on_testimonials()` | trigger function, before an event is deleted | nobody; only its trigger runs it |
@@ -230,10 +243,21 @@ with the moment they consented, which a CHECK enforces) and the marketing
 opt-in; phase 5 of the overhaul sends them from the form.
 
 **A seat is held when** `holds_seat(r)` says so: the booking was not removed
-(`removed_at is null`), is not refunded, and is not an unpaid checkout older
-than `pending_hold_interval()`. It is one function, called by
-`event_availability`, `register_for_event()` and `admin_event_overview`, so
-the number a page shows and the rule the button enforces cannot drift apart.
+(`removed_at is null`), not cancelled by its participant (`cancelled_at is
+null`), is not refunded, and is not an unpaid checkout whose last attempt
+(`checkout_started_at`, else `created_at`) began more than
+`pending_hold_interval()` ago. It is one function, called by
+`event_availability`, `register_for_event()`, `admin_event_overview` and
+`admin_participants`, so the number a page shows and the rule the button
+enforces cannot drift apart.
+
+**One seat per email per event** (B3, `20261003000000_payments.sql`).
+`register_for_event()` looks for the address's latest booking on the event
+that was not removed, cancelled or refunded, under the same lock. Paid or free:
+refused, code `already_registered`. Unpaid: that booking carries on, with the
+details just sent and a fresh hold (taking a seat again only if one is free,
+when its hold had lapsed), and the answer carries `resumed` and its
+`session_id`.
 It takes the whole row, so PostgREST also offers it to the admin as if it were
 a column. `anon` may execute it because Postgres checks a view's functions
 against the caller; it reads nothing but its argument.
@@ -250,10 +274,14 @@ what a booking records: the note with its consent time, the opt-in and her
 note. `register_for_event()` gained `p_consented_at`, so a note written on
 the waiting list keeps its consent time when the seat is claimed.
 `admin_participants` gives each row a `status` (`removed`, `refunded`,
-`refund_requested`, `pending`, `abandoned` for a checkout past its hour,
-`paid`, `free`, `offers`, `waitlist`) and `archived`: a booking once removed or
-once its event has ended with nothing pending on it, a waiting-list entry once
-removed or once its event has ended. `search_text` is lowercased without
+`refund_requested`, `cancelled` since Phase 10, `pending`, `abandoned` for a
+checkout past its hour, `paid`, `free`, `offers`, `waitlist`) and `archived`:
+a booking once removed, once cancelled with no refund waiting on her, or once
+its event has ended with nothing pending on it; a waiting-list entry once
+removed or once its event has ended. Since Phase 10 it also carries what was
+paid (`amount_paid`, `paid_currency`, `discount_code`, `paid_online`) and the
+event's price and currency, and the service role still reads it for
+announcements. `search_text` is lowercased without
 accents, the phone as bare digits. `admin_delete_participants()` deletes only
 archived rows, and the claimed waiting-list entry behind a booking with it.
 `daily_cleanup()` clears participants' and her notes 30 days after the event,

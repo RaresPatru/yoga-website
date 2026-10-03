@@ -319,6 +319,31 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   override once the parents' own ranges reach a fixed version. `npm audit fix`
   answered with a downgrade of `typescript-eslint` that fixed nothing, and
   `--force` offered `eslint-config-next` 15; never run `--force`.
+- **The test suite's Stripe is a stand-in** (`tests/fake-stripe.ts`), started
+  by `tests/global-setup.ts` on `127.0.0.1:12111`. The test server reaches it
+  through `STRIPE_API_BASE`, set in `playwright.config.ts`, which
+  `lib/stripe.ts` honours only against the local database with an `sk_test_`
+  key. A server you started yourself and Playwright reuses lacks that
+  variable, so every paid test fails with "Invalid API Key": let Playwright
+  start it. Tests steer the stand-in through `tests/stripe-helpers.ts`.
+- **Deleting a booking clears `waiting_list.claimed_registration_id`**
+  (`ON DELETE SET NULL`). Code that must find who claimed a booking reads them
+  before the delete; reading after it found nobody, which left anyone whose
+  claimed checkout expired off the waiting list for good until 3 October 2026.
+- **Every Stripe session carries `metadata.db`**, the database that made it,
+  because the sandbox is one account and Stripe sends every copy of the site's
+  events to every endpoint. The webhook ignores sessions from another
+  database. To try payments locally against the sandbox, in PowerShell, with
+  the Stripe CLI logged in:
+  ```powershell
+  stripe listen --print-secret   # copy the whsec_… it prints into the next line
+  $env:STRIPE_WEBHOOK_SECRET = "whsec_…"; $env:NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"; $env:TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA"; npm run dev
+  stripe listen --forward-to localhost:3000/api/stripe/webhook   # in a second window
+  ```
+  Card `4242 4242 4242 4242`, any future date and CVC; Revolut Pay opens
+  Stripe's test page with an Authorize button. Without `stripe listen` it still
+  works: the event page confirms the payment when Stripe sends the visitor
+  back.
 - **`npm run dev` reads the *local* database; `npm run dev:prod` reads
   production.** `.env` holds the production values and `.env.local` overrides the
   three Supabase ones with the Docker stack, which Next resolves in that order.
