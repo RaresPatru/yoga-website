@@ -1871,18 +1871,16 @@ Proven in production, not just in tests: a real card payment through Stripe →
 webhook → registration marked `completed` → confirmation email with a calendar
 invite at the correct local time.
 
-Three things are known-outstanding, and none of them waits on code:
+Two things are known-outstanding and are deliberately not fixed in code, because
+neither is a code problem:
 
 - **The money path has run against the Stripe sandbox, not yet on a
   deployment.** `charge.refunded` is subscribed now, and Phase 10 ran payment,
   refund and the freed seat end to end against the sandbox from a local
   server; the waiting list's part runs in the suite, against the stand-in.
-  The migrations reached production on 5 October, after a rehearsal on a copy
-  of its data; a payment on the deployed site waits for the merge to `main`.
-- **The live site records sessions until the next merge.** It runs the code of
-  22 September, and her PostHog project has session replay on. Phase 11
-  switches it off in the code; the switch in PostHog can go off now, before
-  any merge.
+  The migrations and the code of phases 0 to 11 reached production on
+  5 October, the migrations after a rehearsal on a copy of its data; a test
+  payment on the deployed site is the next step.
 - **The launch blocker is content, not engineering.** Her photo, her story, the
   About text, the FAQs and a real business name to replace the placeholder. All
   editable from the admin panel; the list is in

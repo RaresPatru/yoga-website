@@ -1562,12 +1562,13 @@ retry; that page never loads the statistics.
 
 **Found along the way**
 
-- **The live site records sessions.** Production still runs the code of
-  22 September: it loads PostHog on every page, the admin panel included,
-  sets its cookie, and loaded PostHog's session recorder on 4 October,
-  because her PostHog project has session replay switched on. `feature`
-  fixed the cookie in phase 2 and the admin panel in phase 9; it reaches the
-  live site at the next merge (Needs Rares).
+- **The live site recorded sessions.** Until 5 October production ran the
+  code of 22 September: it loaded PostHog on every page, the admin panel
+  included, set its cookie, and on 4 October loaded PostHog's session
+  recorder, because her PostHog project has session replay switched on. The
+  merge of 5 October (`de2a3d0`) ended all three: the live site's security
+  policy now allows no script from PostHog, so the recorder cannot load, and
+  the code switches recording off besides.
 - **A phone on the Wi-Fi counted as a visitor.** The phase 9 rule was "not on
   localhost", and a phone opening the dev server at `192.168.x.x` carried
   production's key from `.env` straight past it. Every preview did too.
@@ -1626,13 +1627,11 @@ retry; that page never loads the statistics.
   then `npx supabase db push` for the new migrations.~~ Done on 5 October
   2026, at Rares' request: the fifteen migrations of phases 0 to 11, first
   rehearsed on a copy of production's data, where all applied, and
-  `migration list --linked` now shows every one recorded. Production's
-  schema is ahead of the live site, which still runs the code of
-  22 September: its pages load, and its booking call reaches the new
-  function, whose added parameters have defaults. Its testimonials query
-  filters on `approved`, a column visitors can no longer read, so testimonials
-  would not show there until the merge (production has none yet). The merge
-  to `main` is now code only.
+  `migration list --linked` now shows every one recorded. The code followed
+  the same day: `feature` was merged into `main` (`de2a3d0`, pushed by
+  Rares), and the live site was checked afterwards: every page loads, the
+  server answers from Paris, and the security policy names PostHog's EU
+  address alone.
 - **Stripe, before taking real money** (Phase 10):
   - ~~add `refund.failed` to the webhook endpoint~~ done by Rares on 3 October
     2026; the endpoint now sends all four events the site handles.
@@ -1650,11 +1649,11 @@ retry; that page never loads the statistics.
 - ~~**Phase 11:** a PostHog project on the EU cloud.~~ It is already there:
   the key in `.env` belongs to a project on the EU cloud, and the live site
   uses it. In that project (PostHog's settings, eu.posthog.com):
-  - **Session replay off now, and the recordings deleted.** The live site
-    records sessions until the next merge, the admin panel included, so the
-    recordings so far are of your own visits and may show test participants'
-    details. Autocapture, heatmaps and surveys can go off too. The code
-    refuses them all from the next merge; the switches are a second lock.
+  - **Session replay off, and the recordings deleted.** Until 5 October the
+    live site recorded sessions, the admin panel included, so the recordings
+    are of your own visits and may show test participants' details. Since
+    then the code refuses recordings, autocapture, heatmaps and surveys and
+    loads nothing from PostHog; the switches in PostHog are a second lock.
   - **"Discard client IP data" on** (Project → General → IP data capture),
     if it is not already; EU organisations start with it on. Country and city
     still work.
