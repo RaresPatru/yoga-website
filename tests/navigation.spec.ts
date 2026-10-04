@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
-const RO_PUBLIC_ROUTES = ["/blog", "/events", "/testimonials", "/contact"];
-const EN_PUBLIC_ROUTES = ["/blog", "/events", "/testimonials", "/contact"];
+/** Every public page, answered in both languages. */
+const PUBLIC_ROUTES = ["/about", "/blog", "/events", "/testimonials", "/contact"];
 
 test.describe("navigation and routing", () => {
   test("root redirects to /ro", async ({ page }) => {
@@ -10,7 +10,7 @@ test.describe("navigation and routing", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
-  for (const route of ["/", ...RO_PUBLIC_ROUTES]) {
+  for (const route of ["/", ...PUBLIC_ROUTES]) {
     test(`/ro${route} responds 200 with a page heading`, async ({ page }) => {
       const response = await page.goto(`/ro${route}`);
       expect(response?.status()).toBe(200);
@@ -18,7 +18,7 @@ test.describe("navigation and routing", () => {
     });
   }
 
-  for (const route of EN_PUBLIC_ROUTES) {
+  for (const route of PUBLIC_ROUTES) {
     test(`/en${route} responds 200`, async ({ page }) => {
       const response = await page.goto(`/en${route}`);
       expect(response?.status()).toBe(200);

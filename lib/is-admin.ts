@@ -25,14 +25,23 @@ import { createClient } from "@supabase/supabase-js";
  * cannot drift apart.
  */
 export async function isAdminRequest(req: Request): Promise<boolean> {
+  return (await adminFromRequest(req)) !== null;
+}
+
+/**
+ * The administrator behind a request, or null: the same two checks, and the
+ * account's email address for the routes that write to her ("Trimite-mi un
+ * test").
+ */
+export async function adminFromRequest(req: Request): Promise<{ id: string; email: string | null } | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) return false;
+  if (!url || !anonKey) return null;
 
   const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) return false;
+  if (!token) return null;
 
   // Attaching the token as a global header makes every call on this client run
   // "as" that user, which is what lets auth.uid() inside is_admin() resolve to
@@ -43,13 +52,13 @@ export async function isAdminRequest(req: Request): Promise<boolean> {
   });
 
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return false;
+  if (error || !data.user) return null;
 
   const { data: isAdmin, error: rpcError } = await supabase.rpc("is_admin");
   if (rpcError) {
     console.error("is_admin check failed:", rpcError.message);
-    return false; // fail closed: an unanswerable question is not a yes
+    return null; // fail closed: an unanswerable question is not a yes
   }
 
-  return isAdmin === true;
+  return isAdmin === true ? { id: data.user.id, email: data.user.email ?? null } : null;
 }

@@ -38,22 +38,36 @@ interface LocaleContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   t: (key: string) => string;
+  /**
+   * False until the first set of messages has loaded. Until then `t()` returns
+   * the key itself ("admin.events"), which is fine on screen for a moment but
+   * not in a browser tab's title or a screen reader's announcement.
+   */
+  ready: boolean;
 }
 
 const LocaleContext = createContext<LocaleContextValue>({
   locale: "ro",
   setLocale: () => {},
   t: (key: string) => key,
+  ready: false,
 });
 
 export function AdminLocaleProvider({ children }: { children: ReactNode }) {
   const locale = useSyncExternalStore(subscribe, readLocale, () => "ro" as Locale);
-  const [messages, setMessages] = useState<Messages>({});
+  const [messages, setMessages] = useState<Messages | null>(null);
 
   useEffect(() => {
     import(`../../messages/${locale}.json`)
       .then((mod) => setMessages(mod.default))
       .catch((err) => console.error("Failed to load locale messages:", err));
+  }, [locale]);
+
+  // The admin pages are not localised by address, so the root layout always
+  // declares Romanian. A screen reader picks its pronunciation from this
+  // attribute, so it follows the panel's language instead.
+  useEffect(() => {
+    document.documentElement.lang = locale;
   }, [locale]);
 
   const setLocale = useCallback((l: Locale) => writeLocale(l), []);
@@ -75,7 +89,7 @@ export function AdminLocaleProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <LocaleContext.Provider value={{ locale, setLocale, t }}>
+    <LocaleContext.Provider value={{ locale, setLocale, t, ready: messages !== null }}>
       {children}
     </LocaleContext.Provider>
   );

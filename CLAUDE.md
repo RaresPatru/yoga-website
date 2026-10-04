@@ -7,6 +7,12 @@ most of the odd-looking things are deliberate and explained there.
 [docs/DATABASE.md](docs/DATABASE.md) maps the schema: what exists, who can read
 it, and the checklist for adding to it.
 
+**Every file here, docs included, was written by AI models,** and a full audit
+on 22 September 2026 found the docs and code comments had drifted from the code
+in dozens of places. When a document and the code or schema disagree, the code
+wins — verify a claim before acting on it, and fix the document when it is
+wrong.
+
 ## Non-negotiables
 
 - **Never push to `main`, and never commit or push without being asked.**
@@ -82,6 +88,27 @@ it, and the checklist for adding to it.
   on iPhone.
 - **Romanian is the primary language.** English falls back to Romanian when a
   translation is blank.
+- **What the business actually is.** She is **flow4ward**, and she *hosts
+  events*: yoga, sometimes combined with other activities such as horse riding
+  or creative writing. No class timetable, no teacher training, and no fixed
+  city — events happen anywhere in Romania. So nothing should hardcode a
+  location. A placeholder `SITE_LOCALITY = "Cluj-Napoca"` once reached the
+  structured data on every page; it was removed on 25 September 2026, and the
+  area she serves is an optional field she fills in herself.
+- **The server runs in Paris, beside the database.** `vercel.json` names
+  `cdg1`; Supabase is in `eu-west-3`. Until 29 September 2026 Vercel's default,
+  Washington, put an ocean between them, crossed twice by every read, and that
+  was most of the wait between pages (DECISIONS.md, "The server runs in
+  Paris"). A page's reads happen in rounds, one after another, so keep them
+  in one region and keep the rounds few (`Promise.all`).
+- **Status, 22 September 2026: pre-launch.** Production is publicly reachable
+  but only Rares uses it, to test. There are no real customers and no real
+  personal data in it, and Stripe is a test sandbox. Still treat it as live: it
+  is the database she will run the business on.
+- **The WhatsApp group link is public on purpose, for now.** Joining the group
+  needs the admin's approval, so the link itself is not the gate. Rares will say
+  how it should eventually work — do not lock it down unprompted, even though
+  DECISIONS.md and the `whatsapp_links` table treat an invite URL as a secret.
 - **The instructor runs the site herself.** Anything she might reasonably want
   to change — copy, photos, FAQs, her Instagram and Facebook addresses — belongs
   in the database and the admin panel, not in the source. Half-wiring it counts
@@ -93,14 +120,21 @@ it, and the checklist for adding to it.
 
 ## Commands
 
-```bash
-npx supabase start / db reset    # local database (needs Docker Desktop)
-npx supabase db push             # send new migrations to production
-npm run dev                      # local database — prints which one on startup
-npm run dev:prod                 # the live database; everything you do there is live
-npm run mock:images              # rebuild /public/mock from ./mock-images
+Rares runs **PowerShell 7 on Windows 11**, so every command or script handed to
+him is PowerShell. Claude's own Bash tool is Git Bash; the `npm`/`npx` lines are
+identical in both shells — only environment variables and deleting files differ.
+
+```powershell
+npx supabase start                # local database (needs Docker Desktop)
+npx supabase db reset --local     # replay every migration + seed.sql. LOCAL — never --linked
+npx supabase db push              # send new migrations to production
+npm run dev                       # local database — prints which one on startup
+npm run dev:prod                  # the live database; everything you do there is live
+npm run mock:images               # rebuild /public/mock from ./mock-images
 npm run lint && npx tsc --noEmit
-npm run test:e2e                 # production build, one worker; PW_DEV=1 for the fast loop
+npm run test:e2e                  # production build, one worker, 10+ minutes
+$env:PW_DEV = "1"; npm run test:e2e; Remove-Item Env:PW_DEV   # the faster dev-server loop
+Remove-Item -Recurse -Force .next                              # see "A stale .next" below
 ```
 
 ## Gotchas that have cost time
@@ -114,6 +148,58 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   session for that user.
 - Row Level Security is a filter, not a lock: denied rows come back as an empty
   result with no error. An empty list may be a permissions failure.
+- **Supabase writes and Resend sends return their errors; neither throws.**
+  `const { error } = await supabase.from("events").update(…)` — ignore `error`
+  and a failed save looks exactly like a successful one, which is how the admin
+  editors silently lost edits. Resend's `emails.send()` returns `{ error }` too,
+  and logs it only outside production. Check `error` on every call. In the
+  admin panel, wrap the result in `must()` from `lib/admin/db.ts`: it throws
+  an `AdminError` whose kind maps to a translated sentence
+  (`adminErrorKey()`), and the editor stays open on failure.
+- **Under row-level security, Postgres blanks a unique violation's details.**
+  As the admin, a duplicate slug comes back with `details: null` instead of
+  `Key (slug)=(…) already exists.`, because the key's value could reveal a row
+  the user may not read; the service role gets the full text. Read the
+  constraint name from `message` (`blog_posts_slug_key`) instead, as
+  `lib/admin/db.ts` does. A test run with the service key will never show you
+  this.
+- **Regenerate `lib/database.types.ts` after every migration**
+  (`npx supabase gen types typescript --local > lib/database.types.ts`). All
+  four Supabase clients are typed from it, so a stale file type-checks code
+  against a schema that no longer exists.
+- **Generated columns cannot be written.** `events.starts_at` and
+  `events.ends_at` are computed by Postgres, which refuses any write to them,
+  and so are `blog_posts.first_image`, `reading_minutes_ro` / `_en` and
+  `contact_messages.search_text`. Spread a whole `Row` into `.update()` and
+  the save fails. Since the Supabase CLI 2.118 (`9b403e9`),
+  `lib/database.types.ts` types them `never` on `Insert` and `Update`, so
+  TypeScript catches it; the older CLI offered them as optional fields and
+  the failure only showed at runtime. The events editor's `EventDraft` omits
+  them, and the post editor writes only the fields in `POST_FIELDS`
+  (`lib/admin/blog.ts`). That CLI also writes the file unformatted, so don't
+  hand-format it: the next regeneration would undo it.
+- **An event's times are worked out twice, and the two must agree.** Postgres
+  computes `starts_at` and `ends_at`, which bookings close by; the calendar
+  file, the structured data and the home page use `zonedWallClockToUtc`
+  (`lib/utils.ts`). Until 30 September 2026 the second was an hour out from
+  01:00 to 03:00 on the nights the clocks change. In a test, check an event's
+  times on the clock in Romania, not as a count of hours: dates seeded
+  relative to today reach a changeover weekend four days a year, which is how
+  a calendar test expecting two days and seven hours failed CI.
+- **Next.js writes the layout's `<title>` after a page's effects on a full
+  load.** A client page that sets `document.title` in an effect sees it
+  replaced by the metadata title a moment later. In the admin panel use
+  `useDocumentTitle()` (`components/admin/shell/admin-site.tsx`), which puts
+  its title back whenever something changes it.
+- **Playwright's `getByLabel` and `getByRole({ name })` match substrings,
+  ignoring case.** "Titlu (RO)" also finds "Subtitlu (RO)", and "Adresa
+  articolului" finds a help button called "Ce este adresa articolului?". Most
+  of the post editor's first test run failed on this, in strict mode. Pass
+  `{ exact: true }` whenever one label could sit inside another.
+- **`next/image` throws on a host missing from `images.remotePatterns`,** and
+  takes the page with it. Anything drawn from text she pasted (a post's first
+  picture) goes through `canOptimise()` in `lib/image-src.ts` and
+  `unoptimized` when it says no.
 - Playwright's `isVisible()` does not auto-wait. Branch on viewport width, not
   on a visibility probe.
 - **A Suspense boundary high in the tree costs you HTTP status codes.** Wrapping
@@ -121,6 +207,10 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   `notFound()` deeper down could no longer set 404 — every missing event
   answered 200 with a "not found" body. Keep boundaries around the component
   that actually needs one (`useSearchParams`), never around the whole app.
+  A `loading.tsx` is such a boundary around its page, which is why there are
+  none: the list pages call `notFound()` for `?page=999` too
+  (`tests/transitions.spec.ts` checks). Slow clicks get the veil instead
+  (`components/layout/navigation-feedback.tsx`).
 - **`<Button asChild>` does nothing from a Server Component.** It clones its
   child, which needs `isValidElement()`; across the RSC boundary the child is a
   serialised reference, so it silently renders a `<button>` wrapping your link.
@@ -158,8 +248,9 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
 - **A stale `.next` makes the build lie.** `npm run build` reported `Failed to
   type check` with parse errors inside the `validator.ts` that Next generates —
   a file overwritten without being truncated, so it resumed mid-token from a
-  longer earlier version. `rm -rf .next` and rebuild before believing a type
-  error you cannot find anywhere in your own source.
+  longer earlier version. Delete `.next` (`Remove-Item -Recurse -Force .next`)
+  and rebuild before believing a type error you cannot find anywhere in your
+  own source.
 - **A form that "does nothing" on WebKit is usually a hydration race.** Clicking
   submit before React has hydrated is swallowed silently — these forms have no
   `action`, so the native submit is a no-op too — and the test just sees a page
@@ -187,16 +278,94 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   built**, and every test then fails with `Database error querying schema` —
   which reads like the migration you just wrote destroyed the schema. It did
   not. Stop and start the stack, run `db reset` again, and it applies cleanly.
+
+  Two more, both met on 22 September 2026:
+  - `supabase start` failing its **health check** on storage is often just
+    slowness: storage creates a `storage_vectors` database for the unused
+    `[storage.vector]` feature and misses the CLI's deadline.
+    `npx supabase start --ignore-health-check` brings everything up healthy.
+  - "Starting database from backup..." can restore an **empty** database — no
+    tables, no migration ledger — left over from an earlier failed start. Check
+    `npx supabase migration list --local`: if every applied column is blank,
+    `npx supabase db reset --local` rebuilds it.
 - **The suite runs on one worker, and that is deliberate.** Two engines against
   a production build with Postgres in Docker beside them was enough to get
   WebKit killed mid-test, scattering one to three failures across unrelated
   specs on every run. Measured: 1-3 failures at two workers, 0 at one. Before
   believing a WebKit failure, re-run that spec alone — and do not raise
   `workers` to buy back the ninety seconds. See `playwright.config.ts`.
+- **`[WebServer] ⨯ Error: The destination stream closed early.` is not a
+  failure.** It is React stopping a render because the browser went away
+  before the response was finished. After a page loads, Next's `<Link>`
+  prefetches the pages its visible links lead to, and on this site every one
+  of those is a render on the server; a test that ends while they run closes
+  the window on them. Measured on 28 September 2026: closing the window 50 to
+  100 ms after the prefetches start logs it, while closing sooner (the
+  requests never arrive) or later (they have finished) does not. Every full
+  run since Phase 0 printed it between 42 and 109 times (the count grows with
+  the suite), always with digest `3080431700`, and every one of those runs was
+  green. A visitor who closes a
+  page a moment after opening it would print the same line in Vercel's logs.
 - **Pin `next` exactly and keep `@next/swc-*` in step with it.** Vercel runs
   `npm install`, not `npm ci`, so a floating range can resolve there to a version
   CI never saw. A caret on `next` beside literal `optionalDependencies` pins
   installed two different versions of the same native binary at once.
+- **An exact version in `overrides` freezes that package for good.** Neither
+  `npm update` nor `npm audit fix` will move it, so the version that cleared
+  one advisory is the one the next advisory flags, and `npm audit` then counts
+  every package above it: `brace-expansion` pinned at 5.0.9 in July showed as
+  15 high vulnerabilities on 2 October 2026, all in the lint tools
+  (`npm audit --omit=dev` said 0). Override with a caret range, and delete the
+  override once the parents' own ranges reach a fixed version. `npm audit fix`
+  answered with a downgrade of `typescript-eslint` that fixed nothing, and
+  `--force` offered `eslint-config-next` 15; never run `--force`.
+- **The test suite's Stripe is a stand-in** (`tests/fake-stripe.ts`), started
+  by `tests/global-setup.ts` on `127.0.0.1:12111`. The test server reaches it
+  through `STRIPE_API_BASE`, set in `playwright.config.ts`, which
+  `lib/stripe.ts` honours only against the local database with an `sk_test_`
+  key. A server you started yourself and Playwright reuses lacks that
+  variable, so every paid test fails with "Invalid API Key": let Playwright
+  start it. Tests steer the stand-in through `tests/stripe-helpers.ts`.
+- **Nothing on this machine sends statistics to PostHog.** `lib/analytics.ts`
+  counts visits only at the site's public address (`NEXT_PUBLIC_SITE_URL`,
+  set in Vercel for Production alone) and sends only to PostHog's EU cloud,
+  never from a page on this machine. The suite sends to a stand-in instead
+  (`tests/fake-posthog.ts`, `127.0.0.1:12112`, through
+  `NEXT_PUBLIC_POSTHOG_HOST` in `playwright.config.ts`), and needs a browser
+  that looks like a visitor's (`asVisitor` in `tests/analytics-helpers.ts`):
+  an automated one is silently left out, by the site and by posthog-js, so a
+  test that expects nothing would pass for the wrong reason. To watch it against PostHog itself, in
+  PowerShell, with a key from a test project of your own rather than hers:
+  ```powershell
+  $env:NEXT_PUBLIC_POSTHOG_DEBUG = "1"; $env:NEXT_PUBLIC_POSTHOG_KEY = "phc_…"
+  $env:NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"; $env:TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA"
+  npm run build; npm run start          # then open http://localhost:3000/ro
+  Remove-Item Env:NEXT_PUBLIC_POSTHOG_DEBUG, Env:NEXT_PUBLIC_POSTHOG_KEY, Env:NEXT_PUBLIC_TURNSTILE_SITE_KEY, Env:TURNSTILE_SECRET_KEY
+  ```
+  The Turnstile test keys let the booking form send, for the booking events.
+  The browser's console then shows every event, or why a visit is not
+  counted: being signed in to the admin panel in that browser is a reason.
+  Use a production build: `npm run dev` runs effects twice and doubles some
+  events. The build then holds the debug switch, so build again before
+  anything else uses it.
+- **Deleting a booking clears `waiting_list.claimed_registration_id`**
+  (`ON DELETE SET NULL`). Code that must find who claimed a booking reads them
+  before the delete; reading after it found nobody, which left anyone whose
+  claimed checkout expired off the waiting list for good until 3 October 2026.
+- **Every Stripe session carries `metadata.db`**, the database that made it,
+  because the sandbox is one account and Stripe sends every copy of the site's
+  events to every endpoint. The webhook ignores sessions from another
+  database. To try payments locally against the sandbox, in PowerShell, with
+  the Stripe CLI logged in:
+  ```powershell
+  stripe listen --print-secret   # copy the whsec_… it prints into the next line
+  $env:STRIPE_WEBHOOK_SECRET = "whsec_…"; $env:NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"; $env:TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA"; npm run dev
+  stripe listen --forward-to localhost:3000/api/stripe/webhook   # in a second window
+  ```
+  Card `4242 4242 4242 4242`, any future date and CVC; Revolut Pay opens
+  Stripe's test page with an Authorize button. Without `stripe listen` it still
+  works: the event page confirms the payment when Stripe sends the visitor
+  back.
 - **`npm run dev` reads the *local* database; `npm run dev:prod` reads
   production.** `.env` holds the production values and `.env.local` overrides the
   three Supabase ones with the Docker stack, which Next resolves in that order.
@@ -206,12 +375,41 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   is the only way to reach live data; everything you do there is live.
   The test suite is separate again: `playwright.config.ts` loads `.env.test`
   first and `tests/helpers.ts` hard-crashes on a non-local URL.
+- **Against the local database, emails go to Mailpit, not Resend** (`lib/email.ts`):
+  read them at http://127.0.0.1:54324, and in tests with `emailsTo()` from
+  `tests/helpers.ts`. `npm run dev:prod` sends real email. The daily job
+  (`/api/cron/daily`) refuses to run without `CRON_SECRET`; the test server
+  gets one from `playwright.config.ts`. Mailpit hands back an email's text
+  part with CRLF line endings. Every email also opens with a hidden preheader
+  (`lib/email-layout.ts`) repeating the first words of its text, so an
+  assertion on a sentence in an email or its preview should target a
+  paragraph (`locator("p", { hasText })`), not `getByText`.
 - **Local content comes from `supabase/seed.sql`,** which `npx supabase db reset`
-  replays: five events, five posts, five testimonials, five FAQs and her copy,
-  all invented. The soonest event is deliberately full so the home page's
-  ordering rule has something to do, and the lead event deliberately has no
-  photograph. Pictures live in `/public/mock`, built from the gitignored
-  `mock-images/` by `npm run mock:images`.
+  replays: six upcoming events and one six weeks past, five posts, six
+  testimonials, five FAQs and her copy, all invented except the business name.
+  The soonest event is deliberately full so the home page's ordering rule has
+  something to do, one is closed at capacity 0 with a waiting list, one has no
+  start time yet, and the lead event deliberately has no photograph. The past
+  one (`yoga-la-rasarit`) has an approved testimonial, so the events archive
+  and an ended event's page have something to show. The paid retreat has one
+  participant in each state the Registrations page shows. Three testimonials are
+  on the home page, and one written through a link waits for approval. One
+  announcement is in the history, sent to the three people who had opted in;
+  Dan Georgescu unsubscribed through it, so a new one lists him as left out.
+  Six contact messages fill Mesaje: two unread (one written on the English
+  site), one starred, one without a subject, two archived. No event has a
+  WhatsApp link, so anything that renders one is invisible locally until you
+  add it in `/admin`. Pictures live in `/public/mock`, built from the
+  gitignored `mock-images/` by `npm run mock:images`.
+- **Two translators, two placeholder styles.** Public pages use next-intl,
+  whose messages are ICU: pass the value, `t("ask", { site })`. Calling
+  `t("ask")` and replacing `{site}` afterwards renders the raw key
+  ("unsubscribe.ask") on the page, because a missing value is a formatting
+  error. The admin panel's `t()` (`useAdminLocale`) is its own: it returns
+  the string as written, and callers `.replace("{count}", …)` by hand. In the
+  messages files a key is either a sentence or a group, never both:
+  `admin.email` is the login form's label, so the Email-uri page's copy lives
+  under `admin.mail`.
 - **Tailwind v4 compiles `scale-*` to the individual `scale` property**, which
   does **not** override `transform` — the browser applies translate, rotate,
   scale and *then* transform, so the two multiply. `hover:scale-[1.02]` on an
@@ -271,3 +469,51 @@ npm run test:e2e                 # production build, one worker; PW_DEV=1 for th
   16. A test that asserts on that property fails against a browser engine that
   the audience never runs. Check `CSS.supports` in the engine before believing
   a Playwright-WebKit result about CSS support.
+- **WebKit crashes on `display: none` for a view transition's old picture.**
+  `::view-transition-old(x) { display: none }`, the usual way to drop one (the
+  Next.js guide does it for a still header), takes the whole page down in
+  WebKit when anything calls `document.getAnimations()` while the picture's
+  group is animating, and React animates the root's group itself. Make the
+  picture `opacity: 0` instead (app/globals.css, "PAGE TRANSITIONS").
+- **Playwright's WebKit does not draw view transitions** in its screenshots or
+  videos, though it runs them: a WebKit screenshot mid-transition shows the new
+  page, finished. Check `document.getAnimations()` for the
+  `::view-transition` pseudo-elements instead, and judge the look in Chromium
+  (`Animation.setPlaybackRate` over CDP slows it down to watch).
+- **A named element is pictured whole for a view transition, so never name
+  anything taller than the screen.** Each page's content was once named for
+  the page fade: on Linux WebKit a navigation then waited a median of 1.6 to
+  3.4 s for its pictures and 2 in 24 hung. The fade is the root's (the
+  screen), and a page's `<ViewTransition>` has the class `none`
+  (`components/layout/view-transitions.tsx`).
+- **React drops the root from a transition in which only `<ViewTransition>`
+  boundaries changed** (it writes `view-transition-name: none` on `<html>`),
+  unless `<html>` names itself inline. The public layout does
+  (`components/layout/navigation-feedback.tsx`); without it the page fade
+  came and went between navigations.
+- **A `view-transition-name` may be on the page only once, and it makes a
+  backdrop root.** Two elements with one name and the browser skips the whole
+  transition. And a named element's descendants lose their backdrop blur
+  (measured in Chromium; Playwright's WebKit draws no backdrop blur at all), so
+  the top bar's name is on its glass `<nav>`, not on `<header>`.
+- **Vercel's functions will not `require()` an ES module, even on Node 24.**
+  `next start` on Node 24 loads such a dependency without complaint. The same
+  build on Vercel answers 500 with `ERR_REQUIRE_ESM`. That is why
+  `isomorphic-dompurify` is held at 2.26.0; see DECISIONS.md, which also has the
+  PowerShell to check a preview. It applies to any server-side package whose
+  CommonJS code requires an ES-module-only one. A local production build is no
+  evidence here: deploy a preview and load a page that uses the package.
+- **A WebKit flake that only CI sees may need Linux to reproduce.** Playwright
+  ships a different WebKit port on Windows and on Linux, with different frame
+  timing. The navigation drawer that closed itself as it opened did so on about
+  one open in thirty on Linux and never in 180 on Windows, and for ten days it
+  was blamed on hydration. Serve the test build on :3100 and run the spec from
+  the `mcr.microsoft.com/playwright:v<version>-noble` image with
+  `baseURL: "http://host.docker.internal:3100"`. Log what the page actually did
+  before trusting a theory about why it failed.
+- **Escape never leaves the TipTap editor.** ProseMirror cancels every Escape
+  pressed inside it (`captureKeyDown` in prosemirror-view), and a cancelled
+  Escape is not a close request, so a popover opened while the caret stays in
+  the editor ignores it. The blog editor's shortcut list gets Escape through a
+  keymap in `lib/blog-editor.ts`; anything new that opens over the editor needs
+  the same.

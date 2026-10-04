@@ -4,21 +4,23 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { BackToTop } from "@/components/layout/back-to-top";
+import { NavigationFeedback } from "@/components/layout/navigation-feedback";
+import { Analytics } from "@/components/providers/analytics";
 import { LocaleLang } from "@/components/locale-lang";
 import { buildPageMetadata } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME, SITE_LOCALITY, SITE_COUNTRY } from "@/lib/site-config";
+import { absoluteUrl } from "@/lib/site-config";
+import { brandOf, getSiteContent, getSiteName, navLabels } from "@/lib/site-content";
 import type { Metadata } from "next";
 
 /**
  * Metadata for the home page, and the fallback for anything without its own.
  *
- * It lives on the layout rather than on app/[locale]/page.tsx because that page
- * is still a client component, and `generateMetadata` can only be exported from
- * a server component. Metadata declared on a layout applies to every page
- * beneath it and is overridden by any page that declares its own — which the
- * blog, events, testimonials and contact routes all now do. Phase 5 moves the
- * home page to the server as part of the redesign, at which point this can move
- * onto the page itself.
+ * The title is her tagline ("Conținut site" → "SEO și firmă"), to which
+ * buildPageMetadata appends the site name; without a tagline it is the name
+ * alone. The description is hers too, and without one there is no description
+ * tag at all, which lets a search engine pick an excerpt from the page. Both
+ * used to be sentences the previous AI wrote on her behalf.
  */
 export async function generateMetadata({
   params,
@@ -26,16 +28,11 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const content = await getSiteContent(locale);
 
   return buildPageMetadata({
-    title:
-      locale === "ro"
-        ? `${SITE_NAME} · Yoga pentru corp, minte și suflet`
-        : `${SITE_NAME} · Yoga for body, mind and soul`,
-    description:
-      locale === "ro"
-        ? "Ateliere și retreaturi de yoga în grupuri mici, ghidate cu atenție și blândețe."
-        : "Yoga workshops and retreats in small groups, guided with care.",
+    title: content["seo.tagline"] ?? "",
+    description: content["seo.description"],
     path: "",
     locale,
     image: absoluteUrl(`/api/og/default?locale=${locale}`),
@@ -53,28 +50,44 @@ export default async function LocaleLayout({
 
   if (!routing.locales.includes(locale as (typeof routing.locales)[number])) notFound();
 
-  const messages = await getMessages();
+  /*
+   * Every namespace except the admin panel's. Its copy lives in the same files
+   * but is read by components/admin/locale-provider.tsx, never through this
+   * provider — and whatever is handed to the provider is shipped to every
+   * visitor's browser. That was 3.4 KB gzipped on 23 September 2026, on every
+   * page, to people mostly on phones.
+   */
+  const messages = Object.fromEntries(
+    Object.entries(await getMessages()).filter(([namespace]) => namespace !== "admin")
+  );
   const t = await getTranslations("common");
+  /* One read, shared by the structured data below and by the header. The header
+     is a client component and cannot reach the database itself, so the name has
+     to arrive as a prop from here. */
+  const siteName = await getSiteName(locale);
+  const content = await getSiteContent(locale);
 
   /**
-   * schema.org LocalBusiness, on every page.
+   * schema.org data about the business, on every page.
    *
-   * Tells search engines this is a real business in a real place, which is what
-   * connects the site to a Google Business Profile and makes it eligible for
-   * local results — the "yoga in Cluj" searches that bring people who are not
-   * already following her on Instagram.
+   * Only what she has said. The name and address of the site always; the
+   * area she serves and her own name only when she has filled them in under
+   * "SEO și firmă". It used to state Cluj-Napoca as the business's town and
+   * address, which was a placeholder: she hosts events anywhere in Romania,
+   * and a wrong locality in structured data is a false statement a search
+   * engine will repeat (audit R6).
    */
   const businessSchema = {
     "@context": "https://schema.org",
-    "@type": "HealthAndBeautyBusiness",
-    name: SITE_NAME,
+    "@type": "Organization",
+    name: siteName,
     url: absoluteUrl(`/${locale}`),
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: SITE_LOCALITY,
-      addressCountry: SITE_COUNTRY,
-    },
-    areaServed: SITE_LOCALITY,
+    ...(content["identity.logo"] ? { logo: content["identity.logo"] } : {}),
+    ...(content["seo.description"] ? { description: content["seo.description"] } : {}),
+    ...(content["seo.area_served"] ? { areaServed: content["seo.area_served"] } : {}),
+    ...(content["seo.person_name"]
+      ? { founder: { "@type": "Person", name: content["seo.person_name"] } }
+      : {}),
   };
 
   return (
@@ -90,9 +103,15 @@ export default async function LocaleLayout({
       >
         {t("skip_to_content")}
       </a>
-      <Header />
-      <main id="main-content" tabIndex={-1} className="flex-1 pt-20">{children}</main>
+      <Header brand={brandOf(content, siteName)} labels={navLabels(content, locale)} />
+      {/* Focusable so "Sari la conținut" and "Înapoi sus" can move the keyboard here;
+          no outline, since the whole page would light up and it is not a control. */}
+      <main id="main-content" tabIndex={-1} className="flex-1 pt-20 focus:outline-none">{children}</main>
       <Footer locale={locale} />
+      {/* The public site only: the admin panel has its own layout and none of these. */}
+      <BackToTop />
+      <NavigationFeedback />
+      <Analytics />
     </NextIntlClientProvider>
   );
 }

@@ -7,7 +7,7 @@ The schema itself lives in
 — one file, commented, in dependency order. This page is the map; that file is
 the territory. When they disagree, the file is right.
 
-- **Source of truth:** `supabase/migrations/` — the baseline, plus whatever has not been folded into it yet
+- **Source of truth:** `supabase/migrations/` — the baseline (frozen since September 2026) plus every dated migration after it
 - **History:** [`supabase/migrations-archive/`](../supabase/migrations-archive/README.md) — every migration that has been applied, kept for the *why*
 - **Descriptions:** `20260912000001_object_comments.sql` — 30 `COMMENT ON` statements, collected in one file rather than folded into the baseline. No longer edited in place; a new object needs a new dated migration.
 - **The Supabase SQL Editor holds no schema.** See [Working with production](#working-with-production).
@@ -43,11 +43,11 @@ because only one of the two was done.
 
 | Table | Holds | anon | Touched by |
 |---|---|---|---|
-| `events` | Classes, workshops, retreats. The central table. | `select` where `published` | `app/[locale]/events/*`, `app/admin/events` |
-| `blog_posts` | Articles. | `select` where `published and not hidden` | `app/[locale]/blog/*`, `app/admin/blog` |
-| `testimonials` | Attendee feedback. | `select` where `approved` | home + testimonials pages, `/api/testimonials` |
-| `site_content` | Key/value page copy the instructor edits. | `select` (all) | `lib/site-content.ts`, `app/admin/content` |
-| `faqs` | Questions on the events page. | `select` where `published` | events page, `app/admin` |
+| `events` | Classes, workshops, retreats. The central table. | `select` where `published` | `app/[locale]/events/*`, `app/admin/(panel)/events` |
+| `blog_posts` | Articles. | `select` where `published and not hidden` | `app/[locale]/blog/*`, `app/admin/(panel)/blog` |
+| `testimonials` | Attendee feedback, written through a personal link (`source = 'participant'`, linked to its booking) or imported. Outlives its event: `event_id` becomes NULL and `event_title_ro` / `_en` / `event_date` keep which event it was. | `select` of named columns only, where `approved and not hidden` | home, /testimonials and past event pages; `/api/reviews` writes |
+| `site_content` | Key/value page copy the instructor edits. | `select` (all) | `lib/site-content.ts`, `app/admin/(panel)/content` |
+| `faqs` | Questions on the home page. | `select` where `published` | home page, `app/admin/(panel)/content` |
 | `event_availability` | **View.** `(event_id, capacity, taken)`. | `select` | every page showing seat counts |
 
 ### Private — admins only, no public policy in either direction
@@ -57,11 +57,21 @@ because only one of the two was done.
 | `registrations` | Name, email, phone per signup. | Personal data | `register_for_event()` only |
 | `contact_messages` | Contact-form messages. | Private correspondence | `/api/contact` (service key) |
 | `waiting_list` | Who is waiting, plus their claim window. | Personal data | `/api/register/waiting-list` |
-| `waiting_list_notifications` | Audit log of notified batches. | Operational | Stripe webhook |
-| `email_templates` | Transactional email bodies. | Editable config | `/admin/emails` |
+| `waiting_list_notifications` | Audit log of offer batches: how many links went out, per event. | Operational | `settle_waiting_list_offers()` |
+| `email_templates` | The automatic emails' subjects and texts, RO and EN, with `{{placeholders}}`. | Editable config | `/admin/emails`, `lib/email.ts` |
+| `announcements` | Emails she writes herself: the texts, who they are for (`audience`), `status` draft / sending / sent. | Admin only | `/admin/emails`, `lib/announcements.ts` |
+| `announcement_recipients` | Per announcement and address: `pending`, `sent`, `failed` or `excluded` with the reason, and the unsubscribe link's SHA-256. | Personal data; the admin reads, only the server writes | `lib/announcements.ts` |
+| `email_suppressions` | Everyone who unsubscribed from announcements (`unsubscribed`), or whom she stopped (`admin`). | Admin and server only | `/api/unsubscribe`, the participant panel |
 | `whatsapp_links` | Saved invite URLs. | **A URL is a capability** | `/admin/events` |
 | `admins` | Who may enter `/admin`. | Revoked from everyone; read only by `is_admin()` | by hand |
 | `profiles` | Extra auth fields. | Vestigial — see below | nothing |
+| `content_drafts` | Unpublished changes to a live post or event. | Work in progress | the post and event editors' autosave |
+| `review_invitations` | Personal links to write a testimonial: the token's SHA-256, `expires_at`, `used_at`. | A link is a credential; RLS on, no policy, `service_role` only | `lib/reviews.ts` |
+| `admin_notifications` | Notices for the dashboard about what happened without her: `cancelled`, `refunded` (in Stripe), `refund_failed`, `payment_returned`, with `details` and `seen_at`. | Admin reads and may set `seen_at` only; only the server inserts | `lib/admin-notices.ts`; the dashboard marks them seen |
+| `admin_dashboard` | **View.** One row: the dashboard's counts, with refunds to decide and notices not yet seen. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
+| `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
+| `admin_participants` | **View.** Every booking and every unclaimed waiting-list entry, with its event, a status, `archived` and a search text. | `security_invoker`; `select` for `authenticated`, and for `service_role` to work out an announcement's recipients | `/admin/registrations`, `lib/announcement-audience.ts` (reads) |
+| `admin_announcements` | **View.** Every announcement with how many were sent, failed, are pending and were left out. | `security_invoker`; `select` for `authenticated` only | `/admin/emails` (reads) |
 
 `whatsapp_links` is the only table on this schema that is admin-only for
 *reading* as well as writing. Anyone holding a WhatsApp invite URL can join the
@@ -71,6 +81,98 @@ group, so it is a secret, not a piece of content.
 admin account — so nothing queries it. It stays because `registrations.user_id`
 and `testimonials.user_id` have foreign keys into it.
 
+The two `admin_*` views (`20260924000400_admin_dashboard.sql`) are
+`security_invoker`, the opposite of `event_availability` below: they run with
+the permissions of whoever asks, so the admin-only row policies underneath still
+decide what they count. Anyone signed in who is not the admin would see only the
+published events and zero for everything else, and `anon` has no grant at all.
+A pending payment is defined once, per event, in `admin_event_overview`, and the
+dashboard's total is its sum.
+
+**When an event starts and ends.** `events.starts_at` and `events.ends_at` are
+generated columns (`20260924000200_event_bounds.sql`): Postgres computes them
+from `date`, `time`, `end_date` and `end_time` in Europe/Bucharest and refuses
+any write to them. A blank start time counts as midnight; a blank end time means
+the event runs to the end of its last day. Since the Supabase CLI 2.118 the
+generated types mark them `never` on insert and update, so TypeScript refuses
+a write to them; a writer that spreads a whole row into an update must still
+leave them out. `events_ends_after_start` requires the end to come after
+the start (added `not valid`: enforced on every write from then on, without
+re-checking old rows). `show_in_archive` decides whether a past event is listed
+in the public archive.
+
+**Message state.** `contact_messages` gained `read_at` (NULL means unread),
+`starred`, `archived_at` and `locale` (`20260924000300_message_state.sql`).
+`read_at` is when she last opened a message or marked it read, since she can
+mark one unread again. `search_text` (`20261001000000_message_inbox.sql`) is
+the name, address, subject and message, lowercased and without accents,
+generated by Postgres for the inbox's search, as `admin_participants.search_text`
+is for Registrations.
+
+**Site content keys are described in code.** Which keys exist, and what each
+is for, lives in `lib/site-content-schema.ts`, not in the table: the admin
+creates a key's row the first time she saves it. The `section`, `label_ro`
+and `field_type` columns are written from the schema on every save and are
+not read by the site. The three legal documents are rows too
+(`legal.privacy`, `legal.terms`, `legal.cookies`), seeded as drafts by
+`20260925000000_faq_hidden_and_legal_drafts.sql`, which also makes
+`faqs.published` default to false: a new question stays hidden until she
+publishes it.
+
+**Blog posts as articles** (`20260926000000_blog_editorial.sql`). A post has
+an optional subtitle in each language, a `cover_url`, an `author` (empty means
+the default author from site content) and `published_at`, which the trigger
+`blog_posts_stamp_published` sets the first time the post is saved as
+published and never again. Two things are generated columns, computed by
+Postgres on every save and refused on write: `first_image`, the first `<img>`
+in the Romanian text (the card's picture when there is no cover), and
+`reading_minutes_ro` / `_en`, the words at 200 a minute. The same caveat as
+`events.starts_at` applies: the generated types offer them on insert and
+update. `blog_posts_slug_format` limits the address to lowercase letters,
+digits and single hyphens (`not valid`, like the events check). `media_urls`
+is gone; nothing ever used it.
+
+**Emails** (`20260930000000_email_system.sql`). `email_templates.type` gained
+`waitlist_joined`, the confirmation for joining a waiting list. An
+announcement's `audience` is JSON: `{"kind": "all"}`, `{"kind": "ids",
+"ids": [...]}` (rows of `admin_participants`) or `{"kind": "filter",
+"filters": {...}}` (the Registrations page's filters). The people are worked
+out when it is sent, one per address, and only those whose latest
+`marketing_consent_at` (on any of their rows) is newer than any
+`email_suppressions.created_at` for them receive it. Recipients are written
+once, on the first attempt, so a send cut short carries on from the ones
+still `pending`; `send_started_at` keeps two sends from running at once.
+`email_suppressions` rows are lowercase, one per address; an address that
+unsubscribes twice has its date moved forward.
+
+**Offering freed seats** is `offer_waiting_list_seats()` then
+`settle_waiting_list_offers()`, both under the lock on the event row that
+`register_for_event()` takes, so a booking and an offer, or two offers,
+wait for each other (audit B16). The first decides and stamps; the server
+emails; the second withdraws what did not go and records what did.
+
+**Payments** (`20261003000000_payments.sql`). A booking records its current
+Stripe session (`stripe_session_id`, from the moment one is created), the
+payment once it succeeds (`stripe_payment_intent_id`, unique), what was
+charged (`amount_paid` in bani or cents, `paid_currency`, `discount_code`),
+`checkout_started_at` (the start of its current checkout, from which an unpaid
+booking holds its seat), `cancelled_at` (they cancelled through their link),
+`refunded_at`, `refund_failed_at` and `cancel_token_hash` (the SHA-256 of
+their cancel link's token, unique). `waiting_list.claimed_registration_id` is
+`ON DELETE SET NULL`: deleting a booking clears it, so code that must find who
+claimed a booking reads them before the delete (`releaseCheckout` in
+`lib/payments.ts`).
+
+**Private changes.** While a post is live, the editor's autosave writes to
+its row in `content_drafts` (`data` holds the fields by column name), so
+visitors keep reading the published version. Exactly one of `post_id` and
+`event_id` is set, and each is a foreign key that deletes the draft with its
+owner. `publish_post_draft(id)` copies the draft onto the post and deletes
+it in one transaction; it is `security invoker`, so the admin-only policies
+on both tables decide, and only `authenticated` may execute it. The
+dashboard's `draft_posts` counts unpublished posts that are not hidden, the
+same set as the post list's Ciorne tab.
+
 ---
 
 ## Functions and the capacity rule
@@ -79,7 +181,28 @@ and `testimonials.user_id` have foreign keys into it.
 |---|---|---|
 | `is_admin()` | definer, `search_path` pinned | `anon`, `authenticated` |
 | `pending_hold_interval()` | immutable, returns `1 hour` | `anon`, `authenticated`, `service_role` |
+| `holds_seat(registrations)` | stable, reads only its argument | `anon`, `authenticated`, `service_role` |
 | `register_for_event(...)` | definer, `search_path` pinned | **`service_role` only** |
+| `publish_post_draft(id)`, `publish_event_draft(id)` | invoker | `authenticated` (RLS makes it the admin) |
+| `admin_delete_participants(ids)` | invoker; skips anyone not archived | `authenticated` (RLS makes it the admin) |
+| `daily_cleanup()` | invoker; also deletes lapsed testimonial links, and notices seen over 90 days ago | **`service_role` only** (`/api/cron/daily`) |
+| `offer_waiting_list_seats(event, hours)` | definer; locks the event row, counts free seats and live links, stamps the next people in line | **`service_role` only** (`lib/notify-waiting-list.ts`) |
+| `settle_waiting_list_offers(event, sent, unsent)` | definer; withdraws offers whose email failed, records the rest as a batch | **`service_role` only** |
+| `keep_event_on_testimonials()` | trigger function, before an event is deleted | nobody; only its trigger runs it |
+| `set_updated_at()` | trigger function, `search_path` pinned | nobody; only its triggers run it |
+
+`set_updated_at()` runs before every UPDATE on `events`, `blog_posts`,
+`site_content` and `email_templates`, and stamps `updated_at` with the current
+time (`20260924000000_updated_at_triggers.sql`). No screen has to remember to
+set the column, which is how the sitemap's dates stayed frozen at creation.
+
+**Flags and timestamps are `NOT NULL`** since
+`20260924000100_required_flags_and_timestamps.sql`: `published`, `hidden`,
+`approved`, `payment_status`, and the `created_at`/`updated_at` columns that had
+defaults but still allowed NULL. The TypeScript types in
+`lib/database.types.ts` are generated from this schema
+(`npx supabase gen types typescript --local > lib/database.types.ts`, after
+every migration), so what the database promises is what the code can rely on.
 
 > **Every function in `public` is an HTTP endpoint.** PostgREST exposes it at
 > `/rest/v1/rpc/<name>` to any role holding EXECUTE, so the function ACL is part
@@ -110,14 +233,78 @@ what stops two simultaneous bookings both seeing the last free seat. `anon` and
 `authenticated` are explicitly revoked: the browser reaches it through
 `/api/register`, which is where the CAPTCHA and the validation live.
 
-**A seat is held when:** `payment_status <> 'refunded'` **and**
-(`payment_status <> 'pending'` **or** the row is younger than
-`pending_hold_interval()`).
+Since `20260927000000_registration_lifecycle.sql` it also **refuses once the
+event has started** (`starts_at <= now()`; an event with no announced hour
+starts at midnight on its day), and every refusal carries a `code`
+(`not_found`, `unavailable`, `started`, `full`, `invalid`) beside its
+Romanian sentence, which is what lets the API answer in the visitor's
+language. It takes the page's language, the participant's note (stored only
+with the moment they consented, which a CHECK enforces) and the marketing
+opt-in; phase 5 of the overhaul sends them from the form.
 
-That rule is written twice — in `event_availability` and in
-`register_for_event()` — and the two **must** stay identical. When the number a
-page displays and the rule the button enforces disagree, you get a page offering
-seats next to a button that refuses them.
+**A seat is held when** `holds_seat(r)` says so: the booking was not removed
+(`removed_at is null`), not cancelled by its participant (`cancelled_at is
+null`), is not refunded, and is not an unpaid checkout whose last attempt
+(`checkout_started_at`, else `created_at`) began more than
+`pending_hold_interval()` ago. It is one function, called by
+`event_availability`, `register_for_event()`, `admin_event_overview` and
+`admin_participants`, so the number a page shows and the rule the button
+enforces cannot drift apart.
+
+**One seat per email per event** (B3, `20261003000000_payments.sql`).
+`register_for_event()` looks for the address's latest booking on the event
+that was not removed, cancelled or refunded, under the same lock. Paid or free:
+refused, code `already_registered`. Unpaid: that booking carries on, with the
+details just sent and a fresh hold (taking a seat again only if one is free,
+when its hold had lapsed), and the answer carries `resumed` and its
+`session_id`.
+It takes the whole row, so PostgREST also offers it to the admin as if it were
+a column. `anon` may execute it because Postgres checks a view's functions
+against the caller; it reads nothing but its argument.
+
+**What a booking records** (same migration): `locale`, `participant_note` and
+`note_consent_at`, `admin_note`, `marketing_consent_at`,
+`refund_requested_at`, and `removed_at` with `removal_reason`. A removed
+booking keeps its history and frees its seat. The waiting list gained
+`locale`, `removed_at` and `removal_reason`; a removed entry is never offered
+a seat, and nobody is offered one once the event has started.
+
+**Participants** (`20260928000000_participants.sql`). The waiting list records
+what a booking records: the note with its consent time, the opt-in and her
+note. `register_for_event()` gained `p_consented_at`, so a note written on
+the waiting list keeps its consent time when the seat is claimed.
+`admin_participants` gives each row a `status` (`removed`, `refunded`,
+`refund_requested`, `cancelled` since Phase 10, `pending`, `abandoned` for a
+checkout past its hour, `paid`, `free`, `offers`, `waitlist`) and `archived`:
+a booking once removed, once cancelled with no refund waiting on her, or once
+its event has ended with nothing pending on it; a waiting-list entry once
+removed or once its event has ended. Since Phase 10 it also carries what was
+paid (`amount_paid`, `paid_currency`, `discount_code`, `paid_online`) and the
+event's price and currency, and the service role still reads it for
+announcements. `search_text` is lowercased without
+accents, the phone as bare digits. `admin_delete_participants()` deletes only
+archived rows, and the claimed waiting-list entry behind a booking with it.
+`daily_cleanup()` clears participants' and her notes 30 days after the event,
+and deletes pending bookings older than seven days. Two email templates,
+`booking_cancelled` and `waitlist_removed`, joined the type CHECK.
+
+**Verified reviews** (`20260929000000_reviews.sql`). A testimonial records
+the booking it was written from (`registration_id`, one testimonial per
+booking, set to NULL if the booking is deleted), `photo_url`, `consent_at`
+(required when `source = 'participant'`), `locale`, `hidden`, and her home
+page selection (`on_home`, `home_order`). Visitors see approved rows that are
+not hidden, and only through a grant on named columns, which leaves out the
+booking and the consent: a public query naming another column is refused. The
+dashboard's `pending_testimonials` no longer counts hidden ones.
+
+**`admin_event_overview`** gives each event a `status` (`draft`, `upcoming`,
+`ongoing`, `ended_pending` when it is over with a payment or refund still
+pending, `archived`), `taken` and `capacity`, and five numbers: `waiting`
+(in line, no live offer), `pending_payments`, `refund_requested`,
+`offers_open` and `refunded`. The admin list's tabs and the dashboard's
+"Evenimente" count read the status. **`publish_event_draft()`** publishes a live
+event's private changes (`content_drafts.event_id`) and leaves its date, times,
+price, currency and places alone once it has ended.
 
 ### Why `event_availability` is not `security_invoker`
 
@@ -166,14 +353,20 @@ Do not edit the baseline. Write a new dated migration.
 npx supabase migration new descriptive_name
 # edit supabase/migrations/<timestamp>_descriptive_name.sql
 npx supabase db reset      # replays everything from scratch
+npx supabase gen types typescript --local > lib/database.types.ts
 npm run test:e2e
 ```
 
+The third line regenerates the TypeScript types every Supabase client uses. Skip
+it and the code keeps compiling against the old schema: a renamed column still
+type-checks, then fails at run time.
+
 Checklist for a new table — the third item is the one people forget:
 
-- [ ] `create table if not exists`
+- [ ] `create table` — not `if not exists`: a migration runs exactly once, and `if not exists` would silently skip a table that already exists in another shape
 - [ ] `alter table ... enable row level security`
-- [ ] **`revoke all ... from anon`, then grant back only what is public**
+- [ ] **`revoke all ... from anon, authenticated`, then grant back only what is needed**
+- [ ] For a function: **`revoke all on function ... from public`** first — see "Every function in `public` is an HTTP endpoint" above
 - [ ] **`grant`** for each of `anon` / `authenticated` / `service_role`
 - [ ] `drop policy if exists` then `create policy` (idempotent, so it re-runs)
 - [ ] Index anything a query filters or orders on
@@ -183,8 +376,11 @@ Checklist for a new table — the third item is the one people forget:
 
 **Why the revoke comes first, and is not optional.** Supabase's project setup
 runs `alter default privileges in schema public grant all on tables to anon`.
-Every table you create inherits *all* privileges for `anon` — SELECT, INSERT,
-UPDATE and DELETE — before you have written a single grant. Nothing in this
+On the local stack, every table you create inherits *all* privileges for
+`anon` — SELECT, INSERT, UPDATE and DELETE — before you have written a single
+grant. Re-verified on 22 September 2026 with CLI 2.117.0, despite a comment in
+`supabase/config.toml` suggesting new tables are no longer exposed by default.
+Production grants less by default; see the last section. Nothing in this
 repository says so, and `pg_dump` does not print default privileges as table
 grants, so the only way to see it is to ask a freshly built database:
 
@@ -233,6 +429,12 @@ before the constraint:
 update public.events set max_participants = null
  where max_participants is not null and max_participants <= 0;
 ```
+
+> The lesson stands; do not copy that statement. `events_capacity_positive` was
+> replaced by `events_capacity_non_negative` in
+> `20260918000000_capacity_is_required.sql`, because zero became a legal
+> capacity meaning "sold out" — so this repair would now erase a deliberate
+> value. A repair has to be written against the rule you are introducing.
 
 ---
 
@@ -309,10 +511,9 @@ select grantee, table_name, string_agg(privilege_type, ', ' order by privilege_t
  order by grantee, table_name;
 ```
 
-Note there is deliberately **no** "applied migrations" query. The CLI has never
-driven this project and `supabase_migrations.schema_migrations` does not exist
-here — a query against it errors, which is more misleading than useful. That is
-changing; see below.
+There is no saved "applied migrations" query because the CLI answers that
+better: `npx supabase migration list --linked`. The ledger behind it,
+`supabase_migrations.schema_migrations`, has existed since 11 September 2026.
 
 ### Applying a change
 
@@ -327,7 +528,8 @@ changing; see below.
    that check; prefer renaming the file to a later timestamp, because the check
    is worth keeping.
 5. Deploy the code, if the change needs any.
-6. Once it is live, it gets folded into the baseline — see below.
+6. Leave the file where it is. Migrations stay in `supabase/migrations/` for
+   good — see "The baseline is frozen" below.
 
 The remote has had a migration ledger since 11 September 2026. Before that it
 had none, and every change went in through the SQL Editor by hand.
@@ -371,10 +573,10 @@ itself, which is the whole point of having a ledger.
 honest if it really has. That was checked first, by dumping both schemas and
 diffing:
 
-```bash
+```powershell
 npx supabase db dump --linked -f prod-schema.sql
 npx supabase db dump --local  -f local-schema.sql
-diff prod-schema.sql local-schema.sql
+git diff --no-index prod-schema.sql local-schema.sql   # not `diff`: in PowerShell that is Compare-Object, which compares the two names
 ```
 
 77 lines differed, in three categories and none of them structural: comment text
@@ -385,32 +587,39 @@ exactly — 13 tables, 18 policies, 11 indexes, 25 constraints, 3 functions, sam
 names on both sides.
 
 Delete the dumps afterwards. They are a snapshot that goes stale immediately,
-and a full one carries real people's names and email addresses.
+and a full one carries real people's names and email addresses. `.gitignore`
+does not cover these two file names, so a stray `git add -A` would commit them.
 
-### Folding into the baseline
+### The baseline is frozen — nothing is folded into it any more
 
-The baseline is only trustworthy if it describes what production actually has,
-so a migration is merged into it **after** it has been applied to production,
-never before. Folding early would make the baseline assert a schema that does
-not exist yet, and a fresh `db reset` would then disagree with the live site.
+Folding used to be the routine: once a few migrations had reached production,
+merge them into the baseline and `git mv` the originals to
+`migrations-archive/`. Since production gained a migration ledger on
+11 September 2026 that routine is unsafe, for two reasons:
 
-The cycle, per batch:
+- **It breaks `db push`.** The ledger records every version it applied. Move a
+  file out of `supabase/migrations/` and the remote holds a version the local
+  folder no longer has, so the next `npx supabase db push` refuses to run until
+  each folded version is marked `reverted` with `migration repair`.
+- **The baseline is already applied.** Production recorded `00000000000000` as
+  done, so editing that file changes nothing live — which is why CLAUDE.md
+  forbids editing it.
 
-1. Migrations accumulate in `supabase/migrations/` as they are written, applied
-   and committed. Reading the baseline plus two or three files is fine.
-2. When about five have built up — or at a milestone — fold them into the
-   baseline and `git mv` the originals to `migrations-archive/`.
-3. Prove the fold changed nothing: dump the schema before and after, and diff
-   the `CREATE`/`GRANT`/`POLICY`/`COMMENT` lines. They must be identical. This
-   is not optional; hand-merging SQL is where a silent divergence gets baked in
-   permanently.
-4. Run the suite, then commit the fold on its own.
+So every change stays a dated migration, permanently. The price is that the
+current schema is the baseline *plus* every file after it, and the baseline's
+own comments describe 11 September 2026 — "NULL capacity means unlimited", for
+one, which `20260918000000_capacity_is_required.sql` reversed. Read the later
+migrations before trusting a baseline comment.
 
-`20260912000001_object_comments.sql` never participates: the descriptions are
-easier to read collected in one file than scattered through a baseline of a
-thousand lines. It is no longer edited in place — `db push` will not re-apply a
-migration it has already recorded — so describing a new object means a new dated
-migration, which the fold will absorb like any other.
+If the list ever grows unwieldy, squashing is still possible — as a planned
+operation agreed with Rares, not a habit: dump production's schema, write the
+new baseline from it, prove the two identical by diffing, and repair the ledger
+in the same sitting (`migration repair --linked --status reverted` for the old
+versions, `--status applied` for the new baseline).
+
+Object descriptions follow the same rule. `20260912000001_object_comments.sql`
+is history now; describing a new object, or correcting an old description,
+means a new dated migration with the `comment on` lines in it.
 
 ### A note on default privileges
 

@@ -296,7 +296,8 @@ There is no built-in "parse this as if in zone X", so the conversion works
 backwards using `Intl`, which knows every zone's rules including daylight
 saving: pretend the wall clock is UTC, ask what that instant reads as in
 Bucharest, and the difference is the offset. Verified across both daylight-saving
-transitions.
+transitions, though not in the small hours of the changeover nights, where it
+was an hour out until Phase 9 found it.
 
 The previous plan file listed this as fixed. It was not.
 
@@ -1274,6 +1275,552 @@ staying put.
 
 ---
 
+## Part 12 — The overhaul, and the groundwork under it
+
+On 24 September 2026 Rares asked for a complete overhaul of the admin panel and
+a long list of public-site changes. His brief was specific about who uses what:
+the instructor works in the admin from a computer 60–70% of the time, but has to
+manage from her phone when she's away from one, and visitors mostly arrive on
+phones from Instagram. He asked for a plan before any code, with every choice
+offered as options and a recommendation.
+
+So the first deliverable was a conversation, not a commit. Thirteen decisions
+were settled with him in three rounds of questions: one RO/EN switch per form
+instead of stacked English boxes, site content split into sections with a side
+menu, archives as a tab inside each section, reviews verified by an emailed
+link rather than an email-and-phone check, and so on. Where I made a call
+myself, the plan says so and why. The result is
+[OVERHAUL.md](OVERHAUL.md): twelve phases, each ending with the full test suite
+and a commit he approves.
+
+### Phase 0: making failures visible before building on them
+
+**Typing the database found a crash the audit had predicted.** The Supabase
+clients had no type information, so every row was `any`. Generating types from
+the schema (`lib/database.types.ts`) produced 30 errors. One was the share-image
+route slicing an event's start time, which can be empty since end dates arrived.
+That was a real 500 on every event announced without a time (B8). Most of the
+rest were columns such as `published` and `created_at` that had defaults but
+still allowed NULL, a third state nothing was designed for. A migration now fills
+any gaps and forbids NULL, so the types describe the data as it really is.
+
+**Saves that failed looked exactly like saves that worked.** Supabase returns
+errors rather than throwing them. The admin editors never looked at them, so
+they closed after a duplicate slug or an expired session, and her work was gone
+(B5). Every admin write now goes through `must()`, which turns the error into a
+plain sentence ("that address is already used by another page"). The editor
+stays open with everything she typed. `alert()` and `confirm()` gave way to
+toasts and a confirmation dialog in the admin's own style. The dialog focuses
+Cancel first when the action destroys something.
+
+**The error was more cautious than the test.** The first version of the "which
+field failed" logic read the column name from the error's `details`, and it
+worked with the service key. In the browser, signed in as the admin, `details`
+was null. Postgres deliberately blanks the key of a unique violation for users
+under row-level security, because it could reveal a row they may not read. The
+constraint's name (`blog_posts_slug_key`) still carries the column, so that is
+what the code reads now. It is also a reminder that a test with more privileges
+than the real user can pass for reasons the real user never gets.
+
+**A waiting-list payment charged the wrong currency.** Checkout had been fixed
+to use each event's currency, but the waiting-list claim route was an older copy
+of the same code and still charged lei (B1). Both now call one
+`createCheckoutSession()`, and the Stripe session's parameters come from a pure
+function a test can check without a Stripe account. The same function builds the
+return addresses from the site's configured URL. Before, it used whatever
+`Origin` a caller sent, which let anyone choose where Stripe redirected after
+payment (S4).
+
+**Duplicates that had already drifted.** Seven admin pages kept two copies of
+each query. On the events page the two had diverged, one sequential and one
+parallel. They became one hook (`useAdminData`). Also merged: the email check,
+the `.env` parser (written twice, with different handling of quotes; both now use
+Node's own), and the share images' colours, which had kept a rose the site had
+stopped using. A test now compares that palette with the CSS.
+
+### Phase 1: a frame that remembers, and a dashboard that speaks
+
+**The frame used to decide its shape by reading the address.** One client
+layout wrapped the whole admin and compared the pathname with the three sign-in
+addresses to decide whether to draw the sidebar. Route groups let the folders
+decide instead: `(auth)` for the sign-in pages, `(panel)` for the rest. That
+also let the panel's layout run on the server, which is what a remembered
+sidebar width needs. The choice lives in a cookie the server reads before it
+sends any HTML. Kept in `localStorage`, it would have drawn the sidebar wide and
+snapped it narrow on every page load.
+
+**Widening over the page, not beside it.** Rares wanted the narrow rail to
+open when the pointer rests on it. If its grid column widened, the whole page
+would slide sideways every time the pointer crossed the left edge. So the panel
+sits inside the column, and when pinned narrow only the panel widens. The page
+underneath doesn't move. It opens after 120 ms, so a pointer passing across the
+screen doesn't flash it, and closes 250 ms after the pointer leaves, which
+forgives a small slip off the edge.
+
+**A title that kept coming back.** Every admin tab used to have the same title
+(B21). Each page now sets its own. That worked when moving between pages and
+failed when a page was opened from the address bar. A probe of the `<title>`
+element showed why: Next.js wrote the layout's title into it one millisecond
+after the page had set its own. The page's title now puts itself back whenever
+something replaces it. The test waits a second after a full load, because that
+is the case that failed.
+
+**An event could end before it began.** Computing each event's start and end as
+instants exposed a gap in the old checks: they compared times only when an end
+date was filled in, so a one-day event from 18:00 to 10:00 saved without a
+murmur. On the new dashboard it would have counted as over before it started. A
+single constraint now compares the two instants. The instants themselves became
+generated columns rather than trigger-maintained ones, because Postgres refuses
+to let anyone write a generated column, so it can never disagree with the date
+and times it comes from. The catch is that Supabase's generated types don't know
+that, so the events editor has to leave both columns out of what it saves.
+
+**A dashboard that says what is waiting.** The old dashboard showed five totals
+that answered no question: every registration ever made, every post ever
+written. Rares defined what each number should mean: events not yet ended,
+payments still pending, unread messages, testimonials to approve, drafts. The
+new rows say each count as a sentence, and Romanian has three plural forms:
+"1 plată", "2 plăți", "20 de plăți", and then "101 plăți" again, because the
+third form returns after each hundred. `Intl.PluralRules` knows the rule, and
+a test pins it down. Rows for things waiting on her turn rose, and at zero they
+say "Totul la zi", so the eye goes only where it is needed.
+
+### Phase 2: her words, in her voice, or visibly missing
+
+**The content screen showed whatever happened to be in the table.** It listed
+every row, grouped by a column in the database, each field with its own Save
+and an English box stacked under it. A field only existed if a migration had
+inserted its row, which is how a section called "general" ended up on screen.
+Now every field is described once, in code: its section, its label, what it is
+for, whether it has an English version, and what the site shows while it is
+empty. The admin draws its ten sections from that description, the public
+pages read their fallbacks from it, and a field's row is created the first time
+she saves it.
+
+**One switch instead of two boxes.** Rares chose a single RO / EN switch per
+form. In English each field shows the Romanian text above it, and under every
+field a line says what a visitor would see if it stayed empty: the Romanian
+text, a plain label, a dashed marker, or nothing. That answers the question she
+would otherwise have to answer by opening the site in another tab.
+
+**Deleting the words nobody wrote.** The home page used to fall back to a
+headline and a tagline invented by the previous AI, and they had spread into
+page titles, the share card and the root description. They are gone. Headings
+and buttons still fall back to plain labels, which point somewhere and claim
+nothing. Her own words show a dashed marker named after the part. The same rule
+reached the structured data: no town and no person's name unless she supplies
+them, where there used to be "Cluj-Napoca" and a placeholder name.
+
+**Legal pages that are true on the day they appear.** The drafts describe what
+the site actually does, which meant checking it. The cookie policy says the
+statistics run without cookies, and at the time they did not: PostHog kept an
+identifier in the browser. One line from phase 11 came forward so the sentence
+became true. What only she knows (her legal name, her registration number, her
+address) is a `{{token}}` that shows as a dashed marker until she fills it
+in. The ANPC pictogram is official artwork, so she uploads ANPC's own file
+rather than the site drawing an imitation.
+
+### Phase 3: writing on the page she publishes
+
+**The editor was a form; now it is the page.** A post used to be a title field,
+a slug field and two stacked editors with a Save button that closed the whole
+thing. The editor now has an address of its own, and the title, subtitle and
+text are set exactly as the published article sets them, from one typography
+file both share. That file replaced `prose-sage`, a class the pages had used for
+months that never existed: the typography plugin has no sage theme, so it
+quietly did nothing, and headings came out in a heavy sans-serif that looked
+like a different site.
+
+**Saving is no longer something she does.** Autosave, and with it a question
+autosave raises at once: on a live post, every half-written sentence would go
+public. Its changes wait in `content_drafts` until "Publică modificările", and
+visitors keep reading the published version. Preview shows the private version
+inside the real public layout, which needed the admin's session on a public
+page. That is exactly what took three pages down with 504s earlier in the
+month, so the preview reads the post in the browser instead of on the server.
+
+**The tests found three things I would have shipped.** A test that pasted an
+image from an unknown host into a post brought the whole article down: the
+first picture in a post becomes its card picture, and `next/image` throws on a
+host it does not know. The leave guard, which catches link clicks before
+anything else, swallowed the editor's own Back button, so an empty post was
+saved instead of thrown away. And an address that another post already had was
+invisible on a live post, because its changes sit in a table the unique
+constraint does not look at. The editor now checks before saving.
+
+**Videos wait to be asked for.** A YouTube frame contacts Google as the page
+loads, so every post with a video needed a cookie banner the site has
+promised not to have. Each one is now a placeholder that loads the video when
+pressed, from YouTube's no-cookie host, with no thumbnail (fetching one would
+contact Google too). The stored HTML keeps the real frame, so nothing is lost
+if that ever changes. Along the way, the portrait-video bug the audit
+reproduced turned out to be a shape written in one attribute and read back
+from another.
+
+### Phase 4: an event has a life, and the site follows it
+
+**Nothing knew when an event was over.** The booking function counted seats
+and never looked at the clock, so an Instagram story from the spring still
+opened a page with a working payment button. Now the database refuses once an
+event has started, the four routes that lead to it refuse in the same terms,
+and the page follows the event: the booking panel before, a notice once it
+has begun, and once it is over, what the people who came said about it. Past
+events that she has not hidden become an archive, twelve to a page.
+
+**The rule for a seat, written once.** Whether a booking holds a seat was
+written out twice, in the public count and in the booking gate, and kept
+identical by hand. It is one function now, and a booking she removes frees its
+seat in both places at once. The admin overview reads it too, and gives every
+event a state and five numbers: who is waiting, whose payment is pending, who
+asked for a refund, whose offer is unanswered, who was refunded. Each number
+opens those people.
+
+**A claim link that lost its seat used to call itself invalid.** When someone
+booked the last seat before the waitlisted person pressed their link, the page
+told them the link was invalid, and worse, their unanswered offer went on
+counting as a promised seat, so the next seat was offered to nobody. They get
+an apology now, and are back at the front of the queue.
+
+**The event editor borrowed the blog's.** Rather than copy phase 3's autosave
+into a second editor, it moved into a hook both share; the blog's tests
+passed before and after, which was the point of having them. What an event
+adds is a lock: once it has ended, its date, price and places are what people
+paid for, so the editor disables them and the publish function ignores them.
+
+**Then a round of polish, from Rares going over the panel.** An event's row
+did nothing under the pointer: its only hover changed a colour its own text
+overrode. It cannot be one link like a post's row, because its numbers are
+links, so the title's link now stretches over the row and the numbers sit
+above it. The order menus opened as the square grey list Windows draws; the
+customizable select lets the page draw it instead, but sizes the closed
+control to whichever order is chosen, which pulled the search box sideways
+at every change, so the control has a width of its own. The sort labels now
+say which way they run. The sidebar's toggle had its lines running into its
+chevron; it has Chrome's proportions now, read out of Chromium's source
+rather than guessed. The top bar came down to the public bar's full-width
+height, measured at 52 pixels (the comment there said 51), and on a wide
+screen the content page's menu moved into the middle of the empty space
+instead of hugging the form.
+
+### Phase 5: everyone on one list
+
+**Two lists became one.** Bookings and the waiting list lived in separate
+tables and, in the panel, on separate screens, though to her they are all
+people coming, or hoping to come, to an event. They are one list now, with an
+Active tab and an Archive, searchable by name, email, phone or event, and
+filtered from the address so the dashboard and each number on an event open
+it already narrowed. Deciding what is archived took the longest to phrase and
+the least code: a view in the database says it, once, for the list, its counts
+and the delete that works only on the archive.
+
+**A panel for one person.** Their contact details (with WhatsApp, which is how
+she actually reaches people), their note and when they agreed to it being
+kept, her own note that saves itself, every event under the same email, and
+what she can do: mark a refund asked for or made, or cancel the booking with a
+reason and, if she ticks it, an email in the language they booked in.
+
+**The booking form asks what she needs to know.** An optional note, often
+about health, kept only with its own tick and cleared 30 days after the event
+by a daily job; a box for news about future events, unticked; one line
+pointing to the privacy policy. The free and paid bookings had near-identical
+code paths in the form; there is one now, with the waiting list on it too.
+
+**Emails learnt the reader's language, and to say when they fail.** They used
+to go in Romanian with the date as "2026-10-10", and a failed send was
+indistinguishable from a sent one. Against the local database they now land in
+the local mailbox instead of the live Resend account, which is also how the
+tests read them.
+
+**Two findings.** Phase 4 made event descriptions rich text and nobody told
+the calendar: every entry, emailed or downloaded, carried the HTML tags. And an
+Excel library that compresses in a background worker would have been refused
+by the site's own security policy on the first large export, so the workbook
+is written by hand, a few dozen lines over a small zip library.
+
+### Phase 6: testimonials from the people who came
+
+**Nothing could write a testimonial.** There was a route that accepted them and
+no form that used it, and the admin could only approve what was already in the
+table, so testimonials had to be typed into the database by hand, with a name
+and a star rating she made up for them. Now the people who came write their
+own, through a personal link sent to the email they booked with: the morning
+after an event, or when they ask for it on the site. What arrives waits for
+her approval, and carries a mark saying it came from someone who booked.
+
+**The link had to be something a leaked database could not replay.** Only its
+hash is stored, it works once, and it lapses after two months. The page that
+sends it answers the same thing whatever email is typed into it, so it cannot
+be used to find out who went where.
+
+**A photo from a phone knows where it was taken.** The browser shrinks it and
+the server re-saves it, which is what leaves the location behind; the test
+writes a GPS position into a photo and checks it is gone.
+
+**Her part got smaller, on purpose.** She approves, hides, picks the ones for
+the home page and puts them in order. She no longer sets the name or the
+stars: those are the writer's now.
+
+**One thing turned up in the tests.** Since phase 5 a testimonial outlives its
+event, and the tests that tidied up by deleting their event had been leaving
+their testimonials behind on the testimonials page, a dozen of them by the time
+anyone looked.
+
+### Phase 7: every email in one voice, and news for the people who asked
+
+**The emails were bare HTML from a plain box.** Seven templates, each a raw
+fragment she could only edit as markup, sent with whatever name the sending
+address carried and no way to reply to her. Now every email the site sends is
+drawn in one layout (her name at the top, her business and address at the
+bottom) and comes from the site's name, with replies going to her. She edits
+each one with the placeholders as chips in the text and sees, beside it, the
+real email filled in with her next event, at a phone's width or a computer's.
+One button sends her what is on screen as a test.
+
+**The preview had to be the email, not a picture of it.** The functions that
+fill a template in and draw the layout run in her browser for the preview and
+on the server before sending, so the two cannot disagree.
+
+**Empty lines had been reaching people.** A confirmation for an event without
+a WhatsApp group ended in "Alătură-te grupului de WhatsApp:" and a blank link,
+and an event with no hour yet printed "Ora:" and nothing. A line whose value is
+empty is now left out. Subjects had been escaped as if they were HTML, so
+"Yoga & brunch" arrived as "Yoga &amp; brunch".
+
+**Announcements.** She picks people on the Registrations page, or everyone,
+and writes once in each language, with events as cards. Before she sends, the
+page says who will receive it and who is left out and why: only people who
+ticked the box for news when they booked, and not anyone who unsubscribed
+since. Every announcement has an unsubscribe link and the headers mail apps
+use for their own Unsubscribe button. The link's page does nothing until its
+button is pressed, because mail scanners follow every link in an email.
+
+**Two offers at once could promise one seat twice.** Counting the free seats,
+choosing who is next and stamping their links were three separate requests,
+so a refund and her save arriving together could both hand out the same seat.
+All three now happen in one database step, under the lock bookings already
+take; the test fires six offers at two seats and gets two.
+
+**One bug the phone screenshots caught.** The unsubscribe page printed
+"unsubscribe.ask" instead of its sentence: public pages fill placeholders
+through next-intl, which wants the value passed in, while the admin panel's
+translator replaces them by hand afterwards. The page used the admin's habit.
+
+### Phase 8: an inbox she can read like letters
+
+**Messages were a pile.** Every message the contact form had ever received sat
+on one page, newest first, each with a delete button: nothing to say which
+were new, no way to keep one aside or put one away, and no way to answer
+except copying the address. The database had been ready since phase 1: read,
+starred and archived columns that no screen used. The test for the page
+checked that it showed "either messages or the empty state", which it would
+have done with any page at all.
+
+**Now it works like a mail app, in her colours.** Primite, Cu stea and Arhivă;
+a Necitite switch that the dashboard's count opens; a search that finds
+"Ionuț" when she types "ionut". A message opens beside the list on a computer
+and over the whole screen on her phone, with the sender and subject in the
+site's serif and the visitor's own line breaks kept. Opening it marks it read.
+
+**The reply had a gap nobody sees from the admin side.** The visitor wrote
+through a form, so they have no copy of what they asked. "Răspunde prin
+email" opens her own mail app with their message quoted underneath, and the
+quote's heading and the subject are in the language of the page they wrote
+from. That meant the contact form finally had to record which page that was.
+
+**"Select all" had to mean "all I saw".** Ticking every message that matches a
+search is a promise kept when she presses a button. In an inbox new messages
+keep arriving, so one that came in while she was choosing would have been
+archived, or deleted, unseen. The list remembers the newest message it had,
+and the test adds one mid-selection to check that it is left alone.
+
+**Two things turned up along the way.** The events list's Trecute tab counted
+events with the words for people ("Toți cei 12 … selectați"), which Romanian
+does not do. And the Supabase CLI, updated earlier that day, now marks
+computed columns as impossible to write in the generated types. That had been a
+runtime-only trap, written up as a warning in CLAUDE.md; the compiler catches
+it now.
+
+### Phase 9: the wait between pages, measured before it was dressed
+
+**Rares asked why pages paused before changing, and whether PostHog was the
+culprit.** The plan answered with a spinning lotus, but its first line was to
+measure. Two read-only questions to the Vercel and Supabase command-line tools
+settled it: the site's server ran in Washington, its database in Paris. Every
+read crossed the Atlantic twice, and a page reads in up to three rounds, one
+after another. The live home page took about a second to start answering.
+PostHog was innocent; it loads in the browser, after the page. One line in
+`vercel.json` moves the server to Paris, which a lotus could never have done.
+
+**The measurement also changed the plan.** A loading screen per list page
+looked like the obvious answer, until reading React's source showed that a
+loading screen, once shown, stays for at least 0.3 s: with the server beside
+the database, every click would have been slower with it. It would also have
+cost `?page=999` its 404. So the lotus went into a veil that appears only on a
+slow click: nothing for 0.15 s, then the page washes pale and stops taking
+taps, then the lotus turns. A quick page shows none of it.
+
+**Motion that answers a tap.** The page breathes out and the next one breathes
+in; an event's photograph glides from its card to the top of its page; the
+top bar stays still. "Înapoi sus" arrives with the bar when she scrolls up.
+The FAQ unfolds, in CSS where Chromium can and through a small script on
+Safari, which cannot, and which most of her visitors use.
+
+**The bug that only showed under a test harness.** The usual way to hide the
+old picture of a view transition, `display: none`, crashed WebKit outright
+once the test began watching the page's animations. Stripped to a bare page, it
+crashed three times in three, and `opacity: 0` never did. A visitor's Safari
+might never meet the condition; the site does not bet on it.
+
+**And the camera that could not see.** Playwright's WebKit runs view
+transitions but leaves them out of its screenshots and videos, so for a while
+the transitions looked absent on the iPhone engine. Listing the page's running
+animations showed they were all there. The look was judged in Chromium, and an
+iPhone on the preview gets the last word.
+
+**CI failed the first push, and the failure pointed somewhere else.** A new
+FAQ test had watched the answer unfold frame by frame, and on CI's Linux WebKit
+the page drew three frames in 0.7 s: it saw the answer already open. Replaying
+the new tests in Playwright's Linux image turned up something worse. One
+navigation in five hung for seconds inside the view transition, and logging
+each step showed where: WebKit was taking its picture of the page. Each page's
+content had been named for the fade, and a named element is pictured whole,
+which for a page several screens tall is an enormous image. Fading the picture
+of the screen instead took the median wait from 1.6–3.4 s to 0.45–0.62 s, and
+the hangs went away. Moving the fade there ran into React dropping the
+screen's picture from some navigations and not others (Chromium lost the fade
+where WebKit kept it); naming `<html>` explicitly makes React leave it alone.
+
+**The second push failed CI on a test that assumed every day has 24 hours.**
+A calendar test seeded a weekend 23 to 25 days ahead and expected two days and
+seven hours; run on 30 September, that weekend was the one the clocks go back,
+and the entry was rightly an hour longer. Reading the converter behind it
+found a real bug in hours nobody had tried: `zonedWallClockToUtc` read the
+zone's offset at the wrong instant, so from 01:00 to 03:00 on both changeover
+nights the calendar file was an hour out from the database. Swept every 15
+minutes against Postgres, the old version disagreed 40 times in 1,728
+readings and the new one never.
+
+### Phase 10: money, and what happens when someone changes their mind
+
+**Rares set the rules before the code.** One seat per email per event, and
+nobody books for a friend. Refunds are always in full. Cancelling from the
+confirmation email refunds automatically up to 48 hours before the start; after
+that, the instructor decides. Revolut Pay beside cards. A notice on her
+dashboard whenever a refund is made or a place opens without her. He asked me
+to say whenever a request of his could have legal consequences, being neither
+a lawyer nor a business owner. The two that did were the cancellation window,
+which the law leaves to the terms because the 14-day right of withdrawal does
+not cover leisure services booked for a date, and announced discounts. Romania
+applies the EU's 30-day reference-price rule to services too, through OG
+99/2000, so the code screen says so. The 48-hour window was ambiguous in
+writing ("48 hours after booking" or "before the event"), so I asked again
+with an example rather than guess which way money moves.
+
+**Revolut Pay turned out to be one word.** Stripe offers it to an account in
+Romania for lei and euro; a test session in the sandbox took
+`["card", "revolut_pay"]` for RON and EUR and quietly dropped it for dollars.
+The payment methods stay listed in the code rather than left to her Stripe
+settings, because a method whose money arrives in days would hold, or lose, a
+seat while nobody knew whether it was paid.
+
+**The checkout used to be two requests, and the gap between them was the
+bug.** The form booked the seat, then asked a second endpoint to start a
+payment for whatever booking id it named. That endpoint took any id in any
+state (B11), and a closed tab between the two requests left a seat held with
+no payment behind it. Now one request books and opens the session. The booking
+remembers its session, and a returning visitor is sent back to it. A
+replacement is recorded only if nobody else replaced it first. Stripe
+confirmed that it writes the session's id into the cancel address as well, so
+someone who turns back sees how long their place is held and can resume or
+let it go.
+
+**A test stand-in for Stripe, because CI should never hold real keys.** Every
+paid path in the suite used to stop at "Invalid API Key", which is why the
+money path was the least tested part of a booking site. `tests/fake-stripe.ts`
+is a small server that answers the calls the site makes, keeps the sessions and
+refunds it creates, serves a payment page, and signs its webhooks the way
+Stripe does. The site reaches it through a variable it honours only against
+the local database with a test key. The first run of the new webhook tests
+passed; the stand-in's own ids needed one fix, because the code screen's route
+checks a code's id the way Stripe shapes it.
+
+**What the tests found was older than this phase.** When a checkout claimed
+from the waiting list expired, the webhook deleted the booking, then looked
+for the claimant by the column the deletion had just cleared
+(`ON DELETE SET NULL`). The person stayed marked as claimed, never offered
+another seat, for as long as the code had existed. Nothing had ever tested an
+expired claim. The full suite (764 passed, 11 skipped) found one more of my
+own, by timing, in one run of two: when the site returned a payment for a
+booking she had removed, Stripe's report of that refund marked the unpaid
+booking refunded. The test now sends that report itself and fails on the
+old code every time.
+
+**Then the real sandbox.** The stand-in proves the site's logic, not Stripe's,
+so the dev server ran against the sandbox with the Stripe CLI forwarding its
+events. Through Stripe's own payment page: a card payment, a Revolut Pay
+payment through Stripe's test authorisation page, turning back with Stripe's
+arrow, resuming the same session, giving the place up, and the cancel link
+refunding both payments with Stripe's `charge.refunded` arriving afterwards
+and changing nothing. The promotion-code calls, written against a newer shape
+of Stripe's API, were checked against it too. The one thing the sandbox
+showed that no test could: the payment page names the business "Yoga
+sandbox", the Stripe account's public name, which only she can change.
+
+### Phase 11: statistics that leave the visitor alone
+
+**Rares asked how PostHog could be tested on this machine when this machine
+never sends to it.** The answer copied phase 10: a stand-in that receives what
+the site would send. The old rule, "not on localhost", was also the wrong
+rule. A phone on the Wi-Fi opens the dev server at `192.168.x.x`, which is not
+localhost, with production's key from `.env`, and every preview passed it too.
+The rule now is that statistics come from the site's public address and from
+nowhere else, and that a page on this machine never sends to PostHog itself.
+A stand-in on this machine may receive them, which is what made testing
+possible at all.
+
+**Looking at what was actually live changed the priorities.** The key in
+`.env` belongs to a project on PostHog's EU cloud, so that part of the plan
+was done already. But the project had session replay switched on, and the
+live site, still on the code of 22 September, loaded PostHog's recorder on
+every page, the admin panel included, and set its cookie. `feature` had fixed
+the cookie in phase 2 and the admin panel in phase 9, but a switch in
+PostHog's settings could still have turned recordings on for every visitor,
+because the library obeys those settings unless told otherwise. So the site
+now switches off everything it does not use in its own code and does not
+fetch PostHog's settings at all. What a visitor's browser sends is decided by
+code someone reviews, not by a toggle on a page nobody watches.
+
+**The first test run found nothing, and that was the useful result.** Not
+one event reached the stand-in: posthog-js quietly drops automated browsers,
+and Playwright's are automated three ways at once (`navigator.webdriver`, the
+user agent, the browser's brand list). Every "nothing is sent" test would
+have passed whatever the code did. With the suite's browsers made to look
+like a visitor's, the next run found two real faults in the cleaning: click
+identifiers survived under `$session_entry_fbclid`, and the cleaning blanked
+the property called `token`, which is where PostHog reads the project key it
+files each event under. PostHog would have thrown away every event in
+production, and the stand-in, which checked nothing, had accepted them. It
+now refuses an event without the key, the way PostHog does.
+
+**Six events, chosen for the questions she will ask.** Which events people
+look at (`event_viewed`), how many press the button (`booking_clicked`), how
+many end up with a place (`booking_completed`) or on the waiting list
+(`waitlist_joined`), what stopped the rest (`booking_failed`, with the
+server's reason), and which posts are read to the end (`blog_post_read`).
+None carries a name, an address or anything typed. Her own visits are not
+counted while she is signed in, and neither are the pages behind someone's
+personal link, nor a browser that asks not to be tracked.
+
+**Where the law came in.** Statistics without a banner rest on nothing being
+stored on the visitor's device, which is true and now tested, and on
+legitimate interest. The EDPB reads "access to the device" more broadly than
+that, so whether Romania needs consent even for this is a question for the
+lawyer who reads the legal pages; PRIVACY.md says so. The privacy policy
+draft now says what is collected, why and for how long, and PostHog's data
+processing agreement waits to be signed in the business's name.
+
+---
+
 ## Decisions worth defending
 
 **Keeping the tech stack.** Next.js + Supabase + Stripe was the right call and
@@ -1324,13 +1871,18 @@ Proven in production, not just in tests: a real card payment through Stripe →
 webhook → registration marked `completed` → confirmation email with a calendar
 invite at the correct local time.
 
-Two things are known-outstanding and are deliberately not fixed in code, because
-neither is a code problem:
+Three things are known-outstanding, and none of them waits on code:
 
-- **`charge.refunded` is not subscribed on the Stripe endpoint**, so the refund
-  branch cannot run (4.5). One checkbox in the Stripe dashboard, then worth a
-  refund test — refund → seat freed → waiting list notified has never executed
-  end to end.
+- **The money path has run against the Stripe sandbox, not yet on a
+  deployment.** `charge.refunded` is subscribed now, and Phase 10 ran payment,
+  refund and the freed seat end to end against the sandbox from a local
+  server; the waiting list's part runs in the suite, against the stand-in.
+  The migrations reached production on 5 October, after a rehearsal on a copy
+  of its data; a payment on the deployed site waits for the merge to `main`.
+- **The live site records sessions until the next merge.** It runs the code of
+  22 September, and her PostHog project has session replay on. Phase 11
+  switches it off in the code; the switch in PostHog can go off now, before
+  any merge.
 - **The launch blocker is content, not engineering.** Her photo, her story, the
   About text, the FAQs and a real business name to replace the placeholder. All
   editable from the admin panel; the list is in

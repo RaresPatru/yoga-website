@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BookmarkPlus, Check, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminLocale } from "@/components/admin/locale-provider";
+import { useConfirm } from "@/components/admin/ui/confirm-dialog";
+import { adminErrorKey, toAdminError } from "@/lib/admin/db";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 
@@ -43,6 +45,7 @@ export function WhatsappLinkField({
   onChange: (url: string) => void;
 }) {
   const { t } = useAdminLocale();
+  const confirm = useConfirm();
   const [links, setLinks] = useState<WhatsappLink[]>([]);
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
@@ -104,7 +107,7 @@ export function WhatsappLinkField({
     // Reported rather than swallowed. Row Level Security filters rather than
     // refuses, so a permissions problem here would otherwise look like a save
     // that worked and a list that stayed empty.
-    if (insertError) setError(insertError.message);
+    if (insertError) setError(t(adminErrorKey(toAdminError(insertError))));
     else {
       setLabel("");
       setLinks(await load());
@@ -113,11 +116,16 @@ export function WhatsappLinkField({
   };
 
   const remove = async (id: string) => {
-    if (!confirm(t("admin.confirm_delete_link"))) return;
+    const { confirmed } = await confirm({
+      title: t("admin.confirm_delete_link"),
+      confirmLabel: t("admin.delete"),
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     const supabase = createClient();
     const { error: deleteError } = await supabase.from("whatsapp_links").delete().eq("id", id);
-    if (deleteError) setError(deleteError.message);
+    if (deleteError) setError(t(adminErrorKey(toAdminError(deleteError))));
     else setLinks(await load());
     setBusy(false);
   };
@@ -135,14 +143,14 @@ export function WhatsappLinkField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="https://chat.whatsapp.com/…"
-          className="min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50 backdrop-blur-sm"
+          className="min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal placeholder:text-charcoal-light/50"
         />
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label={t("admin.manage_saved_links")}
-          title={t("admin.manage_saved_links")}
-          className="shrink-0 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal-light backdrop-blur-sm transition-colors hover:border-rose/30 hover:text-rose-deep"
+          data-tooltip={t("admin.manage_saved_links")}
+          className="shrink-0 rounded-xl border border-sage/30 bg-white/60 px-3 text-charcoal-light transition-colors hover:border-rose/30 hover:text-rose-deep"
         >
           <BookmarkPlus className="h-4 w-4" />
         </button>
@@ -155,7 +163,7 @@ export function WhatsappLinkField({
           if (e.target === e.currentTarget) setOpen(false);
         }}
       >
-        <GlassCard hover={false} className="max-h-[80vh] overflow-y-auto">
+        <GlassCard hover={false} floating className="max-h-[80vh] overflow-y-auto">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-serif text-lg text-charcoal">{t("admin.saved_links")}</h2>
             <button

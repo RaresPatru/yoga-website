@@ -28,16 +28,12 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
 
-/** Minimal dotenv parser. Same shape as the one in playwright.config.ts. */
+/** Reads a .env file with Node's own parser, the same one playwright.config.ts uses. */
 function parseEnvFile(path) {
   if (!existsSync(path)) return {};
-  const out = {};
-  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (match) out[match[1]] = match[2].replace(/^["']|["']$/g, "");
-  }
-  return out;
+  return parseEnv(readFileSync(path, "utf8"));
 }
 
 /**

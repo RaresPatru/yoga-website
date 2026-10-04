@@ -1,24 +1,38 @@
 import type { Faq } from "@/lib/site-content";
+import { FaqAccordion } from "@/components/faq-accordion";
 
 /**
  * The FAQ accordion.
  *
- * Built on native <details>/<summary> rather than React state, which buys a
- * lot for no code: keyboard support, correct screen-reader semantics, and
- * — the part that matters here — the answers exist in the HTML even when
- * collapsed. A JavaScript accordion that renders nothing until opened hides its
- * content from search engines, and "what should I bring to a yoga workshop" is
- * exactly the kind of long-tail question that brings in people who have never
- * heard of her.
+ * Built on native <details>/<summary>, which buys a lot for no code: keyboard
+ * support, correct screen-reader semantics, and — the part that matters here
+ * — the answers exist in the HTML even when collapsed. A JavaScript accordion
+ * that renders nothing until opened hides its content from search engines,
+ * and "what should I bring to a yoga workshop" is exactly the kind of
+ * long-tail question that brings in people who have never heard of her.
  *
- * No "use client" either: there is no state to manage, so this ships zero
- * JavaScript.
+ * Opening and closing are animated in app/globals.css ("THE FAQ"), and by
+ * FaqAccordion in a browser that cannot animate a <details> with CSS alone.
+ *
+ * THE FRAME
+ *
+ * A rounded box with a hairline between questions, and nothing clipping or
+ * blurring it. A blurred element is drawn on a layer of its own, where its
+ * clipping and its rounded corners do not always agree, which is how a frame
+ * comes to draw wrong in one browser and not another; and blurring the flat
+ * cream page behind it showed nothing.
  */
 export function FaqList({ faqs }: { faqs: Faq[] }) {
   if (!faqs.length) return null;
 
-  // schema.org FAQPage makes these eligible to appear as expandable questions
-  // directly in Google results.
+  /*
+   * schema.org's description of a list of questions and answers. Google no
+   * longer turns it into expandable results — it limited them to government
+   * and health sites in 2023 and stopped showing them on 7 May 2026
+   * (RESEARCH_FINDINGS.md) — so this is no longer about search results. It
+   * stays because it is an accurate, standard description of what is on the
+   * page, in a few hundred bytes, for anything that reads schema.org.
+   */
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -35,28 +49,22 @@ export function FaqList({ faqs }: { faqs: Faq[] }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
-      <div className="divide-y divide-sage/20 overflow-hidden rounded-2xl border border-sage/20 bg-white/60 backdrop-blur-sm">
+      <FaqAccordion>
         {faqs.map((faq) => (
-          <details key={faq.id} className="group">
-            {/* The outline is inset here: the rows sit flush inside the list's
-                `overflow-hidden` box, so the global 2px offset would be clipped
-                at the left and right edges. */}
-            <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 text-left font-medium text-charcoal marker:content-none focus-visible:-outline-offset-2">
+          <details key={faq.id} className="faq-item">
+            <summary className="faq-question">
               {faq.question}
-              {/* Rotates when the details element opens. Purely decorative, so
-                  it is hidden from assistive tech — <details> already announces
-                  its own expanded state. */}
-              <span
-                aria-hidden="true"
-                className="shrink-0 text-xl leading-none text-rose-deep transition-transform group-open:rotate-45"
-              >
+              {/* Turns into a × while open. Decorative: <details> announces
+                  its own state. */}
+              <span aria-hidden="true" className="faq-icon">
                 +
               </span>
             </summary>
-            <div className="px-5 pb-5 text-charcoal-light">{faq.answer}</div>
+            {/* Her line breaks kept: she types answers in a plain box. */}
+            <div className="faq-answer">{faq.answer}</div>
           </details>
         ))}
-      </div>
+      </FaqAccordion>
     </>
   );
 }

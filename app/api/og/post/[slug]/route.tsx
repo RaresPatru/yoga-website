@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { createPublicClient } from "@/lib/supabase/public";
 import { LandscapeCard, OG_SIZE } from "@/lib/og-card";
-import { SITE_NAME } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import { toDescription } from "@/lib/metadata";
 import { formatDate } from "@/lib/utils";
 
@@ -12,6 +12,9 @@ export async function GET(
 ) {
   const { slug } = await params;
   const locale = new URL(req.url).searchParams.get("locale") === "en" ? "en" : "ro";
+  /* The share card carries her business name, so it has to read the name she
+     set rather than the placeholder that used to be compiled in. */
+  const siteName = await getSiteName(locale);
 
   const supabase = createPublicClient();
   const { data: post } = await supabase
@@ -23,7 +26,7 @@ export async function GET(
     .maybeSingle();
 
   if (!post) {
-    return new ImageResponse(<LandscapeCard title={SITE_NAME} siteName={SITE_NAME} />, OG_SIZE);
+    return new ImageResponse(<LandscapeCard title={siteName} siteName={siteName} />, OG_SIZE);
   }
 
   const title = locale === "ro" ? post.title_ro : post.title_en || post.title_ro;
@@ -37,7 +40,7 @@ export async function GET(
         // The body is stored as HTML by the editor, so tags are stripped before
         // any of it is drawn onto an image.
         subtitle={toDescription(content, "")}
-        siteName={SITE_NAME}
+        siteName={siteName}
       />
     ),
     {

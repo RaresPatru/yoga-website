@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
-import { PostHogProvider } from "@/components/providers/posthog-provider";
 import { getLocale } from "next-intl/server";
-import { SITE_NAME, siteUrl } from "@/lib/site-config";
+import { siteUrl } from "@/lib/site-config";
+import { getSiteName } from "@/lib/site-content";
 import "./globals.css";
 
 /**
@@ -38,16 +38,22 @@ const inter = Inter({
 });
 
 /**
- * Root-level defaults only. Every localised page supplies its own title,
- * description and share image via generateMetadata — see lib/metadata.ts.
+ * Root-level defaults only: the site's name as the title, and no description
+ * (a sentence written for her would be an invented one). Every localised page
+ * supplies its own title, description and share image via generateMetadata;
+ * see lib/metadata.ts.
  * `metadataBase` is what lets those pages give relative image paths and still
  * emit the absolute URLs that crawlers require.
+ *
+ * A function rather than a constant, because the title is hers to change now and
+ * a `const` cannot await a database read.
  */
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl()),
-  title: SITE_NAME,
-  description: "Yoga pentru corp, minte și suflet",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    metadataBase: new URL(siteUrl()),
+    title: await getSiteName(),
+  };
+}
 
 export default async function RootLayout({
   children,
@@ -73,18 +79,13 @@ export default async function RootLayout({
     <html lang={locale} suppressHydrationWarning className={`${playfair.variable} ${inter.variable}`}>
       <body className="flex min-h-dvh flex-col antialiased">
         {/*
-          No Suspense boundary here any more.
-
-          It used to wrap {children} — the whole application — purely because
-          the analytics provider calls useSearchParams(). That made Next flush
-          the document shell immediately and stream everything after it, so the
-          response status was committed as 200 before any page could call
-          notFound(). Missing events answered "200 OK" while showing a 404.
-
-          The boundary now lives inside PostHogProvider, around the tracker that
-          actually needs it.
+          Nothing wraps {children} here, and nothing should: a Suspense
+          boundary around the whole application makes Next send the response
+          before any page can call notFound(), so missing pages would answer
+          200. The public site's analytics live in app/[locale]/layout.tsx,
+          where the admin panel never reaches them.
         */}
-        <PostHogProvider>{children}</PostHogProvider>
+        {children}
       </body>
     </html>
   );

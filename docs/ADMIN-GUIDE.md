@@ -15,9 +15,10 @@ cunoștințe tehnice pentru nimic din ce urmează.
 4. [Articole pe blog](#4-articole-pe-blog)
 5. [Testimoniale](#5-testimoniale)
 6. [Mesaje de la vizitatori](#6-mesaje)
-7. [Emailuri automate](#7-emailuri-automate)
-8. [Imagini pentru Instagram](#8-imagini-pentru-instagram)
-9. [Când ceva nu merge](#9-când-ceva-nu-merge)
+7. [Email-uri și anunțuri](#7-email-uri-și-anunțuri)
+8. [Coduri de reducere](#8-coduri-de-reducere)
+9. [Statistici](#9-statistici)
+10. [Când ceva nu merge](#10-când-ceva-nu-merge)
 
 ---
 
@@ -25,65 +26,146 @@ cunoștințe tehnice pentru nimic din ce urmează.
 
 **Meniu: Conținut site**
 
-Aici sunt textele și fotografiile de pe pagina principală și de pe pagina
-„Despre mine".
+Aici sunt toate textele și fotografiile de pe site, împărțite în secțiuni:
+Identitate, Rețele sociale, Meniu, Pagina de start, Despre mine, Întrebări
+frecvente, Blog, Subsol, SEO și firmă, Pagini legale. Alegi secțiunea din
+lista din stânga (pe telefon, din lista de sus).
 
-Fiecare câmp are două casete:
-
-- **prima** este textul în română — cel pe care îl vede aproape toată lumea;
-- **a doua** este traducerea în engleză, opțională. Dacă o lași goală, se
-  afișează automat textul în română. Nu rămâne nimic gol pe site.
-
-Apeși **Salvează** sub fiecare câmp. Apare un „Salvat" verde pentru câteva
-secunde.
+- **RO / EN** schimbă toate câmpurile secțiunii între română și engleză. În
+  engleză, deasupra fiecărui câmp vezi textul în română. Un câmp englezesc gol
+  folosește automat textul în română. Cifrele de lângă EN arată câte texte au
+  deja traducere.
+- **Tradu ce lipsește** (în modul EN) traduce toate câmpurile englezești goale.
+  Citește traducerea, apoi salvează.
+- Sub fiecare câmp scrie ce apare pe site cât timp e gol.
+- **Salvează modificările**, sus, salvează toată secțiunea deodată. Dacă pleci
+  din secțiune fără să salvezi, site-ul te întreabă înainte.
+- Textele lungi (prezentarea, povestea ta, paginile legale) au o mică bară de
+  formatare: aldin, cursiv, liste și linkuri. Enter face un paragraf nou.
 
 ### Ce e important să completezi
 
-Câmpurile necompletate apar pe site cu un chenar punctat și un mesaj de tipul
-„Fotografia ta principală — adaugă din panoul de administrare". Sunt vizibile
+Câmpurile necompletate apar pe site cu un chenar punctat și numele părții pe
+care o țin, de exemplu „Titlu principal" sau „Portret". Sunt vizibile
 intenționat, ca să știi ce mai ai de făcut. Lista completă, în ordinea
 priorității, e în `docs/CONTENT-NEEDED.md`.
 
 Cele trei care contează cel mai mult:
 
-1. **Fotografia ta principală** (pagina de start)
-2. **Scurtă prezentare** — 2–3 fraze despre tine
-3. **Povestea ta** (pagina „Despre mine")
+1. **Fotografia principală** (Pagina de start)
+2. **Scurtă prezentare**: 2–3 fraze despre tine (Pagina de start → Cine sunt)
+3. **Povestea ta** (Despre mine)
 
 Motivul e simplu: oamenii aleg un **om**, nu un site. Fotografia ta și povestea
 ta conving mai mult decât orice altceva de pe site.
 
 ### Întrebări frecvente
 
-Tot pe pagina „Conținut site", jos. Apeși **Adaugă**, scrii întrebarea și
-răspunsul, apoi **Salvează**.
+În secțiunea **Întrebări frecvente**. Apeși **Adaugă o întrebare**, scrii
+întrebarea și răspunsul, apoi **Salvează modificările**. O întrebare nouă e
+**ascunsă** până bifezi **Publicată pe site**. Schimbi ordinea trăgând de
+mânerul din stânga sau cu săgețile sus și jos.
 
 Merită efortul: întrebările practice („ce aduc cu mine?", „sunt începătoare, pot
 să vin?") sunt exact lucrurile care opresc pe cineva să se înscrie. Sunt și
 lucrurile pe care oamenii le caută pe Google, deci aduc vizitatori care nu te
 cunosc încă.
 
-Debifezi **Vizibil pe site** dacă vrei să ascunzi temporar o întrebare.
+### Paginile legale
+
+În secțiunea **Pagini legale** completezi datele firmei (denumirea, CUI-ul,
+sediul, emailul pentru date personale, TVA). Ele apar singure în politica de
+confidențialitate, în termeni și în politica de cookie-uri, care sunt deja
+scrise ca ciorne. Tot acolo încarci pictograma ANPC SAL. Un avocat ar trebui să
+citească documentele o dată înainte de lansare; ce anume, e în
+`docs/PRIVACY.md`.
 
 ---
 
 ## 2. Evenimente
 
-**Meniu: Evenimente** → **Eveniment Nou**
+**Meniu: Evenimente**
+
+### Lista
+
+Trei file, cu numărul lor lângă fiecare:
+
+- **Următoare**: tot ce încă poate avea nevoie de tine. Evenimentele care n-au
+  început, cele în desfășurare, și cele încheiate care mai au o plată sau o
+  rambursare în așteptare. Pe aceasta se deschide lista, și pe acestea le
+  numără rândul „Evenimente” din panou.
+- **Ciorne**: nepublicate.
+- **Trecute**: încheiate, fără nimic în așteptare.
+
+Sub fiecare eveniment apar numerele lui, doar cele care nu sunt zero. Întâi ce
+așteaptă după tine: **lista de așteptare, plăți în așteptare, rambursări
+cerute**. Apoi, pentru evidență: **oferte fără răspuns** (oameni de pe listă
+care au primit un link și n-au răspuns încă) și **rambursări făcute**. Fiecare
+număr deschide Înscrieri cu exact oamenii aceia. După ce un eveniment s-a
+încheiat, lista lui de așteptare nu mai apare: nu mai poate primi nimeni un loc.
+
+### Editorul
+
+**Eveniment nou** deschide editorul, care arată și se poartă ca cel de
+articole: se salvează singur, are **Previzualizare** (pagina adevărată, pe
+telefon sau calculator, în română sau engleză) și **Publică**. Un eveniment nou
+se salvează abia când are **titlu și dată**; până atunci bara scrie ce îi
+lipsește.
+
+După publicare, ce schimbi **nu apare pe site** până nu apeși **Publică
+modificările**. La publicare, dacă au apărut locuri libere, primii de pe lista
+de așteptare primesc un link (vezi mai jos), iar un mesaj în colț îți spune
+câți.
+
+**După ce un eveniment s-a încheiat, data, orele, prețul și locurile nu se mai
+pot schimba**: așa au fost rezervate și plătite. Titlul, descrierea și poza
+se pot corecta în continuare.
+
+În dreapta vezi starea evenimentului, locurile ocupate și cele cinci numere, și
+comutatorul **Apare în arhiva evenimentelor trecute**: după ce se încheie,
+evenimentul apare pe site la „Evenimente trecute”, cu ce au spus participanții.
+Îl poți scoate de acolo oricând; se aplică imediat.
 
 | Câmp | Ce înseamnă |
 |---|---|
-| Titlu (RO) | Numele evenimentului. Obligatoriu. |
-| Titlu (EN) | Traducerea. Butonul **→ EN** traduce automat; verifică rezultatul. |
-| Slug | Partea din adresă: `/events/atelier-de-yoga`. Litere mici și liniuțe. |
-| Data, Ora | Ora la care începe, ora României. |
-| Locație | Orașul sau adresa. |
+| Titlu | Numele evenimentului. Comutatorul **RO / EN** din bară arată câmpul în engleză, cu româna deasupra; **Tradu ce lipsește** completează engleza. |
+| Adresa evenimentului | Partea din adresă: `/events/atelier-de-yoga`. Se ia din titlu până la prima publicare; după aceea nu se mai schimbă singură, pentru că linkurile distribuite duc la ea. |
+| Data | Ziua în care **începe**. Singurul câmp obligatoriu dintre cele patru. |
+| Ora | Ora la care începe, ora României. **Poți lăsa gol** dacă nu știi încă: atunci pe site nu apare nicio oră, doar data. O completezi mai târziu și apare. |
+| Data de final | Doar dacă ține mai multe zile. Lasă gol pentru un eveniment de o singură zi. |
+| Ora de final | Când se termină. Lasă gol dacă nu vrei să promiți o oră de final. Dacă finalul ar fi înaintea începutului, câmpul îți spune și nu se salvează, dar restul da. |
+| Locație | Orașul sau adresa. Este textul care se vede pe site. |
+| Link hartă | **Opțional.** Deschizi Google Maps, apeși *Share/Distribuie* și lipești linkul aici. Sau scrii coordonatele: `46.7712, 23.5949` — util pentru un loc din parc, care nu are adresă. Dacă e completat, adresa de pe pagina evenimentului devine apăsabilă și deschide harta. Dacă lași gol, adresa rămâne text simplu. |
 | Preț | **0 înseamnă gratuit.** Orice număr mai mare cere plata prin card. Nu poate fi negativ. |
 | Moneda | RON, EUR, USD sau GBP. Implicit RON. Clientul plătește exact în moneda aleasă aici. |
-| Participanți maxim | Câte locuri sunt. Lasă gol dacă nu limitezi. Minim 1. |
-| URL Imagine | Alegi din Biblioteca Media. |
+| Participanți maxim | Câte locuri pot fi rezervate pe site — singurul loc unde se poate rezerva. Scade numărul dacă vrei să păstrezi locuri pentru cineva: din 15 pui 13 și rămân două ale tale. **Gol sau 0** înseamnă „locuri epuizate”: nimeni nu se mai poate înscrie, se poate intra doar pe lista de așteptare. |
+| Fotografie | Din Biblioteca Media, ca la articole. |
+| Descriere | Același editor ca la articole, cu paragrafe, liste, linkuri și video. |
 | Link WhatsApp | Grupul evenimentului. Se trimite automat în emailul de confirmare. Vezi mai jos. |
-| Publicat | **Cât timp e debifat, evenimentul nu se vede pe site.** |
+
+**Înscrierile se închid când începe evenimentul.** Din acel moment pagina lui
+spune „În desfășurare”, iar după ce se termină, „S-a încheiat”, fără formular.
+Un eveniment fără oră anunțată se închide la începutul zilei lui.
+
+> **Cum apare pe site.** Data și ora se hotărăsc separat.
+>
+> *Data:* o singură zi („9 octombrie 2026”), sau intervalul de zile dacă ai pus
+> și o dată de final („28 – 29 octombrie 2026”).
+>
+> *Ora:* dacă ai pus ora de început **și** ora de final, se vede intervalul
+> („18:30 – 19:45”). La un eveniment de mai multe zile asta se citește ca
+> programul ținut în fiecare zi. Dacă ai pus doar ora de început, se vede doar
+> ea. Dacă n-ai pus ora de început, nu apare niciun ceas — nici dacă ai
+> completat ora de final, pentru că „se termină la 17:00” fără o oră de început
+> nu ajută pe nimeni.
+>
+> **Dacă evenimentul trece de miezul nopții** — începe la 22:00 și se termină la
+> 01:00 — pune ziua următoare la **Data de final**. Site-ul arată atunci
+> „7 – 8 noiembrie 2026” și „22:00 – 01:00”.
+>
+> În calendarul oamenilor evenimentul intră întotdeauna cu durata reală, chiar
+> și când site-ul n-o scrie. Fără oră de început intră ca eveniment „toată
+> ziua”, adică o bandă peste zilele respective.
 
 ### Moneda
 
@@ -114,15 +196,42 @@ deja rămân exact cum au fost trimise.
 
 Site-ul numără singur locurile ocupate. Când se umple:
 
-- pe site apare **„Locuri epuizate"**;
+- pe site apare **„Locuri epuizate”**;
 - formularul de înscriere e înlocuit cu **lista de așteptare**.
 
-Dacă se eliberează un loc — cineva nu finalizează plata, sau ceri o restituire —
+Dacă se eliberează un loc — cineva nu finalizează plata, își anulează singur
+înscrierea, primește banii înapoi sau îl scoți tu de pe eveniment —
 prima persoană de pe listă primește automat un email cu un link valabil **24 de
 ore**. Dacă nu îl folosește, linkul expiră, dar locul rămâne liber și oricine se
 poate înscrie normal.
 
-Vezi cine așteaptă: **Evenimente** → butonul **Vezi lista de așteptare**.
+Vezi cine așteaptă: numărul **pe lista de așteptare** de sub eveniment deschide
+lista acelor oameni.
+
+**Primul venit, primul servit.** Linkul nu rezervă locul: dacă altcineva se
+înscrie înainte ca persoana de pe listă să apese, ea vede un mesaj de scuze și
+își păstrează locul în fruntea listei. Următorul loc eliberat înainte de
+eveniment îi este oferit tot ei.
+
+#### Când dai drumul la locuri, lista pleacă
+
+La un eveniment cu **Participanți maxim** gol sau 0 nu există niciun loc de dat,
+așa că nimeni de pe listă nu primește nimic, oricât ar aștepta. Lista pornește
+doar când pui tu un număr.
+
+**De fiecare dată când publici un eveniment sau modificările lui**, site-ul se
+uită câte locuri sunt libere și trimite atâtea linkuri, în ordinea în care
+oamenii s-au înscris pe listă. Dacă sunt 3 locuri libere și 10 pe listă, pleacă
+3 emailuri. Dacă nu e niciun loc liber, nu pleacă nimic. După ce evenimentul a
+început, nu mai pleacă niciunul.
+
+După publicare îți spune câte au plecat, într-un mesaj în colț. Nimeni nu
+primește același link de două ori: dacă publici din nou peste cinci minute, cei
+care au deja un link valabil sunt săriți.
+
+> **Deci:** înainte să pui un număr mare la un eveniment cu listă de așteptare,
+> gândește-te că fiecare loc liber înseamnă un email plecat imediat, în numele
+> tău.
 
 ---
 
@@ -138,33 +247,148 @@ Starea plății:
 | Etichetă | Ce înseamnă |
 |---|---|
 | Gratuit | Eveniment fără plată. Locul e confirmat. |
-| În așteptare | A început plata dar nu a finalizat-o încă. Locul e rezervat temporar. |
-| Plătit | Banii au intrat. Locul e confirmat. |
-| Restituit | Ai returnat banii. Locul s-a eliberat automat. |
+| Plată în așteptare | A început plata dar nu a finalizat-o încă. Locul e rezervat temporar, cel mult o oră. |
+| Plătit | Banii au intrat. Locul e confirmat. În panoul persoanei vezi cât a plătit și, dacă a folosit unul, codul de reducere. |
+| Rambursare cerută | O rambursare așteaptă decizia ta (vezi mai jos). |
+| Rambursat | Banii s-au întors. Locul s-a eliberat. |
+| S-a retras | Și-a anulat singur înscrierea, din linkul din email. Locul s-a eliberat. |
+| Anulat | L-ai scos tu de pe eveniment. |
 
 > **Datele acestea sunt personale.** Numele, emailurile și telefoanele
 > participantelor sunt vizibile **doar** aici, doar pentru tine. Nu apar nicăieri
 > pe site public. Pe site se vede doar numărul de locuri ocupate.
 
+**Un loc pe adresă de email.** La un eveniment, o adresă poate avea un singur
+loc. Cine vrea să vină cu cineva, îl roagă să se înscrie cu adresa lui.
+
+### Anulări din linkul din email
+
+Fiecare email de confirmare are la final „Dacă nu mai poți veni,
+anulează-ți înscrierea". Linkul deschide o pagină cu înscrierea și un singur
+buton, care spune ce se întâmplă cu banii:
+
+- **Cu cel puțin 48 de ore înainte de eveniment:** „Anulează și primește banii
+  înapoi". Banii se întorc automat, integral, pe cardul sau în contul Revolut
+  cu care s-a plătit. Nu faci nimic.
+- **Mai târziu:** locul se eliberează, iar rambursarea **așteaptă decizia ta**:
+  apare la „Rambursări de aprobat" pe panoul de control.
+- **După ce a început evenimentul** linkul nu mai anulează nimic; pagina îi
+  spune să-ți scrie.
+- **Evenimentele gratuite** se anulează pur și simplu.
+
+Orice anulare apare la **Noutăți**, sus pe panoul de control.
+
+### Rambursări
+
+Deschide persoana din **Înscrieri** și apasă **Rambursează 450 RON** (suma pe
+care a plătit-o). Te întreabă o dată, apoi banii se întorc integral prin Stripe.
+Rambursările sunt mereu integrale. O rambursare nu se mai poate anula.
+
+- **Cineva s-a retras târziu și cere banii?** Ai două butoane:
+  **Rambursează** sau **Nu rambursa**.
+- **O plată făcută pe altă cale** (nu prin Stripe) nu se poate returna de aici:
+  butonul e „Marchează ca rambursat", după ce i-ai dat tu banii.
+- **Rambursezi din Stripe, nu de pe site?** Merge și așa: site-ul află singur,
+  eliberează locul și îți arată la Noutăți.
+- **„Stripe nu a putut returna plata"** apare foarte rar (de obicei la Revolut
+  Pay): banii au revenit în contul tău Stripe și trebuie dați altfel. După ce
+  i-ai dat, apasă **S-a rezolvat**.
+
+### Când cineva își dă locul altcuiva
+
+Termenii spun că un loc plătit se poate ceda prin tine. Deschide persoana și
+apasă **Schimbă datele**: scrie numele, emailul și telefonul noii persoane.
+Bifează „Trimite-i confirmarea" ca să primească emailul cu invitația în
+calendar și propriul link de anulare. Linkul vechi nu mai funcționează. Dacă
+noua adresă are deja un loc la eveniment, nu se poate.
+
+Ca să le scrii celor bifați (sau tuturor celor din lista filtrată), apasă
+**Scrie un anunț** în bara de jos. Vezi [Email-uri și anunțuri](#7-email-uri-și-anunțuri).
+
 ---
 
 ## 4. Articole pe blog
 
-**Meniu: Articole** → **Articol Nou**
+**Meniu: Articole**
 
-Editorul funcționează ca un document normal: selectezi text și apeși pe butoane
-pentru **bold**, titluri, liste, citate.
+### Lista
 
-- **Imagini, audio, video:** butonul cu imagine deschide Biblioteca Media.
-- **Video de pe YouTube / Vimeo / Instagram:** butonul cu ▶ — lipești linkul
-  paginii, nu ai nevoie de cod. Reels-urile și Shorts-urile apar în format
-  vertical, ca pe telefon.
-- **Corectură ortografică:** butonul RO/EN/off. Pentru română, Chrome are nevoie
-  de dicționarul românesc instalat (Setări → Limbi → adaugă Română).
-- **Ascuns:** articolul rămâne salvat dar dispare de pe site.
+Articolele sunt împărțite în **Publicate**, **Ciorne** și **Ascunse**, cu
+numărul lor lângă fiecare. Căutarea găsește după titlu, subtitlu sau adresă, în
+română sau engleză, și nu ține cont de diacritice. **Ordine** le așază după
+ultima editare, după data publicării sau alfabetic. Un articol publicat la care
+ai schimbat ceva nepublicat are eticheta **Modificări nepublicate**.
 
-Butonul **→ EN** traduce automat titlul sau conținutul. E o traducere
-automată — merită citită înainte de publicare.
+Tot ce alegi rămâne în adresa paginii, așa că butonul Înapoi al browserului te
+întoarce exact unde erai.
+
+### Scrierea
+
+**Articol nou** deschide o pagină goală. Nu trebuie să salvezi nimic: articolul
+**se salvează singur** la o secundă și jumătate după ce te oprești din scris, cel
+puțin o dată la zece secunde cât scrii, și când treci în alt tab sau altă
+aplicație. Bara de sus arată **Salvat**, **Se salvează…** sau **Nu s-a salvat**.
+Dacă internetul cade, textul rămâne și în browser și ți se oferă înapoi data
+viitoare când deschizi articolul. Ctrl+S (⌘S pe Mac) salvează imediat.
+
+Dacă deschizi **Articol nou** și pleci cu **Articole** fără să scrii nimic, nu
+rămâne nimic în urmă.
+
+- **Coperta:** poza de sus a articolului și de pe card. Fără copertă, se
+  folosește prima imagine din text.
+- **Titlul și subtitlul** arată ca pe site. Subtitlul e opțional și apare pe
+  card și sub titlu.
+- **Adresa articolului** (în Detalii) se ia din titlu până la prima publicare.
+  După aceea nu se mai schimbă singură, pentru că linkurile deja distribuite duc
+  la ea.
+- **Autor:** vine completat cu autorul din Conținut site → Blog. Îl poți schimba
+  pentru un singur articol.
+- **Ascuns:** articolul dispare de pe site imediat, inclusiv de la adresa lui,
+  publicat sau nu.
+
+### Bara editorului
+
+- **Format** (primul buton): text normal, Titlu 2, Titlu 3.
+- **Aliniere:** un singur buton cu meniu; stânga e implicit.
+- **Liste:** cât ești într-o listă apar două butoane care fac dintr-un rând un
+  subpunct și înapoi (pe calculator merg și Tab și Shift+Tab).
+- **Imagine** deschide Biblioteca Media, doar cu imagini.
+- **Video:** lipești adresa de pe YouTube (și Shorts), Vimeo, Instagram
+  (postare sau reel) sau TikTok (adresa completă, cu /video/ în ea). Hărțile și
+  alte site-uri nu merg, și fereastra spune de ce.
+- **Link:** adresa și textul afișat. Dacă lași textul gol, se afișează adresa.
+  Când editezi un link vezi ce e acum și îl poți scoate. `https://` se adaugă
+  singur.
+- **Undo / Redo** își păstrează numele din engleză.
+- **Scurtături:** butonul cu tastatură (sau Ctrl+/, ⌘/ pe Mac) arată tot ce poți
+  face fără mouse. Multe merg doar scriind, inclusiv pe telefon: `## + Spațiu`
+  la început de rând face un titlu, `- + Spațiu` o listă, `**cuvânt**` îl
+  îngroașă. Dacă nu voiai formatarea, apasă Backspace imediat după.
+- **Corector ortografic:** butonul cu A și bifă îl pornește sau îl oprește.
+  Pentru română, Chrome are nevoie de dicționarul românesc (Setări → Limbi).
+
+Pe site, un video nu se încarcă până nu apasă cineva pe el: până atunci pagina
+nu contactează YouTube, Instagram sau TikTok. De aceea site-ul nu are nevoie de
+banner de cookie-uri.
+
+### Engleza
+
+Comutatorul **RO / EN** din bară arată câte texte au și variantă în engleză (de
+exemplu 2/3). În EN, fiecare câmp are deasupra textul în română. **Tradu ce
+lipsește** completează tot ce e gol în engleză, cu formatare cu tot. **Tradu din
+nou din română** înlocuiește textul în engleză cu o traducere nouă, după ce te
+întreabă; Undo îl aduce înapoi. E o traducere automată, care merită citită.
+
+### Publicarea
+
+- **Publică** verifică să existe titlu, adresă și text, apoi publică articolul.
+  Rămâi în editor, iar mesajul din colț are linkul spre articol.
+- După publicare, ce schimbi **nu apare pe site** până nu apeși **Publică
+  modificările**. Până atunci vizitatorii văd versiunea publicată.
+- **Previzualizare** arată articolul exact cum va fi pe site, cu modificările
+  nepublicate, pe lățime de telefon sau de calculator, în română sau engleză.
+- Meniul **⋯** are **Renunță la modificări** (revii la versiunea publicată) și
+  **Șterge articolul**.
 
 ---
 
@@ -172,20 +396,32 @@ automată — merită citită înainte de publicare.
 
 **Meniu: Testimoniale**
 
-Testimonialele trimise de participante apar aici ca **Neaprobat** și **nu se
-văd pe site** până le aprobi tu (bifa verde). Butonul X le șterge definitiv.
+Testimonialele le scriu participanții, printr-un **link personal** primit pe
+emailul cu care s-au înscris:
 
-Pentru fiecare poți completa:
+- **automat, în dimineața de după eveniment** (poți opri asta din Conținut site
+  → Testimoniale);
+- când apeși **Trimite invitațiile la testimonial** pe pagina unui eveniment
+  încheiat;
+- sau când îl cer ei, de pe pagina „Împărtășește-ți experiența" a site-ului.
 
-- **Nume** — un testimonial cu nume convinge mult mai mult decât unul anonim.
-  Dacă îl lași gol, se afișează „Participantă".
-- **Rating** (1–5) — **opțional**. Dacă îl lași pe „Fără", nu se afișează stele
-  deloc. Asta e intenționat: mai bine fără stele decât cu stele inventate.
-- **Link video** — dacă testimonialul e o filmare.
+Linkul e valabil 60 de zile și merge o singură dată. Nu primesc link cei care
+și-au anulat înscrierea sau au cerut banii înapoi.
 
-> **Testimonialele video merită cerute.** Sunt cea mai convingătoare formă de
-> recomandare pentru ateliere și retreaturi. Un clip de 20–30 de secunde filmat
-> cu telefonul e suficient. Îl încarci în Biblioteca Media și lipești linkul aici.
+Ce scriu ajunge în tab-ul **De aprobat** și **nu apare pe site** până apeși
+**Aprobă**. Pe fiecare vezi numele întreg, numele ales pentru site, evenimentul,
+stelele, textul și fotografia.
+
+- **Ascunde** îl scoate de pe site fără să-l ștergi; îl găsești în **Ascunse**.
+- **Pe pagina principală** îl pune pe pagina de start. În **Aprobate**, cele
+  alese stau primele; cu săgețile le schimbi ordinea. Dacă nu alegi niciunul,
+  pagina de start arată cele mai noi trei.
+- **Link video**: un link de pe YouTube, Instagram, Vimeo sau TikTok, care
+  apare sub text.
+- **Șterge** îl șterge definitiv, cu fotografia lui.
+
+Textul, stelele și numele sunt ale participantului, așa că nu se pot modifica.
+Așa rămâne un testimonial verificat.
 
 ---
 
@@ -198,40 +434,157 @@ Formularul e protejat împotriva roboților, deci nu ar trebui să primești spa
 
 ---
 
-## 7. Emailuri automate
+## 7. Email-uri și anunțuri
 
 **Meniu: Email-uri**
 
-Textele emailurilor trimise automat. Poți schimba conținutul; **nu schimba
-cuvintele dintre acolade** — `{{user_name}}`, `{{event_name}}` — pentru că
-acolo se completează automat datele reale.
+Două taburi: **Automate**, emailurile pe care site-ul le trimite singur, și
+**Anunțuri**, emailurile pe care le scrii tu.
+
+Toate arată la fel: sus numele site-ului (sau logoul, cum ai ales în Conținut
+site → Identitate), jos denumirea și sediul firmei, din Pagini legale. Pleacă
+cu numele site-ului, iar când cineva răspunde, răspunsul ajunge la adresa din
+**Conținut site → Email-uri**. Până o completezi, ajunge la adresa pentru date
+personale din Pagini legale.
+
+### Emailurile automate
+
+Sunt în ordinea în care le primește cineva: înscrierea, lista de așteptare,
+anularea, după eveniment. La fiecare scrie când pleacă. Apasă pe unul ca să-l
+schimbi.
+
+- **RO / EN**: scrii textul în română, apoi în engleză. Engleza lăsată goală
+  înseamnă că pleacă textul în română. „Tradu ce lipsește" o completează
+  singur; citește-o înainte să salvezi.
+- **Pastilele** („Nume", „Eveniment", „Data", „Locul"...) se completează cu
+  datele fiecărei persoane și ale evenimentului ei. Le pui cu butoanele de sub
+  subiect și de deasupra textului, acolo unde e cursorul.
+- **Un link singur pe rândul lui apare ca buton**, de exemplu „Rezervă-ți
+  locul". Un rând care rămâne fără valoare, cum ar fi „Ora:" la un eveniment
+  fără oră, nu apare deloc.
+- **Previzualizarea** (în dreapta, pe telefon dedesubt) arată emailul exact
+  cum ajunge, cu datele următorului eveniment, la lățime de telefon sau de
+  calculator.
+- **Trimite-mi un test** îți trimite ce vezi pe ecran, chiar nesalvat, la
+  adresa cu care intri în panou.
+- Nimic nu se schimbă până apeși **Salvează modificările**. Dacă pleci cu
+  modificări nesalvate, te întreabă întâi.
 
 | Email | Când se trimite |
 |---|---|
-| Confirmare înscriere | Imediat, la evenimente gratuite. |
-| Confirmare plată | După ce plata a intrat, la evenimentele cu preț. |
-| Cerere testimonial | Când o trimiți tu. |
+| Confirmare înscriere | Imediat ce cineva se înscrie la un eveniment gratuit, sau își ia un loc eliberat la unul, și când o trimiți cuiva căruia i-ai dat un loc. Are atașată invitația pentru calendar și linkul personal de anulare. |
+| Confirmare plată | Imediat ce ajunge plata pentru un eveniment cu plată. Are atașată invitația pentru calendar, linkul personal de anulare și data până la care banii se returnează automat. |
+| Pe lista de așteptare | Când cineva intră pe lista de așteptare a unui eveniment complet. |
+| Loc eliberat | Când se eliberează un loc: primii de pe listă primesc un link de rezervare valabil 24 de ore. |
+| Scos de pe lista de așteptare | Doar când bifezi „Trimite-i un email" când scoți pe cineva de pe listă. |
+| Înscriere anulată | Doar când bifezi „Trimite-i un email" la anulare. |
+| Invitație la testimonial | În dimineața de după eveniment (dacă invitațiile sunt pornite), când apeși „Trimite invitațiile" sau când cineva își cere linkul pe site. |
+| Testimonial: prea devreme | Când cineva își cere linkul înainte să se încheie evenimentul: îi spune de când poate scrie. |
 
 Fiecare confirmare are atașată invitația pentru calendar, cu ora corectă a
 României.
 
+### Anunțurile
+
+Un anunț pleacă **doar** la cei care au bifat, când s-au înscris, că vor să
+afle de evenimentele noi. Ceilalți apar la „rămân pe dinafară", cu motivul.
+Fiecare anunț are jos un link de dezabonare; cine îl folosește nu mai primește
+anunțuri, dar emailurile despre înscrierile lui vin în continuare.
+
+1. Din **Înscrieri**, bifează oamenii (sau filtrează lista și selectează-i pe
+   toți) și apasă **Scrie un anunț**. Sau, din **Email-uri → Anunțuri**, apasă
+   **Anunț nou**: pleacă la toți cei care au acceptat anunțuri.
+2. Scrie subiectul și textul, în română și în engleză. Cu butonul
+   **Eveniment** pui un eveniment ca un card: poza, data, locul și un buton
+   spre pagina lui.
+3. Verifică **Destinatarii** (câți îl primesc, cine rămâne pe dinafară) și
+   previzualizarea. Poți să-ți trimiți un test.
+4. Apasă **Trimite anunțul**. După ce pleacă nu se mai poate opri.
+
+După ce pleacă, anunțul arată la cine a ajuns și la cine nu. Dacă la unii nu a
+ajuns, îl poți trimite din nou doar lor. Ciornele stau în tabul Anunțuri până
+le trimiți sau le ștergi.
+
+> **Cineva îți cere pe alt drum să nu-i mai scrii?** Deschide-l în
+> **Înscrieri** și apasă „Oprește anunțurile către această persoană". E ca și
+> cum s-ar fi dezabonat. Dacă bifează din nou căsuța la o înscriere nouă,
+> primește iar anunțuri.
+
 ---
 
-## 8. Imagini pentru Instagram
+## 8. Coduri de reducere
 
-Pe fiecare pagină de eveniment și de articol există butonul **„Descarcă pentru
-Instagram"**.
+**Meniu: Coduri de reducere**
 
-Îți generează o imagine verticală (formatul de story) cu titlul, data, locația
-și prețul evenimentului, gata de postat. Nu trebuie să faci nimic în alt program.
+Un cod e un cuvânt pe care oamenii îl scriu pe pagina de plată, la „Adăugare
+cod", ca să plătească mai puțin. Îl pui într-un anunț, de exemplu „Cu codul
+VARA10 ai 10% reducere până pe 31 august".
 
-Avantajul: imaginea se face din datele reale ale evenimentului. Dacă muți
-evenimentul pe altă dată, imaginea se schimbă odată cu el — nu ai cum să postezi
-din greșeală o dată veche.
+1. Scrie **codul** (litere, cifre și liniuțe; apare cu majuscule).
+2. Alege **Procent** sau **Sumă fixă** (în RON sau EUR) și cât.
+3. Dacă vrei, pune **ultima zi** în care merge și **de câte ori** se poate
+   folosi în total.
+4. Apasă **Creează codul**.
+
+Codul merge la toate evenimentele cu plată; o sumă fixă merge doar la
+evenimentele cu prețul în moneda ei. În listă vezi de câte ori a fost folosit.
+Un cod nu se poate șterge, doar opri (**Oprește**), și îl poți porni din nou.
+Cine a plătit cu un cod are în panoul lui suma plătită și codul.
+
+> **Când anunți o reducere**, ea se socotește față de cel mai mic preț al
+> evenimentului din ultimele 30 de zile, iar codul trebuie să meargă tot timpul
+> pe care l-ai anunțat. Așa cere legea (OG 99/2000). Deci nu ridica prețul
+> chiar înainte de o reducere, și nu opri codul mai devreme decât ai spus.
 
 ---
 
-## 9. Când ceva nu merge
+## 9. Statistici
+
+**Unde:** în contul PostHog al site-ului, pe [eu.posthog.com](https://eu.posthog.com),
+nu în panoul site-ului.
+
+La **Web analytics** vezi vizitele: ce pagini se deschid, de unde vin oamenii
+(Instagram, Google, direct), de pe telefon sau de pe calculator, din ce țară
+și oraș. Pe lângă vizite, site-ul numără câteva lucruri, pe care le găsești
+după nume la **Activity**, sau într-un grafic nou (**Product analytics** →
+**New insight**):
+
+| Nume | Ce înseamnă |
+|---|---|
+| `event_viewed` | cineva a deschis pagina unui eveniment |
+| `booking_clicked` | cineva a apăsat butonul de înscriere (sau pe cel al listei de așteptare) |
+| `booking_completed` | a primit locul: o înscriere gratuită, un loc luat din lista de așteptare sau o plată confirmată |
+| `booking_failed` | înscrierea nu a mers, cu motivul: de exemplu `full` (locurile s-au ocupat între timp), `already_registered` (adresa are deja un loc), `phone` (telefon greșit) |
+| `waitlist_joined` | cineva a intrat pe lista de așteptare |
+| `blog_post_read` | un articol citit până la capăt |
+
+La fiecare scrie și despre ce eveniment sau articol e vorba (`event_slug`,
+`post_slug`: adresa lui de pe site).
+
+**Ce nu se numără:**
+
+- vizitele tale, cât timp ești autentificată în panou în acel browser, pe
+  telefon sau pe calculator, și previzualizările;
+- paginile la care se ajunge din linkurile personale din emailuri (anularea,
+  testimonialul, dezabonarea);
+- vizitele din browserele setate să ceară să nu fie urmărite;
+- nimic din ce scriu oamenii în formulare și nicio înregistrare a ecranului.
+
+> **Fiecare vizită apare ca un vizitator nou.** Site-ul nu păstrează nimic în
+> browserul oamenilor (de aceea nu are nevoie de banner de cookie-uri), așa că
+> cine revine altă dată sau reîncarcă pagina e numărat din nou. Numerele sunt
+> bune pentru comparații (ce eveniment atrage mai mult, de unde vin oamenii,
+> câți dintre cei care apasă pe înscriere ajung să aibă loc), nu pentru a
+> număra persoane.
+
+> **Ca să știi câte vizite vin din Instagram**, pune la sfârșitul linkului din
+> bio `?utm_source=instagram`, de exemplu `…/ro/events?utm_source=instagram`.
+> Aplicația Instagram nu spune întotdeauna site-ului de unde vine vizita; așa
+> o spune linkul.
+
+---
+
+## 10. Când ceva nu merge
 
 **Nu pot intra în panou.** Verifică emailul și parola. Dacă apare mesajul
 „Contul acesta nu are acces la panoul de administrare", contul există dar nu are
@@ -244,9 +597,13 @@ data — evenimentele trecute nu apar în lista principală.
 YouTube sau Vimeo și lipește linkul în editor. Fișierele `.svg` sunt respinse
 intenționat, din motive de siguranță — folosește `.jpg`, `.png` sau `.webp`.
 
-**Cineva a plătit dar înscrierea arată „În așteptare".** Confirmarea vine de la
-procesatorul de plăți și durează de obicei câteva secunde. Dacă rămâne așa mai
-mult de câteva minute, e de verificat tehnic.
+**Cineva a plătit dar înscrierea arată „Plată în așteptare".** Confirmarea vine
+de la Stripe și durează de obicei câteva secunde; se confirmă și când omul se
+întoarce pe site după plată. Dacă rămâne așa mai mult de câteva minute, e de
+verificat tehnic.
+
+**Cineva a plătit de două ori.** Site-ul returnează singur a doua plată,
+integral, și îți arată la Noutăți.
 
 **Am șters din greșeală.** Ștergerile sunt definitive. Ștergerea unui eveniment
 șterge și înscrierile lui. Întreabă înainte dacă nu ești sigură.

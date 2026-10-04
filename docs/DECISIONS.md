@@ -23,9 +23,10 @@ which is a first-party answer to the business's actual requirement.
 
 ### Suspense boundaries wrap the component that needs them, never the app
 
-`PostHogProvider` calls `useSearchParams()`, which requires a Suspense boundary,
-and that boundary had been put in the root layout around `{children}` — the
-entire application.
+`PostHogProvider` (now `Analytics`, in `components/providers/analytics.tsx`)
+calls `useSearchParams()`, which requires a Suspense boundary, and that
+boundary had been put in the root layout around `{children}` — the entire
+application.
 
 The cost was not a rendering bug but an HTTP one. With everything inside
 Suspense, Next flushes the document shell immediately and streams the rest, so
@@ -79,6 +80,15 @@ because it is admin-only, optional, and needs no API key — the failure mode is
 translate button that stops working, not a broken site. DeepL's free tier is the
 fallback if it does break.
 
+Blog posts go to it paragraph by paragraph, not as one document
+(`lib/translate-document.ts`). Each paragraph or heading is sent with only its
+inline markup — bold, italics, links, line breaks — which the endpoint returns
+intact, and everything structural is copied rather than translated: heading
+levels, lists, alignment, images, embeds. Asking a translator to preserve a whole
+document is asking for attributes and embed URLs to come back reworded. One
+request still carries the whole post: 60 blocks and 66,531 characters in under a
+second, measured on 23 September 2026.
+
 ---
 
 ## Database
@@ -113,7 +123,10 @@ worst kind of bug: a page saying "8/10 spots" beside a button answering "this
 event is full".
 
 `pending` **is** counted — that is someone in Stripe checkout right now, holding
-the seat until they pay or the session expires.
+the seat until they pay or the session expires. Since Phase 10 a booking its
+participant cancelled through their link holds no seat either, and an unpaid
+one is held from its last checkout (`checkout_started_at`); the rule lives in
+`holds_seat()`, below.
 
 ### A `register_for_event` function instead of count-then-insert
 
@@ -123,10 +136,15 @@ bookings both see 14 of 15 and both succeed. Doing both inside one function, wit
 
 ### Key/value for site content, a table for FAQs
 
-`site_content` is one row per field so adding an editable field is an insert, not
-a migration and a deploy. The trade-off — no compile-time safety, a typo returns
-nothing — is mitigated by declaring the keys in `lib/site-content.ts` and seeding
-every expected key.
+`site_content` is one row per field, so adding an editable field needs no
+migration. Since 25 September 2026 every field is described once, in code, in
+`lib/site-content-schema.ts`: its section, label, help, whether it has an
+English version, and what the site shows while it is empty. The admin screens
+are drawn from that file and the public pages read their fallbacks from it, so
+the two cannot disagree. The keys are typed from it, which buys back most of the
+compile-time safety a key/value table gives up. A field's row does not have to
+exist in advance: the admin creates it on the first save (an upsert), with the
+section, label and type taken from the schema.
 
 FAQs are a proper table because they are a variable-length ordered list, which
 key/value handles badly.
@@ -245,10 +263,12 @@ Unsupplied content renders with a dashed outline rather than plausible filler.
 The previous page filled its gaps with invented statistics, which look finished
 and are therefore never questioned. A visible gap gets closed.
 
-### `Button asChild` for links
+### `Button asChild` for links — client components only
 
 `<Link><Button>` puts a `<button>` inside an `<a>` — invalid, and ambiguous for
-screen readers. `asChild` renders one styled `<a>`.
+screen readers. `asChild` renders one styled `<a>`, but only inside a client
+component; from a Server Component use `buttonClasses()` on the link (see
+"`buttonClasses()` lives outside the `"use client"` boundary" above).
 
 ### Optional ratings on testimonials
 
@@ -292,12 +312,11 @@ Almost every real visitor arrives from Instagram on a phone; on iOS that is a
 WKWebView. The project paid for itself within hours by catching a CSP bug
 invisible in Chrome.
 
-### Two workers and one retry
+### One retry, everywhere
 
-Two browser engines against a production build alongside Postgres in Docker was
-killing WebKit processes at three workers, failing unrelated specs. Retries are
-on locally as well as in CI: a developer who sees red they cannot reproduce
-learns to ignore red.
+Retries are on locally as well as in CI: a developer who sees red they cannot
+reproduce learns to ignore red. The worker count went 3 → 2 → 1; the reasons
+are under "One Playwright worker, measured rather than assumed" below.
 
 ### A warm-up pass before the suite
 
@@ -361,10 +380,11 @@ currency at checkout, which is the worst possible moment to discover one.
 
 The admin panel writes to Supabase directly from the browser, so `min="0"` on an
 input is advice to whoever is typing and nothing more. A negative price would
-reach Stripe as a negative charge; a capacity of zero makes
-`taken >= max_participants` true for every event and marks the whole calendar
-sold out. Both are CHECK constraints, and the tests assert the *write* is
-refused rather than that the attribute is spelled correctly.
+reach Stripe as a negative charge, and a negative capacity is always a typo.
+Both are refused by CHECK constraints, and the tests assert the *write* is
+refused rather than that the attribute is spelled correctly. Zero capacity was
+refused too, until `20260918000000_capacity_is_required.sql` made 0 — and
+NULL — mean "sold out, waiting list only".
 
 ### The WhatsApp link library copies, it does not reference
 
@@ -379,6 +399,13 @@ The table is also the one place with no public read policy. A WhatsApp invite UR
 is a capability: anyone holding it can join the group. Anonymous callers get a
 hard permission error rather than an empty list, because there is no GRANT — a
 better failure than RLS filtering silently.
+
+**The copy on each event is not secret, by decision (September 2026).** The
+event page shows it to every visitor and the public API can read the column.
+That is acceptable for now because joining the group needs the admin's
+approval, so the link is not the gate. How it should ultimately be handled is
+Rares's call and still open; until he decides, do not treat the exposure as a
+bug to fix.
 
 ### The language switcher shows where you are, not where you would go
 
@@ -398,23 +425,57 @@ Everything else tracks the latest release. These four do not, and each has a
 reason that outlived the upgrade that produced it. Re-checking them is cheap;
 raising them because they look stale is how the site breaks.
 
-**`isomorphic-dompurify` stays on 2.x.** Version 3 moved to a jsdom that depends
-on `@exodus/bytes`, which is `"type": "module"` — ESM only. Vercel traces the
-serverless bundle with `require()`, so the sanitizer 500'd every page that
-renders stored HTML: blog posts, event descriptions, About and the home page.
-Version 4 pulls jsdom 30, and jsdom 30 still lists `@exodus/bytes`, so the
-condition that caused the outage is unchanged. The `.nft.json` files under
-`.next/server` confirm jsdom really is traced into those routes, so this is not
-theoretical. Check the dependency, not the version number: this unblocks when
-jsdom drops that package or ships a CommonJS entry point, not when the major
-number changes again.
+**`isomorphic-dompurify` stays on 2.x.** Every release after 2.26.0 runs on
+jsdom 27 or later, up to jsdom 30 in 4.x. jsdom loads its dependencies with
+`require()`, and one of them, `@exodus/bytes`, is `"type": "module"`:
+ES-module-only. Vercel's functions refuse to `require()` an ES module. So every
+page that renders stored HTML answers 500: blog posts, event descriptions,
+About and the home page. Each fails with:
+
+```
+Failed to load external module jsdom-…: Error [ERR_REQUIRE_ESM]: require() of
+ES Module …/@exodus/bytes/encoding-lite.js from
+…/html-encoding-sniffer/lib/html-encoding-sniffer.js not supported
+```
+
+**It is not about the Node version.** That error took production down in August
+2026, before `engines` pinned Node 24. Node 24 *can* `require()` an ES module,
+and `next start` on Node 24 serves the upgrade without complaint. Then on
+23 September 2026 a preview of 4.3.0 ran on Vercel's Node 24.x ("fluid"
+functions). It failed with exactly that error on every route that sanitizes,
+while the 2.26.0 preview beside it answered 200. Whatever Vercel's function
+loader does, it does not allow this. A local production build is therefore no
+evidence either way.
+
+`tests/sanitize.spec.ts` reproduces Vercel's refusal: it loads the package with
+Node's `--no-experimental-require-module`. An upgrade that would take the site
+down fails CI first.
+
+This unblocks when either of these happens:
+- jsdom stops depending on an ES-module-only package, or ships CommonJS.
+- Vercel documents that its functions allow `require()` of an ES module.
+
+Either way, prove it on a preview before trusting it:
+
+```powershell
+$preview = "https://yoga-website-<id>-patru.vercel.app"   # from the Vercel check on the commit
+foreach ($path in "/ro", "/en", "/ro/about") {            # all three render sanitized HTML
+  vercel curl $path --deployment $preview -- --silent --output NUL --write-out "$path %{http_code}`n"
+}
+vercel logs --deployment $preview --level error --since 30m
+```
+
+Previews sit behind Vercel Authentication. `vercel curl` gets past it with the
+project's "Protection Bypass for Automation" secret, and creates that secret
+if the project has none.
 
 **`typescript` is `~6.0.3`, not `^6`.** `@typescript-eslint/parser` declares
 `typescript: ">=4.8.4 <6.1.0"` as a *required* peer. A caret would let
 `npm install` pick 6.1 the day it ships and break the lint chain — and Vercel
 runs `npm install`, not `npm ci`, so it is free to resolve differently from CI.
 The tilde keeps us inside the peer range no matter what is published. TypeScript
-7 is out for the same reason, one major further along.
+7 is out for the same reason, one major further along. Re-checked 22 September
+2026: typescript-eslint 8.70 still declares `<6.1.0`.
 
 **`eslint` stays on 9.** ESLint 10 itself would be fine — the config is already
 flat, there are no `eslint-env` comments, and Node 24 satisfies its engines. The
@@ -422,6 +483,7 @@ blocker is Next's lint preset: `eslint-config-next` pulls
 `eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, and
 all three cap their peer at `^9`. Only `eslint-plugin-react-hooks` accepts `^10`.
 This unblocks when those three ship v10 support, which is not ours to do.
+Re-checked 22 September 2026: all three still cap at `^9`.
 
 **`@types/node` tracks the runtime, not the registry.** `engines.node` pins
 Vercel to 24.x, so the types must describe Node 24. Taking `@types/node` 26
@@ -457,10 +519,11 @@ larger risk than the one it removes.
 ### The three signed-out `/admin` routes are an explicit list
 
 `proxy.ts` keeps `PUBLIC_ADMIN_ROUTES` as an exact set, not a prefix match, and
-`app/admin/layout.tsx` keeps the same three paths so they render without the
-sidebar. Two lists, deliberately: one decides what is *reachable*, the other
-what it *looks like*. A prefix match would have been shorter and would have
-exempted every future `/admin/...` page somebody added under a similar name.
+the same three pages live in the `app/admin/(auth)` route group, which renders
+them without the sidebar. Two lists, deliberately: one decides what is
+*reachable*, the other what it *looks like*. A prefix match would have been
+shorter and would have exempted every future `/admin/...` page somebody added
+under a similar name.
 
 `/admin/reset-password` has to be on that list for a reason that is easy to miss.
 Supabase returns the recovery token in the URL *fragment*
@@ -483,18 +546,17 @@ learn which ones are registered. The copy is written to stay honest under that
 constraint: it says an email has been sent *if* the address has an account,
 rather than claiming one was sent.
 
-### Other sessions are revoked on reset, explicitly
+### Every session is revoked on reset, explicitly
 
-After a successful change the page calls `signOut({ scope: "others" })`.
-Changing a password does not by itself end sessions that already exist, and the
-reason someone resets one is usually that they believe it is known to somebody
-else. Without this, an attacker holding a stolen refresh token keeps their
-access and the reset accomplishes nothing against the threat that prompted it.
-Supabase's "Secure password change" setting covers part of this and is off on
-this project, so it is done in code where it is visible and testable.
-
-`others` rather than `global`: this browser has just proved control of the
-mailbox, and it is about to be sent to the login page anyway.
+After a successful change the page signs out every session, this one included
+(`global` scope — "A completed reset ends every session" below explains why the
+first attempt, `others`, was not enough). Changing a password does not by itself
+end sessions that already exist, and the reason someone resets one is usually
+that they believe it is known to somebody else. Without this, an attacker
+holding a stolen refresh token keeps their access and the reset accomplishes
+nothing against the threat that prompted it. Supabase's "Secure password
+change" setting covers part of this and is off on this project, so it is done in
+code where it is visible and testable.
 
 ### The test uses a throwaway account and the real mailbox
 
@@ -890,7 +952,7 @@ a fresh clone and CI both have them without anyone needing the originals.
 Deliberately not wired into `predev` or `prebuild`: it would be dead work on
 every build and it needs a folder most clones will not have.
 
-### Which three events the home page leads with
+### Which event the home page's carousel leads with
 
 Soonest first, except that an event with no seats left gives up its place to a
 later one somebody can still book. A full event is not hidden — it drops behind
@@ -903,8 +965,8 @@ worth more.
 
 Nothing has to happen when a seat frees up. `hasRoom` is computed per render
 from live registration counts, so a cancellation restores that event to its
-natural place by date on the next render — within the five minutes the page is
-cached for.
+natural place by date on the very next request — the page is rendered on
+demand, not cached (see CLAUDE.md on why `revalidate` is inert here).
 
 Three implementation notes:
 
@@ -967,6 +1029,108 @@ bearing and easy to undo by accident:
   "Complet" and "Locuri epuizate" — so passing the label in meant the same event
   read differently depending on the page. One concept, one vocabulary.
 
+  "Locuri epuizate" is the one that won, in September 2026. "Complet" had been
+  chosen first and had two problems: it is also the word this site uses for a
+  *full name* in every form it has, and on its own it never said what was
+  complete. `docs/ADMIN-GUIDE.md` had been promising her "Locuri epuizate" the
+  whole time, so that page went from wrong to right without being touched.
+- **`SeatCount` counts in Romanian, which has three plural forms, not two.**
+  The noun takes `de` once the last two digits leave the 1..19 window: "1 loc
+  liber", "19 locuri libere", "20 de locuri libere". Capacity is hers to set
+  from the admin panel, so twenty is an ordinary number here — this read "1
+  locuri libere" on the card that matters most, the one with a single seat left.
+
+### The dev server trusts `localhost` and nothing else
+
+`next.config.ts` lists this machine's own IP addresses in `allowedDevOrigins`,
+computed from `os.networkInterfaces()`. It looks like configuration for its own
+sake. It is not.
+
+`next dev` refuses the hot-reload websocket when the `Origin` header is anything
+other than `localhost` — a guard against a hostile page driving your dev server,
+and right to have. Replayed by hand against the running server:
+
+```
+Origin: http://localhost:3000     -> 101 Switching Protocols
+Origin: http://127.0.0.1:3000     -> connection closed, no response
+Origin: http://192.168.1.138:3000 -> connection closed, no response
+```
+
+The symptom is what makes it expensive. Without that socket the dev client never
+finishes bootstrapping, so **React never hydrates and nothing on the page is
+interactive** — the HTML arrives and looks perfect, the menu will not open, the
+carousel will not move, no form submits. The only console output is a failed
+websocket, which reads like a hot-reload nuisance rather than the cause. It is
+worst where it is hardest to see: testing on a real phone, which can only reach
+the machine by its LAN address and has no console to look at.
+
+Verified after the change, on all three addresses: the header compacts on
+scroll, the drawer opens, zero console errors.
+
+The addresses are computed rather than written down because the router hands out
+a different one whenever the lease expires. `127.0.0.1` is added by hand, since
+`networkInterfaces()` reports the loopback as internal and filters it out.
+
+### Tooltips are CSS, not `title`, and not the Popover API
+
+`title` draws the operating system's tooltip: a black box with white text in the
+system font. On a cream and sage page it reads as a fault, and no browser
+exposes a hook to style it — so matching the site means not using it.
+
+The current recommendation is interest invokers (`interestfor`) with
+`popover="hint"` and anchor positioning. Measured support: interest invokers are
+Chrome 142+ with nothing in Firefox or Safari, anchor positioning has no Safari
+at all, and standing it up needs two polyfills. On the iPhone this audience
+arrives with, none of the mechanism exists — the same trade already refused for
+the navigation drawer.
+
+So: a `::after` on `[data-tooltip]`, shown on hover and `:focus-visible`, in
+app/globals.css. It is not the accessible name — every trigger has its own text
+or `aria-label`, and nothing is said only by a tooltip. What it does worse than
+a real popover is dismissal: Escape cannot close it, which WCAG 1.4.13 asks for.
+`title` could not either, so nothing regressed.
+
+**The trap:** the tooltip is the trigger's own `::after`, so a trigger with
+`overflow: hidden` clips it away entirely. `truncate` is the usual way in — it is
+three declarations under one name. The header wordmark had exactly that: the
+tooltip computed as fully opaque, would have passed any assertion on `opacity`
+or `content`, and painted nothing. It was found by looking at a screenshot, and
+`tests/public-events.spec.ts` now fails if any trigger hides its overflow.
+
+### The map is a link, and the calendar is the date
+
+Both were buttons in a row under the description, alongside an Instagram
+download. All three are gone.
+
+An embedded Google map was built and measured before being removed: 1.23MB
+across 39 requests from Google on a page that otherwise contacts them not at
+all, the visitor's IP address handed over on page load before anyone asked to
+see a map, a `frame-src` entry in the CSP, and an undocumented `output=embed`
+endpoint outside the terms of the Maps Embed API. The address links to a map
+instead and sends nothing until it is pressed.
+
+Putting each action on the noun it acts on — the date adds the date, the address
+opens the map — removed the row entirely. The cost is discoverability, and it is
+real: a button announces itself and an underlined date has to be recognised.
+Against it, both are second-visit actions rather than what the page is for, and
+they now sit where somebody looking for the date or the address is already
+looking. lib/meta-link.ts is what makes them read as live on a device with no
+hover, and explains why it takes an icon, an underline *and* a darker ink rather
+than any one of them.
+
+### `ghost` buttons had a hover that did nothing
+
+The variant's hover was `bg-white/40`. Over the cream page that resolves to
+(255, 251, 246) against a resting (255, 248, 240) — three points of green, six
+of blue, none of red, which is below what an eye picks up. Inside a `GlassCard`,
+already white at 60%, it was fainter still. Measured from painted pixels after
+the change: (255, 248, 240) to (245, 240, 229), a delta of about ten on each
+channel.
+
+It is now `sage/10`, the same wash the carousel arrows and the calendar menu
+use, plus an `active:` state — Tailwind wraps `hover:` in `@media (hover: hover)`,
+so on the phone this audience arrives with, a tap produced no feedback at all.
+
 ### `admins` is sealed off from every role the API can reach
 
 The table decides who may enter `/admin`. It has no grants for `anon` or
@@ -1014,3 +1178,1014 @@ The migration is a no-op against production by construction — every statement
 revokes something production had already lost. It runs there anyway, because the
 value is in the migration history: a rebuild from this repository now produces
 production's permissions rather than a looser set that happens to work.
+
+---
+
+## Admin panel
+
+### A failed save keeps the editor open and says why
+
+Supabase returns `{ error }` instead of throwing, so an unchecked write looks
+exactly like a successful one. The admin editors used to close either way, and
+a duplicate slug cost her a whole post. Every admin read and write now goes
+through `must()` in `lib/admin/db.ts`. It throws an `AdminError` whose kind
+(duplicate, missing, invalid, session, permission, network) maps to one sentence
+in `messages/*.json`, and the editor catches it and stays open. The raw database
+message never reaches her: it is English, technical, and says nothing about what
+to do next.
+
+### Toasts in the top layer, confirmations in the admin's own dialog
+
+`alert()` and `confirm()` blocked the page, looked like a browser fault, and
+could not name the thing about to be deleted. The replacements:
+
+- **Toasts** (`components/admin/ui/toaster.tsx`) are a `popover="manual"` list,
+  so they sit in the browser's top layer above an open dialog, such as a failed
+  upload inside the media library. Success disappears after five seconds;
+  errors stay until closed. Screen readers hear them through two live regions
+  that are always in the page, because a live region added at the same moment as
+  its text is often not announced.
+- **Confirmations** (`components/admin/ui/confirm-dialog.tsx`) are a native
+  `<dialog>` opened with `showModal()`, which traps focus and makes the page
+  behind it inert without any code of ours. A destructive question focuses
+  Cancel first, so an accidental Enter never deletes anything. It can carry a
+  text box, for the reason given when a participant is removed.
+
+### Bilingual fields: one switch per form, with a fallback design on file
+
+Chosen with Rares on 24 September 2026, and built in overhaul phase 2: a RO / EN
+switch at the top of each form flips every text field to the other language, and
+in EN mode each field shows the Romanian text as reference. If it proves awkward
+in use, the agreed fallback is **RO / EN tabs on each field's label**, where each
+field remembers its own tab. It has not been built. See
+[OVERHAUL.md](OVERHAUL.md#decisions) for the reasoning.
+
+### The panel's two halves are route groups, not a path check
+
+`app/admin/(auth)` holds the three sign-in pages and `app/admin/(panel)` holds
+everything else, inside the sidebar and top bar. The groups change no address.
+The shell used to be one client layout that compared the pathname against a list
+to decide whether to draw itself. Now the folder decides, and the panel's layout
+can be a server component, which is what lets it read the sidebar cookie below.
+`app/admin/layout.tsx` sits above both and provides what they share: her site
+name, the admin language, toasts and the confirmation dialog.
+
+### The sidebar pins on a cookie and widens over the page
+
+The toggle pins the sidebar wide (15rem, icons and labels) or narrow (4.5rem,
+icons only), and the choice is a cookie rather than `localStorage` because the
+server has to read it. Read in the browser, the page would draw the sidebar wide
+and then snap it narrow on every load. While it is pinned narrow, resting the
+pointer on it for 120 ms, or tabbing into it, widens its panel *over* the page:
+the panel is positioned inside the grid column rather than being the column, so
+the page does not move and nothing reflows under the pointer. Leaving narrows it
+again after 250 ms, which forgives a pointer slipping off the edge.
+
+The toggle is a toggle button with a name that stays put, "Bară laterală
+îngustă", and `aria-pressed`. A name that changed with the state ("Narrow the
+sidebar", "Widen the sidebar") on top of an expanded/pressed state would say
+the same thing twice. The tooltip says what pressing it will do.
+
+While the sidebar is narrow the labels are transparent, not removed, so every
+link keeps its accessible name. They are clipped by the list, not by the panel,
+so the toggle's tooltip can still reach over the page.
+
+### The phone drawer is a modal `<dialog>`, unlike the public site's
+
+The public site's drawer is a horizontal scroller you can swipe shut, because
+visitors on phones expect to swipe, and it took a long hunt to make reliable (the
+T10 fix in `components/layout/header.tsx`). The admin drawer is a `<dialog>`
+opened with `showModal()`. The browser then keeps focus inside it, closes it on
+Escape and makes the page behind it inert, with no code of ours to get wrong. She
+opens it occasionally and mostly with a tap, so the swipe was not worth a second
+copy of the hardest component on the site.
+
+It slides with `@starting-style` and discrete transitions of `display` and
+`overlay`. WebKit does not support `overlay` yet, so there the dialog leaves the
+top layer the moment it closes and finishes sliding out as an ordinary fixed
+element; a `z-index` keeps it above the page for those 250 ms.
+
+### Tab titles are set in the browser, and set again when Next.js overwrites them
+
+Every admin tab used to read the same title (audit B21). The panel's language
+lives in `localStorage`, so the server cannot title a page in it, and
+`useDocumentTitle()` sets "Evenimente · flow4ward Admin" from the page instead.
+Setting it once was not enough: on a full page load Next.js writes the layout's
+metadata title into `<title>` after the page's effect has run, which put
+"flow4ward Admin" back on every page opened from the address bar. The hook now
+watches the document and restores its title whenever something else changes it.
+`tests/admin-shell.spec.ts` checks the title a second after a full load.
+
+### Start and end instants are generated columns
+
+`events.starts_at` and `events.ends_at` are `generated always as (...) stored`
+from the four wall-clock columns, read in Europe/Bucharest. A trigger would work
+too, but a generated column cannot be written at all, so it can never disagree
+with the columns it comes from, and Postgres fills it in for existing rows when
+the column is added. The cost is that Supabase's generated types still offer the
+columns on insert and update, where Postgres refuses them: the events editor's
+`EventDraft` leaves them out, and any other writer must too. The same migration
+adds `events_ends_after_start`, which catches the one-day event ending before it
+starts that the older pair of checks let through. It is `not valid`, so it
+guards every new write without re-checking old rows, which could have blocked the
+migration on a stray test event in production.
+
+### The dashboard says sentences, not numbers
+
+Each row reads as a sentence with the right plural ("1 plată", "2 plăți",
+"20 de plăți"; `lib/admin/plural.ts`) and links to the list it counted, filtered.
+Rows for things waiting on her turn rose when there are any and say "Totul la
+zi" when there are none, so the eye lands only where she is needed. Live events
+and her own drafts are facts rather than tasks, so they stay neutral either way
+and say "Niciun eveniment activ" or "Nicio ciornă" at zero. The counts come from
+two admin-only `security_invoker` views, and a pending payment is defined once,
+per event, in `admin_event_overview`; the dashboard's total is its sum.
+
+### Site content is edited one section at a time, with one Save
+
+"Conținut site" used to be one long page of every row in the table, each with
+its own Save button, and English boxes stacked under the Romanian ones. It is
+now ten sections at `/admin/content/<section>` (chosen with Rares on
+24 September 2026), each a single form: one RO / EN switch flips every field,
+the English side shows the Romanian text above each field, and one Save writes
+only what changed. A section with unsaved changes asks before she leaves it,
+through the admin's own dialog for links and the browser's prompt for closing
+the tab (`lib/admin/use-leave-guard.ts`). The back button is not guarded: the
+App Router offers no way to hold a history navigation.
+
+### Headings fall back to plain labels; her own words fall back to a placeholder
+
+An empty field falls back in one of two ways, decided per field in the schema.
+Headings and buttons have a plain, factual label to fall back to ("Evenimente
+viitoare", "Vezi toate evenimentele"), because a missing heading helps nobody
+and those labels claim nothing. Her own words (the main heading, the
+introduction, her story, her photographs) have no honest substitute, so they
+show a dashed marker named after the part. The previous fallbacks were
+sentences written for her, "Îți ghidez călătoria către echilibru" and "Yoga
+pentru corp, minte și suflet", which also reached page titles and share cards.
+They are deleted. Search-facing text follows the same rule: without her tagline
+the home page's title is just the site name, and without her description there
+is no description tag, which lets a search engine pick an excerpt.
+
+### Legal documents are site content, with the business facts as tokens
+
+The privacy policy, terms and cookie policy are rich-text fields she edits
+like any other, seeded with drafts that describe what the site really does.
+Facts only she can supply are written as `{{business_name}}`, `{{address}}`
+and so on, and filled in from her business details (`lib/legal.ts`). A
+missing fact renders as a dashed marker rather than the raw token or a guess.
+Values are escaped: a company name is text, not markup. Each page shows the
+row's `updated_at` as its "last updated" date, which the database keeps
+current by itself. docs/PRIVACY.md lists what she must fill in and what a
+lawyer should check.
+
+### The ANPC pictogram is uploaded, not drawn
+
+Romanian consumer law requires the SAL pictogram in the footer, at 250×50 px,
+linking to reclamatiisal.anpc.ro. It is official artwork published by ANPC,
+so the site does not recreate it: she uploads the official file in "Pagini
+legale", and until she does, the footer carries the same link as text.
+
+### Visitor statistics keep nothing in the browser
+
+PostHog runs with `persistence: "memory"`: no cookie and no localStorage, so
+each page load is a fresh anonymous visitor. That is what lets the cookie
+policy say the statistics run without cookies, and the site go without a
+consent banner. It was planned for phase 11 and brought forward to phase 2,
+because the cookie policy written in phase 2 had to be true on the day it
+appeared. Phase 11 checked it in a browser for the first time, against the
+suite's stand-in, and kept it over PostHog's cookieless mode
+([Visitor statistics](#nothing-kept-and-nobody-a-person-memory-not-cookieless-mode)).
+
+### The wordmark goes home again
+
+For a while the name in the header scrolled the current page to its top
+instead of going home, on the reasoning that "Acasă" sat beside it. A visitor
+arriving from Instagram on an event page then had no obvious route to the rest
+of the site on a phone, where "Acasă" is inside the menu (audit I20). On
+24 September 2026 Rares chose "home": the wordmark links to the home page, and
+on the home page itself the same click scrolls to the top. A back-to-top button
+for long pages comes in phase 9.
+
+### Videos in posts wait for a press, and have no thumbnail
+
+A YouTube, Vimeo, Instagram or TikTok frame contacts that company the moment
+the page loads, and may set its cookies, before the reader has shown any
+interest in the video. EU rules treat those as non-essential cookies that need
+consent first, which would have meant a banner. So the public pages draw a
+placeholder in the frame's place (`sanitizeArticleHtml` in `lib/sanitize.ts`),
+and `components/rich-html.tsx` swaps the player in when it is pressed, from
+YouTube's no-cookie host. The placeholder has no thumbnail: fetching one from
+YouTube's image server would tell Google who is reading, which is the thing the
+placeholder exists to avoid. The stored HTML keeps the real `<iframe>`, so the
+editor shows the video and nothing is lost if this is ever revisited.
+
+One list of players, `lib/embeds.ts`, feeds the editor's video dialog, the
+sanitizer and the placeholder. `tests/sanitize.spec.ts` checks the live CSP
+allows each of them.
+
+### A live post's changes are private until published
+
+Autosave on a published post would otherwise publish every half-written
+sentence. Its saves go to `content_drafts` instead, and visitors read the post
+row until "Publică modificările" copies the draft over in one transaction
+(`publish_post_draft`). The draft holds the whole edited version, not a diff,
+so it always says exactly what publishing would produce. Hiding is the
+exception: it applies at once, since it exists to take something down quickly.
+Events get the same treatment in phase 4 through the same table.
+
+### The preview is read in the browser, and is the one framed page
+
+Only the admin may read an unpublished post, so the preview needs her session,
+and a public page must not read the session on the server (CLAUDE.md, the 504s
+of `lib/supabase/server.ts`). `app/[locale]/preview/blog/[id]` therefore reads
+the post with the browser client and draws it with the published article's own
+component, inside the public layout. The editor shows it in a frame at phone or
+computer width, so that path alone is served with `frame-ancestors 'self'` and
+`X-Frame-Options: SAMEORIGIN` (a second header rule in `next.config.ts`, which
+Next applies after the global one), plus `noindex`.
+
+### Every post is in exactly one tab
+
+Publicate, Ciorne, Ascunse: a hidden post is in Ascunse whether or not it was
+ever published, and the dashboard's draft count follows the same rule, so the
+number on the dashboard is the number on the tab it links to. The list fetches
+every post without its text and filters, sorts and pages in the browser: a solo
+blog has tens of posts, and it keeps each tab's count exact without a query per
+tab. Revisit if it ever reaches the thousands.
+
+### A post's address follows its title until it goes live
+
+Before the first publish nobody has the link, so the address is rebuilt from the
+title as she types (and numbered if another post has it). After publishing it
+changes only when she changes it, because shared links lead to it. An address
+she types that another post has is refused on its own: everything else keeps
+saving, and the field says why.
+
+### Pictures from unknown hosts are shown unoptimised
+
+`next/image` throws, and takes the page down with it, for any host missing from
+`images.remotePatterns`. A post's first picture becomes its card's picture, and
+pictures can be pasted from anywhere, so one outside image broke both the
+article and `/blog` during phase 3. `canOptimise()` (`lib/image-src.ts`) sends
+those through `unoptimized`, which shows the file as it is.
+
+### Bookings close when an event starts
+
+`register_for_event()` refuses once `starts_at` has passed, and so do the
+booking, waiting-list, claim and checkout routes, answering with a `code` the
+page turns into a sentence in the visitor's language. An Instagram story lives
+forever, and before this an old one opened a past event with a working
+payment button (audit B4). An event with no announced hour starts at midnight
+on its day, which is how Postgres already computes `starts_at`, so it closes
+when its day begins rather than at an hour nobody was told. The event page
+follows the same rule (`lib/event-phase.ts`): the booking panel before the
+start, a notice once it has started, and the notice plus what participants
+said once it is over.
+
+### A lost claim goes back to the front of the queue
+
+A claim link is a head start, not a reservation: the seat stays free for
+anyone. When someone books it first, the waitlisted person sees an apology,
+and their offer is withdrawn (`notified_at` and `claim_expires_at` cleared)
+instead of being left to run. A live offer counts as a promised seat in
+`notifyWaitingList()`, so leaving it would stop the next seat being offered to
+anyone; cleared, they are simply waiting again, and the queue is in the order
+people joined, so they are first. This is Rares' rule: first come, first
+served, and the waitlisted person keeps first place until the event.
+
+### One definition of "holds a seat"
+
+`holds_seat(registrations)` decides whether a booking takes a seat, and the
+public count (`event_availability`), the booking gate and the admin overview
+all call it. Before, the rule was written out twice and had to be kept
+identical by hand. It takes the whole row, which also lets PostgREST offer it
+to the admin as a column. `anon` holds EXECUTE on it because Postgres checks a
+view's functions against the caller (the reason `pending_hold_interval()` is
+granted to anon too); it reads nothing but the row it is given, and
+`tests/rpc-exposure.spec.ts` lists it with that reason.
+
+### An event that has ended keeps its date, price and places
+
+Those are what people booked and paid for. The editor disables the fields,
+and `publish_event_draft()` ignores changes to them once the event has ended,
+so the rule holds even if the editor is bypassed. Drafts are never locked: an
+event nobody could book has nothing to protect.
+
+### The dashboard counts the Upcoming tab
+
+"Evenimente" on the dashboard opens the events list on its Upcoming tab, so it
+counts what that tab holds: events to come, under way, or over with a payment
+or refund still pending. Phase 1 counted published events that had not ended;
+the two numbers disagreed as soon as an event ended with a checkout open.
+
+### The editors share one autosave
+
+The post and event editors save through `lib/admin/use-autosave.ts`: the
+timers, one save at a time, the browser copy, private changes for a live
+document, the address rules and the leave guard. The logic was first written
+inside the post editor in phase 3 and moved out unchanged when the event
+editor needed it; the blog's tests passed before and after the move. What
+stays in each editor is what differs: the fields, when a new document may be
+created (a post with anything in it, an event with a title and a date), and
+what Publish checks.
+
+### The sort menus draw their own list, with a mouse only
+
+The Events and Blog lists' order menus use the customizable select
+(`appearance: base-select`, `.admin-select` in `app/globals.css`), so the list
+that opens has the panel's rounded corners and colours instead of the square
+grey box Windows draws. Only where the pointer is a mouse: on a phone the
+system picker is larger, familiar and already rounded, and opting in would
+replace it. Browsers without base-select keep their own list. Such a select
+sizes itself to the chosen option rather than the longest, which moved the
+search box every time the order changed, so the control has a fixed width
+from tablet size up (`sm:w-72`, room for "Data evenimentului,
+descrescător").
+
+### An event's row is one target, like a post's
+
+A post's row is a single link. An event's cannot be, because its numbers are
+links to Registrations, and links do not nest. The title's link is stretched
+over the row instead (`after:absolute after:inset-0`), and the numbers sit
+above it. The row lights up only while that link has the pointer, so over a
+number it is the number that answers.
+
+### Bookings and the waiting list are one list, read from one view
+
+`/admin/registrations` shows everyone who booked or is waiting, because to her
+they are all people coming (or hoping to come) to an event. The view
+`admin_participants` puts both tables side by side and decides, in SQL, each
+row's status and whether it is archived, so the list, its counts and the
+permanent delete all use the same rule. A waiting-list entry that claimed its
+seat is left out: its booking stands for that person. The list is filtered and
+paged in the database rather than in the browser, unlike the events list,
+because it only grows: every person who ever booked is in it.
+
+### Only archived participants can be deleted for good
+
+Delete is offered only in the Archive tab, and `admin_delete_participants()`
+skips any id that is not archived, whatever the page sends. A booking is
+archived once removed, or once its event has ended with nothing pending on it;
+a waiting-list entry once removed or once its event has ended. Deleting a
+booking also deletes the claimed waiting-list entry behind it, so nothing of
+the person is left on that event.
+
+### Removing someone keeps the row, and her reason stays hers
+
+"Anulează înscrierea" sets `removed_at` and a required reason; the row stays,
+frees its seat, and moves to the archive. The optional email says the booking
+was cancelled, in the language they booked in, and does not include her
+reason, which may be written for herself. If the event has not started, the
+freed seat is offered to the waiting list straight away.
+
+### A note is kept only with its own consent, and for 30 days
+
+The booking form's "Ceva ce ar trebui să știu?" is often about health, which
+GDPR treats as special: it is kept only with an explicit tick, which appears
+once there is a note, and the database refuses a note without a consent time.
+The daily job clears it, and her own note about the person, 30 days after the
+event; the consent time stays as the record that it was given. A note written
+on the waiting list travels to the booking with its original consent time.
+
+### Emails to test data go to the local mailbox
+
+Against the local database every email goes to the stack's Mailpit
+(`http://127.0.0.1:54324`) instead of Resend (`lib/email.ts`). The address of
+the database decides, not `NODE_ENV`, because it is what makes the data real:
+`npm run dev` and the tests read the local one, `npm run dev:prod` and every
+deployment read production. It also lets tests read what someone received.
+
+### Exports: a real Excel workbook, and a CSV for everything else
+
+The Excel file is written by `lib/admin/xlsx.ts` over fflate, every cell as
+text, so a phone number keeps its "+" and a name typed as a formula stays a
+name. The libraries that do this compress in a Web Worker started from a
+`blob:` address, which the Content-Security-Policy refuses. The CSV has a
+byte-order mark, semicolons (Excel's separator under Romanian regional
+settings) and an apostrophe in front of any cell starting with = + - @; Excel
+shows that apostrophe, which is why phone numbers look odd in the CSV and fine
+in the workbook. Participants' notes are in neither.
+
+### An unfinished checkout is deleted after a week, not an hour
+
+A pending booking stops holding its seat after an hour, but it is only
+deleted by the daily job after seven days: Stripe retries a webhook it could
+not deliver for up to three days, and a late "paid" must still find the booking
+to mark. Whoever had claimed that seat from the waiting list goes back in line.
+
+### The daily job is one database function behind a secret
+
+Vercel calls `/api/cron/daily` (vercel.json) with `CRON_SECRET`; without the
+variable, or with a wrong header, the route refuses (`lib/cron.ts`). All the
+work is `daily_cleanup()`, one transaction, callable only with the service
+key.
+
+### A testimonial outlives its event
+
+Deleting an event used to delete its testimonials. Now the foreign key sets
+`event_id` to NULL, and a trigger copies the event's titles and date onto the
+testimonial first, so what people said stays, still saying which event it was
+about.
+
+### A testimonial is written through a personal link, and the page says so
+
+Only someone who booked can write one: a link is emailed to the address they
+booked with (the morning after the event, when she presses "Trimite
+invitațiile", or when they ask on /testimonials/share), and whoever holds it is
+taken to be that person. A booking cancelled, refunded, or with a refund asked
+for gets no link. Those testimonials carry "Participare verificată", and
+/testimonials says what that means, which the EU's Omnibus rules ask of any
+site showing reviews. Older testimonials are "imported" and make no claim.
+
+### Links are stored as a hash, work once, and lapse after 60 days
+
+`review_invitations` keeps the SHA-256 of each link's token, never the token,
+so a copy of the table hands out no working links. A booking may hold several
+at once (the morning email, a request, her button); writing through any of them
+uses the one testimonial a booking may have. The link is marked used in the
+same conditional update that claims it, so two presses of Send cannot store
+two. The daily job deletes lapsed links.
+
+### The share page gives one answer to every email
+
+"Verifică-ți emailul", whether or not the address ever booked, so the form
+cannot be used to learn who took part in what. What happens next reaches only
+that inbox: a link per ended event, or a note saying when they can write. It is
+behind the CAPTCHA, and limited per visitor and to three requests a day per
+address, so nobody can fill a stranger's inbox with links.
+
+### A participant's photo is re-saved by the server, not trusted
+
+The browser shrinks it to 1600 pixels first, which keeps the request under the
+4.5 MB Vercel accepts and the upload quick on a phone. The server then decodes
+it, turns it the right way up and re-saves it as WebP with sharp, which writes
+no metadata: the camera's EXIF, and with it the GPS position, goes. Anything
+that does not decode is refused. It is stored in the public `media` bucket
+under a random name and linked from a page only once she approves the
+testimonial.
+
+### Her part in a testimonial is small
+
+She approves, hides, chooses and orders the home page's selection, attaches a
+video link, or deletes. She cannot edit the words, the stars or the name: they
+are the participant's, and a verified testimonial she could rewrite would not
+be one. Before phase 6 she filled in the name and the rating herself, because
+nothing collected them.
+
+### Visitors read testimonials through named columns
+
+The row policy shows visitors approved testimonials she has not hidden, and
+the column grant lets them read only what a page draws. Who wrote one from
+which booking, and when they consented, are not among those columns, so a
+public query that asks for them is refused rather than answered. Public pages
+therefore list their columns (`PUBLIC_TESTIMONIAL_COLUMNS`), and none filters
+on `approved`, which the policy already does.
+
+### With nothing chosen, the home page shows the three newest
+
+Her selection is empty until she picks, and a home page without the section
+would hide the first testimonials the day they arrive. The newest three stand
+in until then; once she picks any, only her picks show, in her order.
+
+### Link tokens never reach analytics
+
+PostHog records the address of every page. A testimonial link (`?token=`) and
+a waiting-list claim (`?claim=`) are keys: whoever holds one can use it. The
+provider replaces both with "redacted" in every event before it leaves the
+browser. Since phase 11 the same goes for Stripe's `?checkout=` and for
+advertising click identifiers, in every property
+([Visitor statistics](#keys-and-click-identifiers-are-cleaned-out-of-everything)).
+
+### One email layout, and the preview runs the code that sends
+
+Every email the site sends, automatic or announcement, is filled in by
+`lib/email-content.ts` and drawn by `lib/email-layout.ts`: her name or logo
+on the cream background, the message on a white sheet, her business name and
+address below. Both are string functions with nothing server-only in them, so
+the admin's live preview runs them in the browser and the server runs the same
+ones before sending. A preview drawn by other code would be a guess about the
+email. The HTML is written the old way on purpose (tables, a style on every
+element, hex colours, 560px wide), because Outlook for Windows draws with
+Word's engine and Gmail keeps only part of a stylesheet.
+
+### A link alone on its line is the button
+
+Her text has no "button" to choose. A paragraph whose only content is one link
+is drawn as a rose pill button instead; a link inside a sentence stays a link.
+The chips she inserts for a link (the booking link, the WhatsApp group) put
+words she can change into a link, so a link chip on its own line is the email's
+action. When a link's address comes out empty (an event with no WhatsApp
+group), its paragraph goes; when a labelled line's value is empty ("Ora:" for
+an event with no hour), the line goes. Both used to arrive as an empty label.
+
+### Placeholders are chips on screen and {{names}} in the database
+
+The stored templates keep `{{event_name}}`, which every sender already
+understood, so nothing that sends changed. The editor turns each one into an
+atomic chip with a plain name when it loads and back when it saves
+(`lib/email-editor.ts`), so a placeholder cannot be half deleted or misspelled.
+Link placeholders live in a link's address, where they stay as written.
+
+### An automatic email saves on Save, not on its own
+
+The post and event editors autosave, because a draft is private until
+published. A template has no draft: the next confirmation goes out with
+whatever is saved, so a half-written sentence must not be. The editor has one
+Save, says when something is unsaved, and asks before leaving. A test email
+sends the text on screen, saved or not, so she can try before she saves.
+
+### A test email goes only to the address she signs in with
+
+"Trimite-mi un test" takes the text and nothing else: the route reads the
+admin's address from her session. A route that sent the site's layout, in her
+name, to an address in the request would be a way for anyone with a stolen
+session to send email as her to anyone.
+
+### Emails come from the site's name, and replies go to her
+
+The sending address (`RESEND_FROM_EMAIL`) has to be on a domain verified in
+Resend and is usually one nobody reads. The name beside it is the site's name
+from Conținut site, whatever the variable says, and every email carries a
+Reply-To: her address from Conținut site → Email-uri, or the address for
+personal data requests until she sets one (audit I13). Until she has named the
+site, the name is the site's address, not the placeholder the code keeps.
+
+### Who an announcement reaches: a yes newer than any unsubscribe
+
+Promotional email needs a ticked opt-in (Law 506/2004, art. 12). An
+announcement goes to an address whose latest `marketing_consent_at`, on any of
+its bookings or waiting-list entries, is newer than any unsubscribe for it:
+the box asks about future events, not one event, and ticking it again after
+unsubscribing is a new yes. One email per address, with the name and language
+of that person's latest row. The rule is `exclusions()` in
+`lib/announcement-audience.ts`: the editor runs it with her session to show who
+will receive it, and the server runs it again when it sends, including just
+before each hundred leave, so someone who unsubscribes meanwhile is not
+written to.
+
+### Unsubscribing takes a press on the page, and one click in the mail app
+
+Every announcement carries `List-Unsubscribe` and `List-Unsubscribe-Post`
+(RFC 8058), which Gmail and Apple Mail turn into their own Unsubscribe button
+and which Gmail expects from bulk senders; that POST unsubscribes at once. The
+link in the footer opens a page instead, and the page changes nothing until
+its button is pressed, because mail scanners open every link in an email and a
+link that unsubscribed on its own would unsubscribe people who never asked.
+The button is a plain form post, answered with a redirect, so it works before
+any script has loaded in an in-app browser. Each link carries a random token
+stored only as its SHA-256, like the testimonial links.
+
+### Announcements go a hundred at a time, and a stopped send carries on
+
+Resend's batch endpoint takes a hundred emails per request. The recipients are
+written down once, on the first attempt, each marked sent or failed as its
+batch returns, so a send the function's time limit cut short resumes with the
+ones still pending, and failed ones can be tried again from the report. The
+announcement's status moves to `sending` in one conditional update, and
+`send_started_at` is refreshed after every batch, so a second press, or a
+second tab, cannot send it twice; a send that has not moved for ten minutes can
+be taken over.
+
+### Offering a freed seat is one locked database step
+
+The count of free seats, the choice of who is next and the stamping of their
+claim windows used to be three requests from the server, so a Stripe webhook
+and her save arriving together could both count the same free seat (audit
+B16). `offer_waiting_list_seats()` does all three under the lock on the event
+row that `register_for_event()` takes, so bookings and offers on one event wait
+for each other. The server then emails, and `settle_waiting_list_offers()`
+withdraws the offers whose email failed and records the rest as one batch, so
+no seat is held for someone who was never told and the log counts only links
+that went out (B9).
+
+### Cu stea holds every starred message, archived or not
+
+The inbox has three tabs: Primite (not archived), Cu stea and Arhivă. A star
+means "come back to this", so a starred message stays in Cu stea when she
+archives it, as in a mail app, and says "Arhivat" there so she knows where it
+lives. The tabs are views of two separate facts, `starred` and `archived_at`,
+not places a message moves between.
+
+### "Necitite" is a switch on every tab, not a tab of its own
+
+Unread is a state a message is in wherever it is, so it narrows the tab she
+is on instead of being a fourth place; the dashboard's "mesaje necitite" opens
+Primite with it on (`?filter=unread`). Opening a message marks it read, and the
+list follows at once: with the switch on, the message leaves the list while
+its letter stays open, because the switch promised unread ones. "Marchează ca
+necitit" puts one back.
+
+### The letter sits beside the list from 1280 px, and covers the screen below
+
+Side by side needs room for both a list she can scan and a letter at a
+reading width. From 1280 px, even with the sidebar wide, there is room for a
+23 rem list and a letter of about 37 rem; below that the letter would be
+squeezed to a phone's width beside a squeezed list. So below 1280 px it is a
+modal dialog over the whole screen, like a mail app on a phone, and on a
+tablet or a small laptop its text is centred at a reading width. Either way it
+has its own address (`?m=<id>`), so the back button and a refresh work. The
+wide pane sticks under the top bar and scrolls on its own, so a long list
+scrolls past without taking the letter away.
+
+### The reply is a mail link that quotes what they wrote
+
+"Răspunde prin email" is a `mailto:` link: her own mail app sends the reply,
+from her own address, and keeps it in her sent mail, which a form on the site
+could not do without sending her replies through the site's email allowance.
+The visitor wrote through a form and has no copy of their message, so the reply
+quotes it, as a mail app quotes a reply, under a heading in the language of the
+page they wrote from. Some mail apps refuse links near 2,000 characters, and a
+Romanian letter takes six once encoded, so a long message is quoted from the
+start for as much as fits and marked as cut.
+
+### "All N that match" means the ones she was shown
+
+Ticking every message that matches the tab and the search is a promise, not a
+list: the ids are read when she presses an action. In an inbox, messages keep
+arriving, and one that came in while she was choosing would be archived or
+deleted without ever being seen. So the list remembers when the newest message
+it knew of arrived, and "all that match" stops there.
+
+---
+
+## Payments
+
+### The booking opens the payment; the browser never names a booking to pay for
+
+`/api/register` books a paid seat as `pending` and creates the Stripe Checkout
+session in the same request, answering with the page to pay on. It used to
+answer with the booking's id, and the browser then asked `/api/stripe/checkout`
+to start a payment for that id. That second endpoint took any id it was sent,
+in any state (audit B11), and the time between the two requests left a seat
+held with nothing to pay for it, which is the case the one-hour hold was
+invented to clean up. A waiting-list claim works the same way.
+
+### One payable session per booking, recorded by compare-and-set
+
+A booking keeps its current session in `stripe_session_id` from the moment the
+session exists. Someone who comes back is sent to that session while it is
+open, in their language and with five minutes left; otherwise it is expired
+first, so the old page stops taking money before a new one exists. A new
+session is recorded only if the booking still holds the session the request
+started from. Two tabs at once both create one; the second to record loses,
+expires its own, and follows the first. An expired session frees the seat only
+while it is still the booking's current one: Stripe sends
+`checkout.session.expired` for a session the site expired itself, which would
+otherwise delete a booking that had moved on to a newer session.
+
+Whatever gets past all that is caught where the money arrives: a payment for a
+booking already paid, or removed meanwhile, is refunded in full at once and
+reported to her (`payment_returned`).
+
+### One seat per email per event, decided in the booking function
+
+Rares' rule (3 October 2026): nobody books for a friend; the friend books with
+their own address. `register_for_event()` applies it under the lock it already
+takes on the event, which is what makes it hold: a check in the API would race
+with itself. An address whose seat still counts is refused
+(`already_registered`). An address with an unpaid checkout carries on with
+that booking, taking the details it just sent, rather than holding a second
+seat; the API then sends it back to its session. Removed, cancelled and
+refunded bookings do not count, so those people may book again.
+
+No unique index enforces it. An unpaid booking stops counting after its hold
+without changing any column, and an index cannot see time. It also cannot be
+added to production without first deleting the duplicates Rares' own testing
+may have left, which a migration should not do on its own.
+
+### A hold counts from the last checkout
+
+An unpaid booking holds its seat for `pending_hold_interval()` (an hour) from
+`checkout_started_at`, which every new session for it moves forward. Before,
+the hour ran from `created_at`, so someone who came back after 40 minutes got
+a fresh 30-minute session on a hold with 20 minutes left, and the seat could
+be sold under them before they paid. A hold is moved forward only while it
+still holds the seat: one that lapsed may already be someone else's, and only
+`register_for_event()`, under the lock, may give it back.
+
+### The return page records the payment too
+
+Stripe's fulfilment guide asks for both: the webhook, because the visitor may
+never come back, and the page they come back to, because a webhook can be
+late. `fulfilCheckout()` (`lib/payments.ts`) is safe to run twice, and at the
+same moment: only a booking still `pending` changes, Postgres lets one of two
+simultaneous updates through, and the one that changed it sends the
+confirmation. Stripe waits up to ten seconds for the webhook before sending the
+visitor back, so the page usually finds the booking paid already.
+
+### Payment methods are listed in the code, not left to Stripe's settings
+
+`payment_method_types` names card (with Apple Pay and Link, which Stripe shows
+beside cards) and, for lei and euro, Revolut Pay. Leaving the choice to her
+Stripe Dashboard would let a method whose money arrives days later (SEPA
+debit, a bank transfer) appear at checkout. A seat cannot wait days for an
+answer: the hold would lapse and the seat be sold, and then the money would
+arrive. Both listed methods answer at once. The cost is that a new method
+needs a line of code; the benefit is that the booking rules never meet one
+they were not written for.
+
+### Every session names the database that made it
+
+The Stripe sandbox is one account shared by every copy of the site: a laptop,
+the test suite, previews and production all create sessions in it, and Stripe
+sends each session's events to every endpoint listening. A session's metadata
+carries `db` ("local", or the production database's host), and the webhook
+acts only on its own. Without it, production would look for a laptop's
+booking, find nothing, and, with the rule that money without a seat is
+refunded, refund the laptop's test payment; `stripe listen` on a laptop would
+do the same to production's.
+
+### Refunds: full only, through Stripe, marked before they are made
+
+Rares' rule (3 October 2026): never partial. A refund is made against the
+payment with no amount, so Stripe returns all of it. The booking is marked as
+having a refund asked for before Stripe is called, which is how the webhook
+tells the site's own refunds from one she made in her Stripe Dashboard: only
+the second kind is news to her. An idempotency key makes a double press one
+refund. A partial refund she makes in Stripe anyway leaves the booking as it
+is (audit B10).
+
+### Cancelling: automatic until 48 hours before, then her decision
+
+Rares' rules of 3 October 2026, provisional until the instructor confirms them,
+and written down once, in `lib/cancel-rules.ts`, which the cancel page, the
+server and the confirmation email all read. Up to 48 hours before the start,
+the link cancels and refunds in full. After that it cancels, frees the seat
+and leaves the refund to her. Once the event has begun it cancels nothing.
+The law leaves the window to her: the 14-day right of withdrawal does not
+apply to leisure services booked for a date (Directive 2011/83/EU art. 16(l),
+OUG 34/2014 art. 16 lit. l), as long as the terms say so before booking, and
+the booking form links them now.
+
+The cancellation is made first and the refund after. A refund Stripe refuses
+leaves a cancelled booking waiting for her as a refund requested, rather than
+undoing what the person asked for.
+
+### The cancel link is a token, and only a button uses it
+
+The confirmation email carries a random token; the booking keeps its SHA-256,
+as the testimonial and unsubscribe links do, and each confirmation sent makes
+a new one. The link opens a page that changes nothing; its button posts a
+form. Mail scanners open every link in an email, and a link that cancelled on
+its own would cancel bookings nobody meant to cancel.
+
+### Notices for what happened without her
+
+`admin_notifications` records what she would otherwise not know: someone
+cancelled (and what became of the money), a refund made in Stripe, a refund
+that failed, a payment returned. Her own actions are not recorded: she was
+there. Each notice has a `source_id` (the cancellation, the Stripe charge,
+refund or session) with a unique index, because the webhook and the return
+page can report the same thing. The dashboard shows the unseen ones above
+everything; seen ones are deleted after 90 days.
+
+### Promotion codes live in Stripe
+
+A code is a Stripe coupon behind a promotion code, made from the admin panel
+so she never needs Stripe's Dashboard for it. Stripe applies it on its payment
+page and counts its uses, so the site keeps no table of codes, only, on each
+booking, the amount actually charged and the code used. Every session allows
+codes. A code cannot be tied to one event, because each checkout names its own
+line rather than a stored Stripe product.
+
+### The test suite talks to a stand-in for Stripe
+
+CI has no Stripe account, on purpose, so every paid path used to stop at
+"Invalid API Key", and the money path was the least tested part of the site.
+`tests/fake-stripe.ts` answers the calls the site makes, keeps what it
+creates, serves a payment page with Plătește and Înapoi, and signs its
+webhooks with the suite's secret. The site reaches it through
+`STRIPE_API_BASE`, which `lib/stripe.ts` honours only against the local
+database and with a test key, so no setting on a deployment can send a payment
+anywhere but Stripe. The flows were also run once against the real sandbox
+(JOURNEY.md), because a stand-in proves the site's logic, not Stripe's.
+
+## Speed and motion
+
+### The server runs in Paris, beside the database
+
+Measured on 29 September 2026: Vercel ran the site's functions in `iad1`
+(Washington, D.C.), its default, and the database is in Supabase's
+`eu-west-3` (Paris). Every read crossed the Atlantic and back, and a page
+makes one to three rounds of reads, one after another. From Romania, the live
+site took 0.78–1.11 s to start answering on the home page and 0.38–0.63 s
+on the others; about 0.1 s of that is connecting. A local build with 85 ms
+added to every database request answered in the same pattern: about 0.13 s
+for a page with one round, 0.36 s for the home page's three.
+
+`vercel.json` now names `cdg1` (Paris), so each read is a few milliseconds
+instead of a crossing. Visitors are in Romania, and a request enters Vercel at
+the edge nearest them either way; the distance that matters is the one
+repeated for every read, between the function and the database. The home
+page also reads in two rounds instead of three.
+
+PostHog was not the wait: it loads in the browser, after the page (below).
+
+### No loading screens: a veil over slow clicks instead
+
+The plan had lotus loading screens (`loading.tsx`) on the list pages as well
+as the veil. Only the veil was built:
+
+- **Once React shows a loading screen, it keeps it for at least 0.3 s**
+  (`globalMostRecentFallbackTime + 300` in react-dom), so every click to a
+  list would have shown the lotus for a third of a second even when the page
+  was ready in a twentieth. With the server beside the database, that is
+  slower than no loading screen at all.
+- **A loading screen is a Suspense boundary,** so the response starts before
+  the page has run: `/events?page=999` would answer 200 instead of 404 unless
+  the proxy counted the archive first.
+- **It could never cover an event or a post,** whose pages must be able to
+  answer 404, and those are the pages a card leads to.
+
+The veil covers every slow click on every page: nothing for 150 ms, then the
+page washes pale and stops taking taps, then at 450 ms the lotus turns. A
+quick page shows none of it, and the top bar stays above it, so choosing
+somewhere else is still one tap away.
+
+### Page transitions are React's; the screen breathes, not the page
+
+The old view fades out (150 ms), the new one fades in rising a few pixels
+(300 ms, starting at 60 ms), and the photograph of an event or a post glides
+from the card to the top of its page (420 ms). The top bar does not move.
+
+- **What breathes is the root: the picture of the screen.** Each page wraps its
+  content in a React `<ViewTransition>` whose arrival starts the transition
+  (in every page, because a layout stays put between pages and never
+  enters), but whose class is `none`, so the page is not pictured on its own.
+  The first version pictured each page's content, and a named element is
+  captured whole: a page several screens tall. On Linux WebKit, drawing
+  without a GPU, a navigation then waited a median of 1.6 to 3.4 s for its
+  pictures, once 83 s, and 2 in 24 stalled outright; with the screen alone,
+  a median of 0.45 to 0.62 s and none in 36. On a phone the whole-page
+  picture would cost memory on every tap even where it was quick.
+- **`<html>` names itself.** When a commit changes only what is inside
+  `<ViewTransition>` boundaries, React drops the root from the transition, so
+  that a change in one part does not fade the page. A page change is such a
+  commit, and React judged it differently from one navigation to the next.
+  React leaves the root alone when `<html>` carries a name of its own, so the
+  public layout sets one (`components/layout/navigation-feedback.tsx`).
+- **The photographs are pairs of named boundaries:** the name is the event's
+  or the post's, and it is on the page only once.
+- **Back and forward do not animate.** The browser has already shown the other
+  page by the time the site hears of it, and on an iPhone the swipe is its own
+  animation; a fade after it would show the page being left, then fade back.
+- **With less motion, nothing animates,** and the old page's picture is made
+  invisible: with the animations off, the browser would otherwise draw the old
+  page and the new one over each other for the few frames it takes to finish
+  (about 0.1 s in Chromium).
+- **Old pictures are made invisible, never `display: none`.** WebKit crashes
+  the whole page on `display: none` there if anything asks for the page's
+  animations while the picture's group is animating, and React animates the
+  root's group itself. Three crashes in three on a bare page; `opacity: 0`,
+  none.
+- **What stays on top is named and stacked:** the screen, then the veil fading
+  out, then the photograph, then the top bar. The bar's name is on its
+  `<nav>`, not on `<header>`: a named element is a backdrop root, and on the
+  header it would leave the bar's glass nothing behind it to blur.
+
+A browser without the API (Safari before 18) shows the new page, as before.
+
+### The FAQ opens in CSS where it can, and by script in Safari
+
+The accordion stays native `<details>`: the answers are in the HTML for search
+engines, and the keyboard and screen readers get it for nothing. Chromium can
+animate one to its natural height (`interpolate-size` and
+`::details-content`); Safari cannot, and Safari is most of the people reading
+it, so there `components/faq-accordion.tsx` takes the tap and animates the
+height with the Web Animations API. Both take 320 ms on the same curve, and
+neither runs for someone who asked for less motion.
+
+The frame lost its `overflow: hidden` and its blur: a blurred element is drawn
+on a layer of its own, where its clipping and its rounded corners do not
+always agree between browsers, and the blur was over a flat cream page.
+
+### Glass only on what floats
+
+Rares's rule (24 September): the blur stays on what floats over other content
+(the fixed top bar, "Înapoi sus", the sticky booking panel, dialogs, the
+admin's sticky bars and overlays) and comes off what rests on the page:
+cards, buttons, inputs, the FAQ, the admin's sign-in card. Over the flat
+cream page it blurred nothing and cost each element a compositing layer.
+`GlassCard` blurs only when passed `floating`, and
+`tests/ui-consistency.spec.ts` lists every file allowed to ask for a blur, so
+a new one is a decision rather than a habit.
+
+### PostHog: public pages only, after the page
+
+It is rendered by the public layout alone, so the admin panel never loads it
+and her own work is never counted. It is not part of any page's JavaScript:
+it is fetched once the page has loaded and the browser has a quiet moment, so
+on a phone it never competes with the page. Phase 9 also kept it off
+localhost; phase 11 replaced that with a stricter rule, under
+[Visitor statistics](#visitor-statistics).
+
+### "Înapoi sus" comes and goes with the top bar
+
+It appears once the first screen has scrolled away, and from then on it hides
+while the page is read downwards and returns when it is scrolled up, with the
+bar. Always shown, it sat on whatever was in the bottom corner of a phone,
+the last FAQ's + among them; someone looking for the top scrolls up anyway.
+It moves keyboard focus to the start of the content, as "Sari la conținut"
+does, because the button it leaves is about to disappear.
+
+## Visitor statistics
+
+PostHog, set up in phase 11 (4 October 2026). The rules are in
+`lib/analytics.ts`, the loading in `components/providers/analytics.tsx`.
+
+### Counted from her site alone, and sent only to the EU
+
+Statistics come from one address: the site's public one,
+`NEXT_PUBLIC_SITE_URL`, which only production sets. A preview, a development
+server, the test suite or a copy of the site somewhere else sends nothing,
+and a page on this machine never sends to PostHog whatever the settings say.
+Until phase 11 the rule was "not on localhost", which a phone on the Wi-Fi
+opening the dev server at `192.168.x.x` walked straight past, carrying
+production's key from `.env`, and which every preview passed too.
+
+Where they go is fixed in the code: PostHog's EU cloud, `eu.i.posthog.com`
+in Frankfurt. `NEXT_PUBLIC_POSTHOG_HOST` is honoured only for an address on
+this machine, the suite's stand-in, so no setting in Vercel can send
+visitors' data to the US; a key from an American project gets nothing
+through. The CSP allows that one address for connections and nothing of
+PostHog's as a script or an image.
+
+### Everything else PostHog can do is switched off in the code
+
+PostHog's project settings can switch on recordings of the screen, surveys,
+heatmaps and clicks recorded on their own, and the library obeys them unless
+its configuration says otherwise. On 4 October her project had session replay
+on, and the live site, still on the code of 22 September, loaded the
+recorder. Each is now switched off in the site's own configuration, PostHog's
+settings are not fetched at all (`advanced_disable_flags`) and nothing is
+loaded from PostHog (`disable_external_dependency_loading`), so a switch
+flipped there reaches no visitor. What is sent is page views, page leaves
+(how long a page was read, and how far down) and the six events in
+`AnalyticsEvents`.
+
+### Nothing kept, and nobody a person: memory, not cookieless mode
+
+`persistence: "memory"` and `person_profiles: "never"`: no cookie, nothing in
+the browser's storage, a fresh anonymous visitor on every page load (see
+[above](#visitor-statistics-keep-nothing-in-the-browser)). PostHog's newer
+cookieless mode counts unique visitors per day with a hash its servers make
+from the IP address and the browser, and was considered and not used. It
+needs a switch in her project, without which PostHog throws every event
+away; it loses the country map and PostHog's bot filtering, because the IP
+address is stripped before those run; and it would make the cookie policy's
+"we cannot recognise you from one visit to the next" untrue within a day.
+The cost of memory: a visitor who comes back or reloads counts again, and a
+paid booking finished after Stripe's page (a new page load) cannot be joined
+in a funnel to the click that began it. The counts still compare.
+
+### Keys and click identifiers are cleaned out of everything
+
+Every string in every event passes through `withoutSecrets`, which replaces
+the value of a key (`claim`, `token`, `checkout`) or of an advertising click
+identifier (`fbclid`, `igshid`, `gclid`…), plain or percent-encoded inside
+another address, with `redacted`. A property holding a click identifier on
+its own (`fbclid`, `$session_entry_fbclid`) is cleaned too. A property called
+`token` is not: it is PostHog's own, the project key it files the event
+under. The first version of the cleaning blanked it as well, which PostHog
+would have answered by throwing away every event; the suite's stand-in now
+refuses an event without the key, as PostHog does.
+
+### Who is not counted
+
+Her: a browser signed in to the admin panel (Supabase's `sb-…-auth-token`
+cookie) is not counted on the public site, the admin panel never loads the
+library, and its previews (`/[locale]/preview`) are not counted. Pages behind
+someone's personal link (cancelling, writing a testimonial, unsubscribing),
+which exist for one person each and show their details. A browser that sends
+Global Privacy Control or Do Not Track, which does not even fetch the
+library. And a browser driven by a program (`navigator.webdriver`,
+"HeadlessChrome"), which posthog-js would drop anyway; the site asks first
+and spares it the download.
+
+### A page view each, and what counts as a read post
+
+One page view per address, sent with the address and time it happened at even
+when the library arrives later, and ahead of any event on that page. An
+address that differs only in the keys or in `paid` is the same view: the
+booking panel takes them out of the address after Stripe's return, and that
+tidying is not a second visit. A post counts as read when the end of its text
+has come into view and the reader has spent a quarter of its reading time on
+the page, between 10 seconds and a minute.
+
+### Tested against a stand-in, checked by hand with a switch
+
+`tests/fake-posthog.ts` receives what the test build sends, refuses what
+PostHog would refuse, and answers anything else (settings, flags, scripts)
+with a 404 the tests look for. The site sends to it because the test build
+sets `NEXT_PUBLIC_POSTHOG_HOST` to its address on this machine. The browsers
+of the tests that read it are made to look like a visitor's (`asVisitor` in
+`tests/analytics-helpers.ts`), because automated ones are left out, and a
+test expecting nothing would otherwise pass for the wrong reason. Every other
+test's browser stays automated, so the rest of the suite never loads the
+library.
+
+`NEXT_PUBLIC_POSTHOG_DEBUG=1` in a build lifts the address rules for a
+deliberate check from localhost or a preview, and logs each event, and the
+reason when a visit is not counted, in the browser's console. It never lifts
+the visitor's refusal or her own exclusion.

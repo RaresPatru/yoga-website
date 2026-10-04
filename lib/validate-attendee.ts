@@ -21,7 +21,7 @@
 // allow, and rejecting a valid-but-unusual address is worse than accepting a
 // malformed one — the confirmation email simply bounces. This checks the shape
 // only: something, an @, something, a dot, a couple more characters.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export interface AttendeeInput {
   eventId?: unknown;
@@ -94,4 +94,45 @@ export function validateAttendee(input: AttendeeInput): AttendeeValidation {
       phone: phone.trim(),
     },
   };
+}
+
+/** The longest note the booking forms accept, in characters. */
+export const NOTE_MAX_LENGTH = 1000;
+
+export interface BookingExtrasInput {
+  note?: unknown;
+  noteConsent?: unknown;
+  marketing?: unknown;
+}
+
+export interface BookingExtras {
+  /** Their note, trimmed, or null. Only ever set together with their consent to keep it. */
+  note: string | null;
+  /** Whether they ticked "tell me about future events". */
+  marketing: boolean;
+}
+
+/**
+ * The optional part of the booking and waiting-list forms: a note ("Ceva ce
+ * ar trebui să știu?") and the marketing opt-in.
+ *
+ * A note is often about health, which GDPR lets us keep only with explicit
+ * consent, so a note without the consent box ticked is refused rather than
+ * stored or silently dropped: the form says why, and they can tick it or
+ * delete the note. The database refuses a note without a consent time too
+ * (registrations_note_needs_consent); this answers first, in words.
+ *
+ * Only `true` counts as a tick. A missing field is no, never yes.
+ */
+export function validateBookingExtras(
+  input: BookingExtrasInput
+): { ok: true; value: BookingExtras } | { ok: false; error: string; code: "note_too_long" | "note_needs_consent" } {
+  const note = typeof input.note === "string" ? input.note.trim() : "";
+  if (note.length > NOTE_MAX_LENGTH) {
+    return { ok: false, error: "Note too long", code: "note_too_long" };
+  }
+  if (note && input.noteConsent !== true) {
+    return { ok: false, error: "A note needs consent", code: "note_needs_consent" };
+  }
+  return { ok: true, value: { note: note || null, marketing: input.marketing === true } };
 }

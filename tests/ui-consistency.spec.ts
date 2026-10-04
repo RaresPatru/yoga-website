@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -340,6 +340,101 @@ test.describe("the authorisation root stays out of reach", () => {
   });
 });
 
+test.describe("glass only where something passes behind it", () => {
+  /**
+   * WHAT THIS PROTECTS
+   *
+   * A backdrop blur costs every element that has one its own compositing
+   * layer: memory and frame time on a phone, and in Chrome, text drawn
+   * without subpixel smoothing. Over the flat cream page it blurs nothing, so
+   * it is paid for nothing. Rares's rule (24 September 2026): it stays on what
+   * floats over other content (the fixed top bar, the "Înapoi sus" button,
+   * the sticky booking panel, dialogs, drawers, the admin's sticky bars and
+   * overlays) and comes off everything that rests on the page: cards,
+   * buttons, inputs, the FAQ.
+   *
+   * The list below is every file allowed to ask for one. A new use has to be
+   * added here, which is the moment to ask whether anything passes behind it.
+   */
+  const ALLOWED = [
+    // The public site: the fixed top bar, GlassCard's `floating` prop, and
+    // the "Înapoi sus" button (app/globals.css).
+    "components/layout/header.tsx",
+    "components/ui/glass-card.tsx",
+    "app/globals.css",
+    // The admin panel's sticky bars, dialogs and overlays.
+    "components/admin/blog/editor-bar.tsx",
+    "components/admin/content/form-bar.tsx",
+    "components/admin/media-library.tsx",
+    "components/admin/messages/letter.tsx",
+    "components/admin/participants/details-dialog.tsx",
+    "components/admin/participants/participant-panel.tsx",
+    "components/admin/rich-text-editor.tsx",
+    "components/admin/shell/admin-shell.tsx",
+    "components/admin/ui/confirm-dialog.tsx",
+    "components/admin/ui/selection-bar.tsx",
+  ];
+
+  test("only what floats over the page asks for a blur", () => {
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) return walk(full);
+        return /\.(ts|tsx|css)$/.test(entry.name) ? [full] : [];
+      });
+    const offenders = ["app", "lib", "components"]
+      .flatMap((dir) => walk(join(process.cwd(), dir)))
+      .filter((file) =>
+        readFileSync(file, "utf8")
+          .split("\n")
+          // Comments may talk about it; only code asks for it.
+          .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+          .some((line) => /backdrop-blur|backdrop-filter/.test(line))
+      )
+      .map((file) => file.replace(process.cwd(), "").replace(/\\/g, "/").replace(/^\//, ""))
+      .filter((file) => !ALLOWED.includes(file));
+    expect(offenders, "see the note above: is anything actually behind it?").toEqual([]);
+  });
+
+  const blurOf = (target: Locator) =>
+    target.first().evaluate((el) => {
+      const style = getComputedStyle(el) as CSSStyleDeclaration & { webkitBackdropFilter?: string };
+      return style.backdropFilter || style.webkitBackdropFilter || "none";
+    });
+
+  test("cards, buttons, fields and the FAQ rest on the page without one", async ({ page }) => {
+    const event = await seedEvent({ image_url: "/mock/event-2.webp" });
+    try {
+      await page.goto("/ro");
+      // A secondary button (the hero's second), a post card, the FAQ frame.
+      expect(await blurOf(page.locator("main").getByRole("link", { name: "Despre mine", exact: true }))).toBe("none");
+      expect(await blurOf(page.locator("main a[href*='/blog/'] > div"))).toBe("none");
+      expect(await blurOf(page.locator(".faq-list"))).toBe("none");
+
+      await page.goto("/ro/events");
+      expect(await blurOf(page.locator(`main a[href$="/events/${event.slug}"] > div`))).toBe("none");
+
+      await page.goto("/ro/contact");
+      expect(await blurOf(page.locator("main input"))).toBe("none");
+      expect(await blurOf(page.locator("main textarea"))).toBe("none");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  test("the top bar and the sticky booking panel keep it", async ({ page }) => {
+    const event = await seedEvent();
+    try {
+      await page.goto(`/ro/events/${event.slug}`);
+      expect(await blurOf(page.locator("header nav"))).not.toBe("none");
+      // The booking panel: the card that holds the booking form, sticky beside the event.
+      expect(await blurOf(page.locator("main .sticky"))).not.toBe("none");
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+});
+
 test.describe("seats and ratings say the same thing wherever they appear", () => {
   /**
    * Both of these are shared components rather than markup repeated per page —
@@ -352,24 +447,46 @@ test.describe("seats and ratings say the same thing wherever they appear", () =>
    * extracting it.
    */
 
-  test("a full event says so, and an uncapped one says nothing", async ({ page }) => {
-    const full = await seedEvent({ max_participants: 1 });
-    const uncapped = await seedEvent({ max_participants: null });
+  /**
+   * THIS TEST USED TO ASSERT THE OPPOSITE, AND THAT IS THE POINT OF IT.
+   *
+   * It read "a full event says so, and an uncapped one says nothing", because
+   * a NULL capacity meant unlimited and a card with no limit had nothing useful
+   * to print. That was the bug: an event saved without a number looked exactly
+   * like one with seats left, and took bookings from an unbounded number of
+   * people. NULL and 0 now both mean sold out —
+   * supabase/migrations/20260918000000_capacity_is_required.sql — so all three
+   * ways of being full have to read identically on a card.
+   */
+  test("every way of being full reads the same on a card", async ({ page }) => {
+    const filledUp = await seedEvent({ max_participants: 1 });
+    const blank = await seedEvent({ max_participants: null });
+    const zero = await seedEvent({ max_participants: 0 });
+    const open = await seedEvent({ max_participants: 5 });
     try {
-      await seedRegistrationFor(full.id);
+      await seedRegistrationFor(filledUp.id);
       await page.goto("/ro/events");
 
-      const fullCard = page.locator(`a[href$="/events/${full.slug}"]`);
-      await expect(fullCard).toContainText("Complet");
+      for (const [event, why] of [
+        [filledUp, "filled up through the site"],
+        [blank, "no capacity ever set"],
+        [zero, "deliberately marked full"],
+      ] as const) {
+        await expect(
+          page.locator(`a[href$="/events/${event.slug}"]`),
+          why
+        ).toContainText("Locuri epuizate");
+      }
 
-      // Not "unlimited seats left", which is not information — it is noise on
-      // every card that has no limit.
-      const uncappedCard = page.locator(`a[href$="/events/${uncapped.slug}"]`);
-      await expect(uncappedCard).toBeVisible();
-      await expect(uncappedCard).not.toContainText(/locuri|Complet/);
+      // And one that is not full, so this cannot pass by marking everything
+      // sold out — which is precisely how it would fail unnoticed.
+      const openCard = page.locator(`a[href$="/events/${open.slug}"]`);
+      await expect(openCard).toContainText("5 locuri libere");
+      await expect(openCard).not.toContainText("epuizate");
     } finally {
-      await deleteEventBySlug(full.slug);
-      await deleteEventBySlug(uncapped.slug);
+      for (const event of [filledUp, blank, zero, open]) {
+        await deleteEventBySlug(event.slug);
+      }
     }
   });
 
@@ -385,6 +502,71 @@ test.describe("seats and ratings say the same thing wherever they appear", () =>
       await page.goto("/ro/events");
       await expect(page.locator(`a[href$="/events/${event.slug}"]`)).toContainText(
         "4 locuri libere"
+      );
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
+  });
+
+  /**
+   * ROMANIAN DOES NOT PLURALISE THE WAY ENGLISH DOES
+   *
+   * English splits at one and stops. Romanian splits twice — the noun takes
+   * `de` once the last two digits leave the 1..19 window — so a component that
+   * interpolates a number into a Romanian sentence has three cases to get
+   * right, and the count on these cards used to have one: "1 locuri libere",
+   * "20 locuri libere".
+   *
+   * The boundaries are what is worth pinning: 1, the last short form (19), and
+   * the first long one (20). Capacity is hers to set from the admin panel, so
+   * twenty is an ordinary number here, not an edge case.
+   */
+  test("the seat count is grammatical in Romanian at every boundary", async ({ page }) => {
+    const cases = [
+      { capacity: 1, says: "1 loc liber" },
+      { capacity: 19, says: "19 locuri libere" },
+      { capacity: 20, says: "20 de locuri libere" },
+    ];
+    const events = await Promise.all(
+      cases.map((c) => seedEvent({ max_participants: c.capacity }))
+    );
+    try {
+      await page.goto("/ro/events");
+      for (const [i, expected] of cases.entries()) {
+        const card = page.locator(`a[href$="/events/${events[i].slug}"]`);
+        await expect(card, `capacity ${expected.capacity}`).toContainText(expected.says);
+      }
+
+      // And the same three in English, which only has the one split.
+      await page.goto("/en/events");
+      for (const [i, expected] of cases.entries()) {
+        const card = page.locator(`a[href$="/events/${events[i].slug}"]`);
+        await expect(card).toContainText(
+          expected.capacity === 1 ? "1 spot left" : `${expected.capacity} spots left`
+        );
+      }
+    } finally {
+      await Promise.all(events.map((e) => deleteEventBySlug(e.slug)));
+    }
+  });
+
+  /**
+   * The last seat is the one worth getting right, because it is the one that
+   * used to read "1 locuri libere" — and it is exactly when someone is deciding
+   * whether to book now or later.
+   */
+  test("one seat left reads as one seat, on the card and on the event page", async ({
+    page,
+  }) => {
+    const event = await seedEvent({ max_participants: 2 });
+    try {
+      await seedRegistrationFor(event.id);
+      await page.goto("/ro/events");
+      await expect(page.locator(`a[href$="/events/${event.slug}"]`)).toContainText(
+        "1 loc liber"
+      );
+      await expect(page.locator(`a[href$="/events/${event.slug}"]`)).not.toContainText(
+        "1 locuri"
       );
     } finally {
       await deleteEventBySlug(event.slug);
@@ -408,12 +590,12 @@ test.describe("seats and ratings say the same thing wherever they appear", () =>
       // Scoped to the card element, not `div`. Matching every div on the page and
       // filtering by text made Playwright resolve thousands of handles and run
       // the browser process out of memory.
-      const ratedCard = page.locator(".backdrop-blur-xl").filter({ hasText: rated.content });
+      const ratedCard = page.locator("main article").filter({ hasText: rated.content });
       // One accessible name for the group, not five icons each announcing
       // "star". A screen reader says "4 din 5 stele" and moves on.
       await expect(ratedCard.getByRole("img", { name: "4 din 5 stele" })).toBeVisible();
 
-      const unratedCard = page.locator(".backdrop-blur-xl").filter({ hasText: unrated.content });
+      const unratedCard = page.locator("main article").filter({ hasText: unrated.content });
       await expect(unratedCard.getByRole("img", { name: /din 5 stele/ })).toHaveCount(0);
     } finally {
       await deleteTestimonial(rated);
@@ -480,7 +662,20 @@ test.describe("the footer opens her actual accounts", () => {
    */
   async function footerLinks(page: Page): Promise<string[]> {
     await page.goto("/ro/testimonials");
-    return page.locator("footer a").evaluateAll((links) =>
+    /*
+     * `a[rel~="me"]`, not `footer a`.
+     *
+     * This read every anchor in the footer, which was the same thing while the
+     * footer held nothing but the two social icons. It stopped being the same
+     * thing when the footer grew an index of the site's sections, and the test
+     * then reported six navigation links where it expected two accounts.
+     *
+     * `rel="me"` is the right discriminator rather than a lucky one: it is the
+     * microformat for "this link points at a profile belonging to the same
+     * person", it is already on these two anchors for that reason, and no
+     * navigation link will ever carry it.
+     */
+    return page.locator('footer a[rel~="me"]').evaluateAll((links) =>
       links.map((a) => `${a.getAttribute("aria-label")} ${a.getAttribute("href")}`)
     );
   }

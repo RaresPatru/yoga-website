@@ -1,7 +1,31 @@
 import type { FullConfig } from "@playwright/test";
+import type { Server } from "node:http";
+import { startFakeStripe } from "./fake-stripe";
+import { startFakePosthog } from "./fake-posthog";
+
+/** Starts a stand-in, or uses whatever already listens on its port. */
+async function standIn(name: string, start: () => Promise<Server>): Promise<Server | null> {
+  try {
+    return await start();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+    console.warn(`[global-setup] The ${name} stand-in's port is taken; using whatever listens there.`);
+    return null;
+  }
+}
 
 /**
- * Warms the server once before any test runs.
+ * Starts the stand-ins for Stripe and PostHog, then warms the server once
+ * before any test runs.
+ *
+ * The stand-ins (tests/fake-stripe.ts, tests/fake-posthog.ts) live in this
+ * process for the whole run, and the teardown returned below closes them.
+ * The site reaches them through STRIPE_API_BASE and NEXT_PUBLIC_POSTHOG_HOST
+ * (playwright.config.ts). If something already listens on a port, a
+ * stand-in left by an earlier run or one a developer started, that one is
+ * used.
+ *
+ * WARMING
  *
  * Playwright considers the web server "ready" as soon as `/` responds, but
  * every other route is still cold: on a production build each dynamic page
@@ -16,6 +40,8 @@ import type { FullConfig } from "@playwright/test";
  * as a puzzling timeout inside an unrelated spec.
  */
 async function globalSetup(config: FullConfig) {
+  const standIns = [await standIn("Stripe", startFakeStripe), await standIn("PostHog", startFakePosthog)];
+
   const baseURL =
     config.projects[0]?.use?.baseURL ?? "http://localhost:3100";
 
@@ -30,6 +56,7 @@ async function globalSetup(config: FullConfig) {
     "/en/blog",
     "/en/testimonials",
     "/en/contact",
+    "/ro/booking",
     "/admin/login",
     "/sitemap.xml",
     "/robots.txt",
@@ -43,6 +70,12 @@ async function globalSetup(config: FullConfig) {
       // properly. Warming is best effort.
     }
   }
+
+  return async () => {
+    await Promise.all(
+      standIns.map((server) => new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve())))
+    );
+  };
 }
 
 export default globalSetup;

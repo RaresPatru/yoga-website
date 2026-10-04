@@ -82,12 +82,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          # Matches the development machine. package-lock.json is written by
-          # whichever npm the developer runs, and npm major versions disagree
-          # about how optional peer dependencies are recorded — npm 12 resolves
-          # a nested @swc/helpers for next-intl's @swc/core that npm 10 does
-          # not. `npm ci` then refuses the lock it was handed. Keeping the two
-          # on the same major is what stops that class of failure.
+          # Node 24 for the reason given in the quality job above.
           node-version: 24
           cache: npm
 

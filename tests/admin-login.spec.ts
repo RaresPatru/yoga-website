@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { loginAsAdmin, logout, adminCreds } from "./helpers";
+import { loginAsAdmin, logout, adminCreds, siteContentValue } from "./helpers";
 
 test.describe("admin login", () => {
   test("unauthenticated access to /admin redirects to login", async ({ page }) => {
@@ -19,7 +19,14 @@ test.describe("admin login", () => {
 
   test("valid credentials land on the dashboard", async ({ page }) => {
     await loginAsAdmin(page);
-    await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Panou de control" })).toBeVisible();
+  });
+
+  test("the sign-in page has a tab title of its own", async ({ page }) => {
+    const siteName = await siteContentValue("general.site_name");
+    await page.goto("/admin/login");
+    await expect(page.getByRole("heading", { name: "Autentificare Admin" })).toBeVisible();
+    await expect(page).toHaveTitle(`Autentificare Admin · ${siteName} Admin`);
   });
 
   test("logout returns to the login page", async ({ page }) => {

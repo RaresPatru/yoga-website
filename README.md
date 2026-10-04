@@ -2,8 +2,9 @@
 
 A bilingual (Romanian / English) site for a solo yoga instructor: event listings
 with paid and free registration, capacity limits, waiting lists with expiring
-claim links, a blog, transactional email with calendar invites, and an admin
-panel she runs herself without a developer.
+claim links, a blog, branded transactional email with calendar invites,
+announcements to the people who opted in, and an admin panel she runs herself
+without a developer.
 
 **Stack:** Next.js 16 (App Router) · Supabase (Postgres, Auth, Storage) ·
 Stripe Checkout · Resend · Cloudflare Turnstile · Tailwind CSS 4 · Playwright ·
@@ -17,30 +18,36 @@ deployed on Vercel.
 |---|---|
 | [docs/JOURNEY.md](docs/JOURNEY.md) | What was wrong with this codebase and how each problem was found and fixed. The most interesting document here. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Why things are built the way they are. |
+| [docs/DATABASE.md](docs/DATABASE.md) | The schema map: what exists, who may touch it, and how a change reaches production. |
 | [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md) | Guide for the instructor, in Romanian. |
 | [docs/CONTENT-NEEDED.md](docs/CONTENT-NEEDED.md) | Content still to be supplied. |
 | [PLAN.md](PLAN.md) | What is left to do. |
-| [RESEARCH_FINDINGS.md](RESEARCH_FINDINGS.md) | Research into comparable sites, filtered to what applies here. |
+| [RESEARCH_FINDINGS.md](RESEARCH_FINDINGS.md) | Inspiration: what comparable yoga sites do, and how blogging platforms store posts. Not a blueprint. |
 
 ---
 
 ## Running it locally
 
-**Prerequisites:** Node 22+, Docker Desktop (for the local database).
+**Prerequisites:** Node 24 (pinned in `.nvmrc` and `engines`), Docker Desktop
+(for the local database). The commands below are PowerShell; the `npm` and
+`npx` lines are the same in any shell.
 
-```bash
+```powershell
 npm install
 
 # Starts Postgres, Auth and Storage in Docker, applies every migration in
 # supabase/migrations, then runs supabase/seed.sql.
 npx supabase start
 
-cp .env.example .env.local     # fill in your own keys
+Copy-Item .env.example .env    # then fill in your own keys
 npm run dev
 ```
 
-`supabase start` prints a local API URL and keys. The seed creates a test
-administrator and a little demo content, so `/admin` is usable immediately.
+`supabase start` prints a local API URL and keys. Put those three Supabase
+values in `.env.local`: Next reads it after `.env` and lets it win, so
+`npm run dev` talks to the throwaway local database while `npm run dev:prod`
+reaches the real one. The seed creates a test administrator and a little demo
+content, so `/admin` is usable immediately.
 
 ### Environment
 
@@ -56,15 +63,17 @@ those emails are built as `undefined/ro/events/...`.
 
 ## Tests
 
-```bash
-npm run test:e2e             # everything, against a production build
-PW_DEV=1 npm run test:e2e    # faster loop while writing tests
+```powershell
+npm run test:e2e                                              # everything, against a production build
+$env:PW_DEV = "1"; npm run test:e2e; Remove-Item Env:PW_DEV   # faster loop while writing tests
 npx playwright test --project=mobile
 ```
 
-136 specs across four Playwright projects: `chromium` (public pages), `admin`
-(authenticated, sharing one signed-in session), `admin-auth` (sign-in and
-sign-out, run last), and `mobile` (WebKit on an iPhone viewport).
+About 400 test runs — 392 passed and 11 skipped on 22 September 2026 — across
+five Playwright projects: `setup` (signs in once), `chromium` (public pages),
+`admin` (authenticated, sharing that one signed-in session), `admin-auth`
+(sign-in and sign-out, run last), and `mobile` (WebKit on an iPhone viewport).
+Public specs run on both engines, which is why runs outnumber tests.
 
 Two things worth knowing:
 
@@ -88,8 +97,8 @@ replays from empty. Both halves of Postgres access control are declared there:
 Both must pass, and leaving grants to be applied by hand in the dashboard is why
 two features once shipped with `permission denied` errors.
 
-```bash
-npx supabase db reset                # replay all migrations + seed
+```powershell
+npx supabase db reset --local        # replay all migrations + seed (local only)
 npx supabase migration new <name>
 ```
 
@@ -102,9 +111,10 @@ the one thing not to do here.
 
 ```
 app/[locale]/          public pages, server-rendered
-app/admin/             admin panel (client-side, guarded server-side by proxy.ts)
+app/admin/(auth)/      admin sign-in pages, without the sidebar
+app/admin/(panel)/     admin panel: sidebar, dashboard, editors (guarded server-side by proxy.ts)
 app/api/               route handlers — registration, Stripe, uploads
-app/api/og/            generated share images (link previews + Instagram stories)
+app/api/og/            generated share images (link previews)
 components/            UI; components/events holds the client islands
 lib/                   Supabase clients, email, validation, metadata, sanitising
 supabase/migrations/   schema, in order
@@ -121,5 +131,5 @@ and blocks `/admin` server-side before any HTML is sent.
 The comments explain *why*, not *what* — particularly in the SQL migrations and
 the API routes, several of which encode reasoning about security or concurrency
 that is not obvious from the statements themselves. Start with
-`supabase/migrations/20260807000003_event_availability_view.sql` if you want a
-sense of the house style.
+`supabase/migrations-archive/20260807000003_event_availability_view.sql` if you
+want a sense of the house style.

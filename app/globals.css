@@ -362,6 +362,985 @@ body {
     }
   }
 
+  /*
+   * THE BAR GETS OUT OF THE WAY WHILE YOU ARE READING
+   *
+   * `translate`, NOT `transform`. Tailwind v4 compiles its transform utilities
+   * to the individual `translate` / `scale` / `rotate` properties, and the
+   * browser applies those *before* `transform`, so an element carrying both
+   * gets the product of the two rather than the one written last. Nothing on
+   * the header sets `translate`, and keeping this rule out of the utility
+   * classes is what keeps that true.
+   *
+   * The extra 2rem past -100% is the shadow. In its compact state the bar has
+   * none, but the hide can also begin while the card treatment is still
+   * transitioning out, and `shadow-lg` reaches about 22px below the box —
+   * travelling exactly one box height would park a soft grey smear along the
+   * top edge of the screen for the length of the transition.
+   */
+  .nav-bar[data-hidden] {
+    translate: 0 calc(-100% - 2rem);
+  }
+
+  /*
+   * A BAR THE KEYBOARD IS USING MUST NOT LEAVE — AND ONLY THE KEYBOARD'S
+   *
+   * Someone who tabs into the wordmark or a link while the bar is parked
+   * off-screen would otherwise be focused on something they cannot see.
+   *
+   * This was `:not(:focus-within)` on the rule above, and it was wrong in a way
+   * that took a bug report to see. Closing the drawer hands focus back to the
+   * hamburger, the hamburger lives inside this element, and nothing about
+   * scrolling blurs a button — so after opening and closing the menu once, the
+   * veto held and the bar simply stopped hiding. The giveaway was that widening
+   * the window past `md` fixed it: that makes the hamburger `display: none`,
+   * which blurs it, which released the veto.
+   *
+   * `:focus-visible` is the distinction that was missing. A button focused
+   * programmatically after a tap or a click does not match it; the same button
+   * focused after Escape, by someone driving with a keyboard, does. So the
+   * veto now applies to exactly the visitor it was written for and to nobody
+   * else.
+   *
+   * IT IS TWO RULES ON PURPOSE. `:has()` is the newest thing in this file, and
+   * written as `:not(:has(...))` on the hide rule an engine without `:has()`
+   * would drop the whole declaration and the bar would never hide at all.
+   * Split like this, the worst an old engine does is lose the veto — the bar
+   * still hides, which is the behaviour almost everyone is here for.
+   */
+  .nav-bar[data-hidden]:has(:focus-visible) {
+    translate: 0 0;
+  }
+
+  /*
+   * Reduced motion keeps the behaviour and drops the slide: the bar still
+   * leaves and returns, between one frame and the next.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    .nav-bar {
+      transition: translate 260ms ease;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Tooltips                                                            */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * WHY THESE EXIST AT ALL
+   *
+   * Every tooltip on this site used to be the `title` attribute, which draws
+   * the operating system's own: a black box with white text, in the system
+   * font, at whatever size the OS feels like. On a cream and sage page it looks
+   * like something has gone wrong. It cannot be styled — there is no CSS hook
+   * for it in any browser — so matching the site means not using it.
+   *
+   * WHY NOT THE MODERN ONE
+   *
+   * The current recommendation is interest invokers (`interestfor`) with
+   * `popover="hint"` and anchor positioning. Measured support: interest invokers
+   * are Chrome 142+ with nothing in Firefox or Safari, and anchor positioning
+   * has no Safari at all — so on the iPhone this audience arrives with, the
+   * whole mechanism is absent and it takes two polyfills to stand up. That is
+   * the same trade this project already refused for the navigation drawer
+   * (see the note on `popover` above), and refuses again here for a decoration.
+   *
+   * WHAT THIS IS NOT
+   *
+   * It is not the accessible name. Screen readers get that from the element's
+   * own text or its `aria-label`, and generated content is announced too
+   * inconsistently to be relied on. These are a visual aid for somebody with a
+   * pointer, and nothing here is only said by a tooltip.
+   *
+   * The one thing it does worse than a real popover: Escape cannot dismiss it,
+   * which WCAG 1.4.13 asks for. `title` could not either, so nothing regressed
+   * — but it is the reason to revisit this once Safari ships the real thing.
+   *
+   * THE TRAP, WHICH COSTS NOTHING TO AVOID AND IS INVISIBLE WHEN YOU DO NOT
+   *
+   * The tooltip is this element's own `::after`, so an element with hidden
+   * overflow clips it away entirely. `truncate` is the usual culprit, because
+   * it is three declarations wearing one name and `overflow: hidden` is the one
+   * nobody is thinking about. The header wordmark had exactly that: the tooltip
+   * computed as fully opaque, passed every style assertion, and painted
+   * nothing. Put `truncate` on a child, never on the element carrying
+   * `data-tooltip` — `tests/public-events.spec.ts` fails if anything does.
+   */
+  [data-tooltip] {
+    position: relative;
+  }
+
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    /*
+     * Below, not above. Above is the convention and would put the header's
+     * wordmark tooltip off the top of the screen, since that bar is pinned to
+     * the very edge of the viewport. One direction everywhere beats a correct
+     * direction per call site that nobody remembers to set.
+     */
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    translate: -50% 0;
+    z-index: 60;
+    /* `max-content` so the label never wraps mid-phrase, capped so a long one
+       cannot stretch off the side of a phone. */
+    width: max-content;
+    max-width: min(16rem, 70vw);
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.625rem;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 35%, transparent);
+    /*
+     * Opaque, and no backdrop blur. A tooltip lands on top of body copy, and
+     * even at 97% the text underneath ghosted through it. The blur would not
+     * have helped: CLAUDE.md records that blurring a flat backdrop returns the
+     * same backdrop while costing subpixel antialiasing on the text in front.
+     */
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 400;
+    text-align: center;
+    white-space: normal;
+    box-shadow: 0 8px 20px -6px rgb(0 0 0 / 0.18);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /*
+   * For a button at the right edge of a box that clips (the letter pane on
+   * the Mesaje page scrolls, and so clips): the tooltip ends at the button
+   * instead of being centred on it and cut off.
+   */
+  [data-tooltip][data-tooltip-end]::after {
+    left: auto;
+    right: 0;
+    translate: none;
+  }
+
+  /*
+   * For a button pinned to the bottom right of the screen ("Înapoi sus"),
+   * where below and centred would both leave the screen: beside it, on the
+   * left.
+   */
+  [data-tooltip][data-tooltip-left]::after {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 0.5rem);
+    translate: 0 -50%;
+  }
+
+  /* Keyboard first, and deliberately outside the pointer query below: someone
+     tabbing on a touchscreen laptop still gets it. */
+  [data-tooltip]:focus-visible::after {
+    opacity: 1;
+  }
+
+  /*
+   * Pointers only. Without this the tooltip appears on the tap that also
+   * follows the link, so it flashes up as the page changes under it — which is
+   * noise, not information.
+   */
+  @media (hover: hover) {
+    [data-tooltip]:hover::after {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    [data-tooltip]::after {
+      transition: opacity 150ms ease;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* The calendar menu on an event's date                                */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * The date carries a tooltip *and* opens a menu, and both of them arrive
+   * below it. Once the menu is open the tooltip is answering a question that
+   * has already been answered, and it lands on top of the first option.
+   */
+  .event-calendar[open] > summary::after {
+    opacity: 0;
+  }
+
+  /*
+   * Motion that shows what changed, which is the only kind worth having here:
+   * the panel rises the two pixels it just appeared from. `<details>` cannot be
+   * transitioned open — `::details-content` is Chromium-only — so this runs as
+   * a one-shot animation when the panel is inserted.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    .event-calendar[open] > .event-calendar-panel {
+      animation: event-calendar-open 140ms ease-out;
+    }
+  }
+
+  @keyframes event-calendar-open {
+    from {
+      opacity: 0;
+      translate: 0 -2px;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* The home page's event carousel                                      */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * ONE SCROLL CONTAINER, NOT A TRANSFORM
+   *
+   * Swiping is what a phone visitor reaches for, and the browser already does
+   * swiping. A scroll-snap container gives momentum, the rubber band at each
+   * end and the platform's own sense of when a half-swipe should settle — all
+   * for free, all correct on the engine that matters here. The arrows in
+   * components/events/event-carousel.tsx just call `scrollTo` on this same
+   * element, so there is one notion of where the carousel is.
+   *
+   * Scroll snap has been Baseline since 2020, so none of this needs a fallback.
+   * The newer conveniences would: `scrollsnapchange` is Chrome-only and so are
+   * container scroll-state queries, and CLAUDE.md already records what happens
+   * when you trust WebKit's answer about scroll features.
+   */
+  .event-carousel-track {
+    display: flex;
+    overflow-x: auto;
+    /*
+     * Explicitly clipped, not left to compute.
+     *
+     * The component sets this element's height to the slide showing, and a
+     * shorter slide leaves the taller ones overflowing it. Unstated, the other
+     * axis follows `overflow-x` to `auto`, which makes that overflow *scroll* —
+     * the track would drag vertically under a finger and land somewhere between
+     * two cards. `hidden` is a legal pairing with `auto` here (only `visible`
+     * gets coerced) and clips at the padding box, so the card's shadow, which
+     * lives inside that padding, is untouched.
+     */
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    /* A swipe that runs past either end stops there instead of turning into a
+       scroll of the page behind it. */
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    /*
+     * BLEED, AND WHY THE CARD IS OTHERWISE CLIPPED
+     *
+     * `overflow-x: auto` clips on both axes — CSS will not let one axis scroll
+     * while the other stays visible — so this padding is the only room the card
+     * has for anything that reaches outside it, and the card grows 2% under a
+     * pointer and carries a shadow.
+     *
+     * The vertical padding is asymmetric because the shadow is. It is thrown
+     * downwards: at rest `shadow-lg` reaches 22px below the card (10px offset,
+     * 15px blur, -3px spread) and on hover `shadow-xl` reaches about 40px,
+     * against the 12px that used to be here. Both were sliced flat, which reads
+     * as a card resting on a hard edge rather than lifting off the page. The
+     * top needs far less, because the offset pushes the shadow away from it —
+     * the only thing to clear there is the 2% growth.
+     *
+     * The inline padding is cancelled by `-mx-4` at the call site, so the card
+     * still lines up with the heading above it. `scroll-padding-inline` has to
+     * match it: that is what keeps every snap position at exactly
+     * `index * slideWidth`, which is the arithmetic the component reads and
+     * writes. The vertical padding is free of that — it moves nothing sideways.
+     */
+    padding: 0.75rem 1rem 2.75rem;
+    scroll-padding-inline: 1rem;
+    /*
+     * AND WHY THE BLEED THEN NEEDS A GAP
+     *
+     * That inline padding is inside the scrollport, so with the slides packed
+     * edge to edge the next card's first 16px sat in it — a hairline of a
+     * second card down the side of the screen, which reads as a rendering fault
+     * rather than as a hint that there is more. A gap at least as wide as the
+     * padding pushes the neighbour past the scrollport edge instead, leaving
+     * the bleed empty and the card alone on screen.
+     *
+     * It costs nothing in layout: the gap only ever exists off-screen, between
+     * two snap stops.
+     */
+    column-gap: 2rem;
+    /*
+     * A narrow card is only as tall as what is in it.
+     *
+     * Flex stretches every item to the tallest by default, and the card inside
+     * takes that height — which is right beside a photograph and wrong without
+     * one. An event with no picture was a short paragraph floating in the
+     * middle of a tall empty card, with nearly two hundred pixels of nothing
+     * above and below it on a phone.
+     *
+     * Letting it end where its content ends puts that space outside the card,
+     * where it reads as layout rather than as a card that failed to fill
+     * itself. The track itself is then sized to whichever slide is showing —
+     * see the `ResizeObserver` in components/events/event-carousel.tsx — so
+     * that space does not sit empty beneath a short card either.
+     *
+     * From `md` the cards are side-on to their photograph and want to match it,
+     * so they go back to stretching.
+     */
+    align-items: flex-start;
+  }
+
+  @media (min-width: 768px) {
+    .event-carousel-track {
+      align-items: stretch;
+    }
+  }
+
+  /* `scrollbar-width` is Safari 18.2 and later, and this is the engine that
+     matters most here. */
+  .event-carousel-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * One slide, exactly as wide as the scrollport's content box — which is the
+   * width the card had when the page showed only one of them.
+   *
+   * Declared here rather than as classes on the `<li>` at the call site because
+   * the component measures the distance between two slides to decide where to
+   * scroll to. The width, the gap and the snapping belong beside the container
+   * that reads them; split up, they drift apart and the arrows start landing
+   * between cards.
+   */
+  .event-carousel-track > li {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+  }
+
+  /* Programmatic scrolls — the arrows and the arrow keys — glide. A swipe is
+     driven by the finger either way, and is unaffected by this. Off for anyone
+     who asked for less motion, which leaves the arrows cutting straight to the
+     next card. */
+  @media (prefers-reduced-motion: no-preference) {
+    .event-carousel-track {
+      scroll-behavior: smooth;
+      /*
+       * The section settles into the new card's height instead of snapping to
+       * it. The component writes that height; this is what makes the change
+       * readable rather than a jolt — slightly slower than the card's own
+       * glide, so the box has stopped moving by the time the eye returns to it.
+       *
+       * Only ever a length-to-length change: the first height is applied
+       * before the first paint, and CSS cannot interpolate from `auto`
+       * regardless, so nothing animates on load.
+       */
+      transition: height 360ms ease;
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* The blog editor's list of shortcuts                                 */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * A popover — components/admin/editor-shortcuts.tsx says why this one may
+   * be, when the public pages avoid them. The browser's own popover is a
+   * bordered, padded, scrolling box in the middle of the screen; everything
+   * about that is replaced here.
+   *
+   * WHERE IT OPENS
+   *
+   * On a phone, from the bottom edge and full width. The button is small and
+   * near the top, and a panel hanging off it would use half of a narrow screen
+   * while covering what she was writing.
+   *
+   * Wider than that, under the button that opened it, reaching left from the
+   * button's right edge, since it is the last button in the toolbar — or above
+   * it when there is no room below. That part is CSS anchor positioning, which
+   * is newer than the popover itself; where it is missing the list opens in
+   * the middle of the screen, the browser's default, which serves too.
+   */
+  .editor-shortcuts {
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: min(36rem, calc(100dvh - 2rem));
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 30%, transparent);
+    border-radius: 1rem;
+    /* Opaque, for the reason the tooltips are: it lands on top of text. */
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+    box-shadow: 0 24px 48px -16px rgb(0 0 0 / 0.28);
+  }
+
+  /* `display` only while open. Set unconditionally it would outrank the
+     browser's `display: none` for a closed popover and leave it on screen. */
+  .editor-shortcuts:popover-open {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .editor-shortcuts-body {
+    overflow-y: auto;
+    /* Scrolling to the end of the list must not start scrolling the post. */
+    overscroll-behavior: contain;
+    padding: 0.25rem 1.25rem 1rem;
+  }
+
+  @media (max-width: 639px) {
+    .editor-shortcuts {
+      inset: auto 0 0 0;
+      width: 100%;
+      max-width: 100%;
+      max-height: 85dvh;
+      margin: 0;
+      border-bottom: 0;
+      border-radius: 1.25rem 1.25rem 0 0;
+    }
+
+    /* Clear of the home indicator on a notched phone. */
+    .editor-shortcuts-body {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  /*
+   * A phone has no Ctrl key. At phone widths the list keeps what can be typed,
+   * which works on any keyboard, and drops the key combinations — the column,
+   * and the rows and groups that are nothing but one. Everything dropped is a
+   * toolbar button anyway.
+   */
+  @media (max-width: 639px) {
+    .editor-shortcuts [data-keys-only],
+    .editor-shortcuts .editor-shortcuts-keys {
+      display: none;
+    }
+  }
+
+  @media (min-width: 640px) {
+    @supports (position-area: block-end) {
+      .editor-shortcuts {
+        inset: auto;
+        margin: 0.5rem 0 0;
+        position-area: block-end span-inline-start;
+        /*
+         * Under the button and only as tall as the room under it, since `100%`
+         * here is the area beside the anchor, not the screen: anchor
+         * positioning makes that area the containing block. The list scrolls
+         * inside it rather than running off the bottom of the page, which the
+         * first version did by 186px on a 900px screen.
+         *
+         * The minimum is what decides when to open upwards instead: with less
+         * than 16rem left below, the list no longer fits there, and
+         * `flip-block` tries the space above the button.
+         */
+        min-height: 16rem;
+        max-height: min(36rem, calc(100% - 1.5rem));
+        position-try-fallbacks: flip-block;
+      }
+    }
+  }
+
+  /* Motion that says where it came from: dropping out of the toolbar, or
+     rising from the bottom edge on a phone. Nothing moves for anyone who has
+     asked for less motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    .editor-shortcuts:popover-open {
+      animation: editor-shortcuts-open 160ms ease-out;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) and (max-width: 639px) {
+    .editor-shortcuts:popover-open {
+      animation: editor-shortcuts-rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+  }
+
+  @keyframes editor-shortcuts-open {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+
+  @keyframes editor-shortcuts-rise {
+    from {
+      translate: 0 100%;
+    }
+  }
+
+  /* The button's tooltip would otherwise sit on the list it has just opened —
+     the same rule as the calendar menu above. */
+  .editor-shortcuts-trigger:has(+ .editor-shortcuts:popover-open)::after {
+    opacity: 0;
+  }
+
+  /*
+   * A video in a post, before anyone presses play (sanitizeArticleHtml in
+   * lib/sanitize.ts). It holds the video's own shape, so nothing below moves
+   * when the player replaces it, and says in words what pressing does and
+   * whom it contacts. No thumbnail: fetching one would contact the video
+   * site before the press, which is the thing this exists to avoid.
+   */
+  .embed-facade {
+    position: relative;
+    width: 100%;
+    margin: 1.75rem auto;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 35%, transparent);
+    background:
+      radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--color-sage) 22%, transparent), transparent 70%),
+      var(--color-warm-white);
+  }
+
+  .embed-facade-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.25rem;
+    text-align: center;
+    color: var(--color-charcoal);
+    cursor: pointer;
+  }
+
+  /* A play triangle on a rose-deep disc, drawn in CSS so the markup is text. */
+  .embed-facade-icon {
+    width: 3.5rem;
+    height: 3.5rem;
+    margin-bottom: 0.25rem;
+    border-radius: 9999px;
+    background-color: var(--color-rose-deep);
+    box-shadow: 0 12px 24px -12px color-mix(in oklab, var(--color-rose-deep) 70%, transparent);
+    position: relative;
+  }
+
+  .embed-facade-icon::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 1.1rem;
+    height: 1.25rem;
+    translate: 0.12rem 0;
+    background-color: white;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+
+  .embed-facade-play:hover .embed-facade-icon {
+    background-color: var(--color-rose-deeper);
+  }
+
+  .embed-facade-title {
+    font-family: var(--font-serif);
+    font-size: 1.125rem;
+    line-height: 1.3;
+  }
+
+  .embed-facade-note {
+    max-width: 22rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: var(--color-charcoal-light);
+  }
+
+  .embed-facade-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .embed-facade-icon {
+      transition: background-color 150ms ease, scale 150ms ease;
+    }
+
+    .embed-facade-play:hover .embed-facade-icon {
+      scale: 1.06;
+    }
+  }
+
+  /* A key to press. Raised, with a heavier bottom edge, like the key itself. */
+  .editor-keycap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.375rem;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 50%, transparent);
+    border-bottom-width: 2px;
+    border-radius: 0.375rem;
+    background-color: white;
+    color: var(--color-charcoal);
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  /*
+   * Characters to type, as opposed to keys to press: flat rather than raised,
+   * and monospaced, because the difference between `*` and `**`, or `-` and
+   * `---`, is the whole instruction.
+   */
+  .editor-typed {
+    display: inline-flex;
+    align-items: center;
+    height: 1.5rem;
+    padding: 0 0.4rem;
+    border-radius: 0.375rem;
+    background-color: color-mix(in oklab, var(--color-sage) 16%, transparent);
+    color: var(--color-charcoal);
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1;
+    white-space: pre;
+  }
+
+  /*
+   * Admin toasts (components/admin/ui/toaster.tsx): a manual popover, so it
+   * sits in the top layer above open dialogs. The browser's own popover styles
+   * centre it on screen with a border and a background; this pins it to the
+   * bottom corner instead, clear of the phone's home indicator.
+   */
+  .admin-toasts {
+    position: fixed;
+    inset: auto 1rem calc(1rem + env(safe-area-inset-bottom, 0px)) auto;
+    width: min(24rem, calc(100vw - 2rem));
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  @media (max-width: 639px) {
+    .admin-toasts {
+      inset-inline: 1rem;
+      width: auto;
+    }
+  }
+
+  .admin-toast {
+    animation: admin-toast-in 200ms ease-out;
+  }
+
+  @keyframes admin-toast-in {
+    from {
+      opacity: 0;
+      translate: 0 0.5rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-toast {
+      animation: none;
+    }
+  }
+
+  /*
+   * The admin frame (components/admin/shell/admin-shell.tsx).
+   *
+   * On a computer, a two-column grid: the sidebar's column is 15rem, or 4.5rem
+   * when she pins it narrow, and the page takes the rest. The sidebar sticks to
+   * the viewport, so a long page never scrolls it away. Its panel is positioned
+   * inside the column rather than being the column, so when the narrow sidebar
+   * widens on hover it grows over the page, with a shadow, instead of pushing
+   * the page sideways.
+   *
+   * Below 1024px there is no sidebar: the menu button in the top bar opens the
+   * same links in a drawer.
+   */
+  /*
+   * The top bar's height, 52px: what the public site's bar measures once it
+   * goes flush and full-width (components/layout/header.tsx), so both halves of
+   * the site stand at one height. Everything that sticks beneath the bar reads
+   * it from here (the editors' action bars and toolbars, the content menu),
+   * and so does the phone drawer's top row, which sits outside the shell.
+   */
+  .admin-shell,
+  .admin-drawer {
+    --admin-header-h: 3.25rem;
+  }
+
+  .admin-shell {
+    --admin-rail-width: 15rem;
+    /* How wide the page column grows before it centres itself instead. */
+    --admin-main-max: 72rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 100dvh;
+    background-color: var(--color-cream);
+  }
+
+  .admin-shell[data-collapsed="true"] {
+    --admin-rail-width: 4.5rem;
+  }
+
+  .admin-rail {
+    display: none;
+  }
+
+  .admin-nav-label {
+    white-space: nowrap;
+    transition: opacity 150ms ease;
+  }
+
+  @media (min-width: 1024px) {
+    .admin-shell {
+      grid-template-columns: var(--admin-rail-width) minmax(0, 1fr);
+      transition: grid-template-columns 200ms ease;
+    }
+
+    .admin-rail {
+      display: block;
+      position: sticky;
+      top: 0;
+      height: 100dvh;
+      z-index: 40;
+    }
+
+    .admin-rail-panel {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--admin-rail-width);
+      display: flex;
+      flex-direction: column;
+      background-color: var(--color-warm-white);
+      border-inline-end: 1px solid color-mix(in oklab, var(--color-sage) 25%, transparent);
+      transition:
+        width 200ms ease,
+        box-shadow 200ms ease;
+    }
+
+    /* Widened over the page while pinned narrow. */
+    .admin-shell[data-peek="true"] .admin-rail-panel {
+      width: 15rem;
+      box-shadow: 0 12px 32px rgb(45 45 45 / 0.12);
+    }
+
+    /*
+     * Pinned narrow: the labels fade out rather than being removed, so each
+     * link keeps its text as its accessible name for a screen reader.
+     */
+    .admin-shell[data-collapsed="true"]:not([data-peek="true"]) .admin-nav-label {
+      opacity: 0;
+    }
+
+    /*
+     * "Conținut site"'s section menu, and the page title above it
+     * (components/admin/content/content-screen.tsx). The page column stops
+     * growing at --admin-main-max and centres itself, so on a wide screen the
+     * space it leaves opens up on the menu's far side while the menu stays
+     * pressed against the form. Moving both left by a quarter of that space
+     * puts the menu exactly half way between the sidebar and the form: the
+     * margin on its left shrinks by the quarter and the gap on its right grows
+     * by it, and the two started out equal (the column's padding and the gap
+     * to the form are both 2rem). Where the column is not at its widest the
+     * shift is zero and nothing moves.
+     *
+     * 100vw counts a desktop scrollbar, which the column does not have, so
+     * with one showing the menu sits a quarter of its width (about 4px) left
+     * of the exact middle.
+     */
+    .admin-content-menu {
+      translate: calc(max(0px, 100vw - var(--admin-rail-width) - var(--admin-main-max)) / -4) 0;
+      /* Follows the sidebar when it narrows or widens, at its pace. */
+      transition: translate 200ms ease;
+    }
+  }
+
+  /*
+   * The toggle sits at the left edge of the screen, so its tooltip starts at
+   * the button instead of being centred on it, which would push half of it off
+   * the screen.
+   */
+  .admin-rail [data-tooltip]::after {
+    left: 0;
+    translate: none;
+  }
+
+  /* Hidden until a keyboard user tabs to it, then pinned to the top corner. */
+  .admin-skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 70;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    background-color: var(--color-charcoal);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    translate: 0 calc(-100% - 1rem);
+  }
+
+  .admin-skip-link:focus-visible {
+    translate: none;
+  }
+
+  /*
+   * The phone drawer: a modal <dialog> that slides in from the left. The
+   * slide runs both ways because `display` and `overlay` are transitioned as
+   * discrete properties, which keeps the dialog on screen, and in the top layer
+   * where the browser supports `overlay`, until the slide-out has finished.
+   *
+   * WebKit does not support `overlay` yet, so there the dialog leaves the top
+   * layer the moment it closes and finishes sliding out as an ordinary fixed
+   * element. The z-index keeps it above the page for those 250ms; inside the
+   * top layer it has no effect.
+   */
+  .admin-drawer {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 50;
+    width: min(18rem, 85vw);
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
+    border: 0;
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+    box-shadow: 0 12px 32px rgb(45 45 45 / 0.18);
+    translate: -100% 0;
+    transition:
+      translate 250ms ease,
+      display 250ms allow-discrete,
+      overlay 250ms allow-discrete;
+  }
+
+  .admin-drawer[open] {
+    translate: 0 0;
+  }
+
+  @starting-style {
+    .admin-drawer[open] {
+      translate: -100% 0;
+    }
+  }
+
+  .admin-drawer::backdrop {
+    background-color: rgb(45 45 45 / 0);
+    transition:
+      background-color 250ms ease,
+      display 250ms allow-discrete,
+      overlay 250ms allow-discrete;
+  }
+
+  .admin-drawer[open]::backdrop {
+    background-color: rgb(45 45 45 / 0.4);
+  }
+
+  @starting-style {
+    .admin-drawer[open]::backdrop {
+      background-color: rgb(45 45 45 / 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-shell,
+    .admin-rail-panel,
+    .admin-nav-label,
+    .admin-content-menu,
+    .admin-drawer,
+    .admin-drawer::backdrop {
+      transition: none;
+    }
+  }
+
+  /*
+   * The admin's sort menus, open. A plain <select> opens a list the operating
+   * system draws, which on Windows is a square-cornered box in system grey:
+   * the one sharp shape in a panel of rounded ones. The customizable select
+   * (appearance: base-select) lets the page draw that list instead, so it
+   * takes the panel's corners and colours: sage on hover, rose on the chosen
+   * order, as in the sidebar.
+   *
+   * Only with a mouse. On a touch screen the phone's own picker is the better
+   * control (larger, familiar, and already rounded), and opting in would
+   * replace it. A browser that does not know base-select (Firefox, Safari
+   * before 27) keeps its own list; nothing breaks, it is only square.
+   *
+   * A base-select sizes itself to the chosen option rather than the longest
+   * one, so each page gives the closed control a width of its own; otherwise
+   * picking a shorter order would shrink it and move the search box.
+   */
+  @media (hover: hover) and (pointer: fine) {
+    @supports (appearance: base-select) {
+      .admin-select,
+      .admin-select::picker(select) {
+        appearance: base-select;
+      }
+
+      /* A base-select is a flex row that stretches its children, which
+         leaves the label at the top of the pill and the arrow at the bottom. */
+      .admin-select {
+        align-items: center;
+      }
+
+      /* The panel's chevron (lucide's chevron-down) in place of the browser's
+         filled triangle, drawn as a mask so it takes the text's colour. */
+      .admin-select::picker-icon {
+        content: "";
+        width: 1rem;
+        height: 1rem;
+        background-color: var(--color-charcoal-light);
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+          center / contain no-repeat;
+        transition: rotate 150ms ease;
+      }
+
+      .admin-select:open::picker-icon {
+        rotate: 180deg;
+      }
+
+      .admin-select::picker(select) {
+        margin-block: 0.375rem;
+        padding: 0.375rem;
+        border: 1px solid color-mix(in oklab, var(--color-sage) 30%, transparent);
+        border-radius: 1rem;
+        background-color: white;
+        box-shadow: 0 12px 32px rgb(45 45 45 / 0.12);
+      }
+
+      .admin-select option {
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.625rem;
+        color: var(--color-charcoal-light);
+        transition: background-color 150ms ease;
+      }
+
+      .admin-select option:hover {
+        background-color: color-mix(in oklab, var(--color-sage) 15%, transparent);
+        color: var(--color-charcoal);
+      }
+
+      .admin-select option:checked {
+        background-color: color-mix(in oklab, var(--color-rose) 15%, transparent);
+        color: var(--color-rose-deep);
+        font-weight: 500;
+      }
+
+      /* Arrow keys move focus through the list: the same rose ring as every
+         other focused control, drawn inside the row's rounded corners. */
+      .admin-select option:focus-visible {
+        outline: 2px solid var(--color-rose-deep);
+        outline-offset: -2px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .admin-select::picker-icon,
+      .admin-select option {
+        transition: none;
+      }
+    }
+  }
+
 }
 
 @layer utilities {
@@ -382,5 +1361,742 @@ body {
     height: auto;
     aspect-ratio: 16 / 9;
     border-radius: 0.75rem;
+  }
+}
+
+/*
+ * THE PARTICIPANT PANEL
+ *
+ * A modal <dialog> drawn as a sheet along the right edge on a computer and as
+ * the whole screen on a phone (components/admin/participants/
+ * participant-panel.tsx). The browser's own dialog box is centred and inset;
+ * these rules pin it to the edge and let its content scroll inside it.
+ */
+@layer components {
+  .admin-sheet {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+  }
+
+  @media (min-width: 640px) {
+    .admin-sheet {
+      max-width: 30rem;
+      border-left: 1px solid color-mix(in oklab, var(--color-sage) 25%, transparent);
+      box-shadow: -24px 0 48px -24px rgb(45 45 45 / 0.35);
+    }
+  }
+
+  .admin-sheet::backdrop {
+    background-color: rgb(45 45 45 / 0.3);
+  }
+
+  .admin-sheet[open] {
+    animation: admin-sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  @keyframes admin-sheet-in {
+    from {
+      translate: 2rem 0;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-sheet[open] {
+      animation: none;
+    }
+  }
+}
+
+/*
+ * THE LETTER VIEW
+ *
+ * One message on the Mesaje page (components/admin/messages/letter.tsx).
+ *
+ * From 1280px wide, the letter is a pane beside the list. It sticks below the
+ * top bar and scrolls by itself, so the message stays in view while a long
+ * list scrolls past it; `contain` keeps its scrolling from carrying on into
+ * the page at either end.
+ *
+ * Narrower than that, the letter is a modal <dialog> over the whole screen,
+ * pinned to the edges like the participant panel on a phone, and it arrives
+ * from the right as a page would.
+ */
+@layer components {
+  @media (min-width: 80rem) {
+    .admin-letter-pane {
+      position: sticky;
+      top: calc(var(--admin-header-h) + 1.5rem);
+      max-height: calc(100dvh - var(--admin-header-h) - 3rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+  }
+
+  .admin-letter {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background-color: var(--color-warm-white);
+    color: var(--color-charcoal);
+  }
+
+  .admin-letter::backdrop {
+    background-color: var(--color-cream);
+  }
+
+  .admin-letter[open] {
+    animation: admin-letter-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  @keyframes admin-letter-in {
+    from {
+      translate: 2.5rem 0;
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-letter[open] {
+      animation: none;
+    }
+  }
+}
+
+/*
+ * THE EMAIL EDITOR
+ *
+ * The text of an email as she writes it (components/admin/emails/
+ * email-fields.tsx): close to how the email draws it, so the editor and the
+ * preview beside it do not argue. A placeholder is a chip with its plain
+ * name, and an event in an announcement is a block with the event's name,
+ * both drawn by lib/email-editor.ts.
+ */
+@layer components {
+  .email-body-editor > * + * {
+    margin-top: 0.75rem;
+  }
+
+  .email-body-editor h2 {
+    font-family: var(--font-serif);
+    font-size: 1.375rem;
+    line-height: 1.3;
+  }
+
+  .email-body-editor ul,
+  .email-body-editor ol {
+    padding-left: 1.4rem;
+  }
+
+  .email-body-editor ul {
+    list-style: disc;
+  }
+
+  .email-body-editor ol {
+    list-style: decimal;
+  }
+
+  .email-body-editor li + li {
+    margin-top: 0.25rem;
+  }
+
+  .email-body-editor a {
+    color: var(--color-rose-deep);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .email-chip {
+    display: inline-block;
+    margin-inline: 0.0625rem;
+    padding: 0 0.5rem;
+    border-radius: 999px;
+    background-color: color-mix(in oklab, var(--color-sage) 22%, transparent);
+    color: var(--color-sage-deep);
+    font-size: 0.9em;
+    line-height: 1.6;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  /* Inside a link the chip keeps the link's colour, so the button's words read as one. */
+  .email-body-editor a .email-chip {
+    color: inherit;
+  }
+
+  .email-chip.ProseMirror-selectednode {
+    outline: 2px solid var(--color-rose-deep);
+    outline-offset: 1px;
+  }
+
+  .email-event-node {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0.75rem 0.75rem 1rem;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 45%, transparent);
+    border-radius: 0.875rem;
+    background-color: var(--color-warm-white);
+  }
+
+  .email-event-node.ProseMirror-selectednode {
+    outline: 2px solid var(--color-rose-deep);
+    outline-offset: 2px;
+  }
+
+  .email-event-node-text {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .email-event-node-title {
+    font-family: var(--font-serif);
+    font-size: 1.0625rem;
+    color: var(--color-charcoal);
+    overflow-wrap: anywhere;
+  }
+
+  .email-event-node-when {
+    font-size: 0.875rem;
+    color: var(--color-charcoal-light);
+  }
+
+  .email-event-node-remove {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    color: var(--color-charcoal-light);
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .email-event-node-remove:hover {
+    background-color: color-mix(in oklab, var(--color-sage) 15%, transparent);
+    color: var(--color-charcoal);
+  }
+}
+
+/*
+ * THE LOTUS AND THE VEIL
+ *
+ * What a tap on a link looks like while the next page is on its way
+ * (components/layout/navigation-feedback.tsx), and the lotus that turns in it
+ * (components/layout/lotus.tsx). The timing lives here, and it is what keeps
+ * a quick page from showing any of it:
+ *
+ *   0 ms      the link is followed; nothing changes yet
+ *   150 ms    the page washes pale and stops taking taps
+ *   450 ms    the lotus appears, turning
+ *
+ * The veil is a wash rather than a blur: blurring the whole page costs a
+ * phone more than the half-second it is there for.
+ */
+@layer components {
+  .nav-veil {
+    position: fixed;
+    inset: 0;
+    /* Over the page, under the top bar (z-50): another destination stays one tap away. */
+    z-index: 40;
+    display: grid;
+    place-items: center;
+    background-color: color-mix(in oklab, var(--color-cream) 55%, transparent);
+    /* Hidden, and so letting every tap through, until a link is followed. */
+    visibility: hidden;
+    opacity: 0;
+  }
+
+  /*
+   * `visibility` is hidden through the delay (the animation's first frame
+   * holds it) and visible from the moment the fade starts, so taps are taken
+   * from then on and not before. The name carries it through the page
+   * transition, where it fades out on top of the old page (PAGE TRANSITIONS).
+   */
+  .nav-veil[data-pending] {
+    view-transition-name: nav-veil;
+    animation: nav-veil-in 240ms ease-out 150ms both;
+  }
+
+  .nav-veil-lotus {
+    display: grid;
+    place-items: center;
+    width: 5.5rem;
+    height: 5.5rem;
+    border-radius: 999px;
+    background-color: var(--color-warm-white);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--color-sage) 25%, transparent),
+      0 14px 32px -14px rgb(0 0 0 / 0.3);
+    animation: nav-veil-lotus-in 320ms ease-out 450ms both;
+  }
+
+  @keyframes nav-veil-in {
+    from {
+      visibility: hidden;
+      opacity: 0;
+    }
+    to {
+      visibility: visible;
+      opacity: 1;
+    }
+  }
+
+  @keyframes nav-veil-lotus-in {
+    from {
+      opacity: 0;
+      scale: 0.92;
+    }
+  }
+
+  /*
+   * The lotus turns once every 2.8 seconds while a wave of colour runs round
+   * its outer petals, one petal after the next, every 1.4 seconds: the turn
+   * says "working", and the wave keeps it from looking like a picture that
+   * happens to be rotating.
+   */
+  .lotus {
+    overflow: visible;
+    animation: lotus-turn 2.8s linear infinite;
+  }
+
+  .lotus-petal {
+    fill: var(--color-blush);
+    animation: lotus-wave 1.4s ease-in-out infinite;
+    /* Eight petals, 175 ms apart: one full wave per cycle. Negative, so the
+       wave is already running on the first frame. */
+    animation-delay: calc(var(--petal) * 175ms - 1.4s);
+  }
+
+  .lotus-inner {
+    fill: var(--color-rose);
+  }
+
+  .lotus-heart {
+    fill: var(--color-sage);
+  }
+
+  @keyframes lotus-turn {
+    to {
+      rotate: 1turn;
+    }
+  }
+
+  @keyframes lotus-wave {
+    0%,
+    100% {
+      fill: var(--color-blush);
+    }
+    35% {
+      fill: var(--color-rose-deep);
+    }
+  }
+
+  /*
+   * Less motion: the lotus stops turning and the wave slows, so it still
+   * shows that something is happening without anything moving across the
+   * screen; and it arrives without growing.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .lotus {
+      animation: none;
+    }
+
+    .lotus-petal {
+      animation-duration: 2.8s;
+      animation-delay: calc(var(--petal) * 350ms - 2.8s);
+    }
+
+    .nav-veil-lotus {
+      animation-name: fade-in;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+/*
+ * BACK TO TOP
+ *
+ * The round button in the bottom corner (components/layout/back-to-top.tsx).
+ * It floats over the page, so it keeps the frosted glass of the top bar.
+ */
+@layer components {
+  /* One screen below the top of the page; the button shows once this has
+     scrolled above the screen. */
+  .back-to-top-marker {
+    position: absolute;
+    top: 100vh;
+    top: 100svh;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+
+  .back-to-top {
+    position: fixed;
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    /* Under the veil and the top bar. */
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border: 1px solid color-mix(in oklab, var(--color-sage) 35%, transparent);
+    border-radius: 999px;
+    background-color: rgb(255 255 255 / 0.8);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    backdrop-filter: blur(12px) saturate(150%);
+    color: var(--color-sage-deep);
+    box-shadow: 0 10px 24px -12px rgb(0 0 0 / 0.3);
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 0.75rem;
+  }
+
+  .back-to-top[data-shown] {
+    opacity: 1;
+    visibility: visible;
+    translate: 0 0;
+  }
+
+  /*
+   * It comes and goes with the top bar: away while the page is being read
+   * downwards, where it would sit on whatever is in the corner, and back the
+   * moment the page is scrolled up, which is what someone looking for the
+   * top does anyway. The bar marks itself `data-hidden`
+   * (components/layout/header.tsx); both are children of <body>.
+   */
+  .nav-bar[data-hidden] ~ .back-to-top[data-shown] {
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 0.75rem;
+  }
+
+  @media (hover: hover) {
+    .back-to-top:hover {
+      background-color: #ffffff;
+      color: var(--color-charcoal);
+    }
+  }
+
+  .back-to-top:active {
+    background-color: #ffffff;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .back-to-top {
+      transition:
+        opacity 200ms ease,
+        translate 200ms ease,
+        visibility 200ms,
+        background-color 150ms ease,
+        color 150ms ease;
+    }
+  }
+
+  /* Less motion: it fades in place instead of rising. */
+  @media (prefers-reduced-motion: reduce) {
+    .back-to-top,
+    .nav-bar[data-hidden] ~ .back-to-top[data-shown] {
+      translate: none;
+      transition:
+        opacity 150ms ease,
+        visibility 150ms;
+    }
+  }
+}
+
+/*
+ * THE FAQ
+ *
+ * The questions on the home page (components/faq-list.tsx): a rounded frame,
+ * a hairline between questions, and the answer unfolding under its question.
+ *
+ * Unfolding is CSS where the browser can animate a <details> to its natural
+ * height (Chromium: `interpolate-size` and `::details-content`), and
+ * components/faq-accordion.tsx everywhere else (Safari, Firefox). Both take
+ * 320 ms on the same curve, and neither runs for someone who asked for less
+ * motion: the answer is simply there.
+ */
+@layer components {
+  .faq-list {
+    border: 1px solid color-mix(in oklab, var(--color-sage) 30%, transparent);
+    border-radius: 1rem;
+    background-color: rgb(255 255 255 / 0.6);
+  }
+
+  .faq-item + .faq-item {
+    border-top: 1px solid color-mix(in oklab, var(--color-sage) 30%, transparent);
+  }
+
+  .faq-question {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    /* The keyboard outline follows it, so on the first and last question it
+       stays inside the corners of the frame. */
+    border-radius: 1rem;
+    color: var(--color-charcoal);
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  /* The browser's own triangle: `::marker` in most engines, the prefixed
+     pseudo-element in older Safari. The + says the same thing. */
+  .faq-question::marker {
+    content: "";
+  }
+
+  .faq-question::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Inside the row: outside, it would cross the hairlines around it. */
+  .faq-question:focus-visible {
+    outline-offset: -3px;
+  }
+
+  .faq-icon {
+    flex-shrink: 0;
+    color: var(--color-rose-deep);
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  /* A × while open, and back to + the moment it starts to close. */
+  .faq-item[open]:not([data-closing]) .faq-icon {
+    rotate: 45deg;
+  }
+
+  .faq-answer {
+    padding: 0 1.25rem 1.25rem;
+    color: var(--color-charcoal-light);
+    white-space: pre-line;
+    overflow-wrap: break-word;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .faq-icon {
+      transition: rotate 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+  }
+
+  /*
+   * The CSS half. The answer's box goes from no height to its own, and its
+   * text fades in with it. `content-visibility` is what a closed <details>
+   * hides its content with; `allow-discrete` holds it visible until the
+   * height has finished closing, instead of vanishing on the first frame.
+   */
+  @supports (interpolate-size: allow-keywords) and selector(::details-content) {
+    @media (prefers-reduced-motion: no-preference) {
+      .faq-list {
+        interpolate-size: allow-keywords;
+      }
+
+      .faq-item::details-content {
+        block-size: 0;
+        overflow-y: clip;
+        opacity: 0;
+        transition:
+          block-size 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+          opacity 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+          content-visibility 320ms allow-discrete;
+      }
+
+      .faq-item[open]::details-content {
+        block-size: auto;
+        opacity: 1;
+      }
+    }
+  }
+}
+
+/*
+ * PAGE TRANSITIONS
+ *
+ * Moving between pages is a breath: the page being left fades out, and the
+ * new one fades in, rising a few pixels, in about a third of a second. The
+ * top bar stays exactly where it is, and the photograph of an event or a
+ * post glides from the card that was tapped to its place on the new page.
+ *
+ * React runs these through the browser's View Transitions API
+ * (components/layout/view-transitions.tsx): the content of every page is an
+ * unnamed <ViewTransition> whose arrival starts the transition, and each
+ * photograph one named after its event or post, with the class
+ * `photo-glide`. A browser without the API (Safari before 18) simply shows
+ * the new page, as before.
+ *
+ * The breath is the root's: the picture of the screen as a whole. A page's
+ * content is not pictured on its own, because a named element is captured
+ * whole, and a page several screens tall made a picture WebKit took seconds
+ * to draw (view-transitions.tsx has the numbers).
+ *
+ * WHAT IS LAYERED OVER WHAT
+ *
+ * While a transition runs, the browser draws pictures of the old and new
+ * states in a layer over the page, each named part in its own group, and it
+ * paints named groups over everything unnamed. So each part that has to
+ * stay on top is named and stacked here: the screen at the bottom, then the
+ * veil fading away, then the photograph, then the top bar.
+ *
+ * The name of the bar is on its <nav>, not on <header>: a named element is
+ * a "backdrop root", which would stop the frosted glass inside it from
+ * seeing the page behind (components/layout/header.tsx).
+ *
+ * Taps during that third of a second are dropped rather than passed to the
+ * new page, which is not visible yet: the same rule as the veil.
+ */
+@layer components {
+  ::view-transition-old(root) {
+    animation: page-out 150ms ease-in both;
+  }
+
+  ::view-transition-new(root) {
+    animation: page-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1) 60ms both;
+  }
+
+  @keyframes page-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      translate: 0 0.625rem;
+    }
+  }
+
+  ::view-transition-group(nav-veil) {
+    z-index: 10;
+    animation: none;
+  }
+
+  ::view-transition-old(nav-veil),
+  ::view-transition-new(nav-veil) {
+    animation: page-out 200ms ease-out both;
+  }
+
+  /*
+   * The photograph. A card and a page frame it in different shapes (3:2 on
+   * a card, 16:9 at the top of an event), so both pictures cover the moving
+   * frame instead of stretching to it, cropped as the page crops them.
+   *
+   * The crop has to be asked for: a transition's pictures are not clipped,
+   * so the part of the 3:2 picture outside a 16:9 frame showed above and
+   * below it as a pale box. Clipping the pair gives the frame one rounded
+   * corner throughout, between the card's 12 px and the page's 24 px, which
+   * no eye catches settling at either end.
+   */
+  ::view-transition-group(.photo-glide) {
+    z-index: 20;
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  ::view-transition-image-pair(.photo-glide) {
+    overflow: clip;
+    border-radius: 1rem;
+  }
+
+  ::view-transition-old(.photo-glide),
+  ::view-transition-new(.photo-glide) {
+    height: 100%;
+    object-fit: cover;
+    overflow: clip;
+  }
+
+  /*
+   * The top bar: shown as it is after the change, from the first frame.
+   *
+   * WHY OLD PICTURES ARE MADE INVISIBLE, NEVER `display: none`
+   *
+   * `display: none` is the usual way to drop an old picture (the Next.js
+   * guide does it for exactly this bar), and WebKit crashes on it: the
+   * whole page, when anything asks for the page's animations while the
+   * picture's group is still animating. React animates the root's group
+   * itself, so on this site that is every transition. Reproduced on a bare
+   * page, three crashes in three; `opacity: 0` never crashed.
+   */
+  ::view-transition-group(site-header) {
+    z-index: 30;
+    animation: none;
+  }
+
+  ::view-transition-old(site-header) {
+    animation: none;
+    opacity: 0;
+  }
+
+  ::view-transition-new(site-header) {
+    animation: none;
+  }
+
+  /*
+   * Back, forward, and the swipe back on an iPhone: the browser has already
+   * shown the other page by the time the site hears of it, so a fade after
+   * that would show the page being left for a moment and then fade back.
+   * navigation-feedback.tsx marks these, and they change in one frame.
+   *
+   * Switching the animations off is not enough on its own. The browser still
+   * shows its pictures for the few frames it takes to wind the transition
+   * down, and with nothing fading, the old page and the new one are drawn
+   * over each other for that moment (measured: about 0.1 s in Chromium). So
+   * the old picture is made invisible as well.
+   */
+  :root[data-history-nav]::view-transition-group(*),
+  :root[data-history-nav]::view-transition-new(*),
+  :root[data-history-nav]::view-transition-old(*) {
+    animation: none !important;
+  }
+
+  :root[data-history-nav]::view-transition-old(*) {
+    opacity: 0 !important;
+  }
+
+  /* Less motion: the new page replaces the old one in a single frame. */
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-new(*),
+    ::view-transition-old(*) {
+      animation: none !important;
+    }
+
+    ::view-transition-old(*) {
+      opacity: 0 !important;
+    }
   }
 }

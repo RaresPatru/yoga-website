@@ -1,29 +1,34 @@
 import { defineConfig, devices } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
 import { ADMIN_STATE } from "./tests/auth-state";
 
 /**
- * Minimal .env reader — Playwright's config runs before Next.js loads, so the
- * app's own env handling is not available here.
+ * Loads a .env file into process.env. Playwright's config runs before Next.js,
+ * so the app's own env handling is not available here; Node's parseEnv reads
+ * the file (quotes and comments included), the same parser
+ * scripts/with-env.mjs uses.
  *
- * Order matters: the first file to define a variable wins, because of the
- * `!(match[1] in process.env)` check. `.env.test` is read first so it overrides
- * the development values in `.env.local` / `.env`. That is what keeps the suite
- * pointed at the local database instead of production.
+ * Order matters: the first file to define a variable wins, because a variable
+ * that is already set is never overwritten. `.env.test` is read first so it
+ * overrides the development values in `.env.local` / `.env`. That is what keeps
+ * the suite pointed at the local database instead of production.
  */
 function loadEnvFile(path: string) {
   if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (match && !(match[1] in process.env)) {
-      process.env[match[1]] = match[2];
-    }
+  for (const [key, value] of Object.entries(parseEnv(readFileSync(path, "utf8")))) {
+    if (!(key in process.env)) process.env[key] = value;
   }
 }
 
 loadEnvFile(".env.test");
 loadEnvFile(".env.local");
 loadEnvFile(".env");
+
+// The daily job's secret, for tests/cron.spec.ts: set here, before the server
+// starts, so the server and the tests agree on it. A fixed test value, like the
+// Turnstile test keys; production's lives only in Vercel.
+process.env.CRON_SECRET ??= "local-test-cron-secret-not-for-production";
 
 // Tests run against a production build by default. Dev mode behaves differently
 // in ways that have already hidden a real bug: notFound() returns HTTP 200 in
@@ -103,10 +108,23 @@ export default defineConfig({
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
         process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
       STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET!,
+      // The stand-in for Stripe that tests/global-setup.ts starts
+      // (tests/fake-stripe.ts). lib/stripe.ts honours it only against the
+      // local database and with a test key, so it can never steer a real
+      // payment.
+      STRIPE_API_BASE: "http://127.0.0.1:12111",
+      // The stand-in for PostHog (tests/fake-posthog.ts), with a placeholder
+      // key in place of production's from .env. lib/analytics.ts sends
+      // statistics anywhere but PostHog's EU cloud only when the address is
+      // on this machine, so the suite's visits can never reach her figures.
+      NEXT_PUBLIC_POSTHOG_KEY: "phc_test_stand_in",
+      NEXT_PUBLIC_POSTHOG_HOST: "http://127.0.0.1:12112",
+      NEXT_PUBLIC_POSTHOG_DEBUG: "",
       RESEND_API_KEY: process.env.RESEND_API_KEY!,
       RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL!,
       NEXT_PUBLIC_SITE_URL: "http://localhost:3100",
       RATE_LIMIT_MULTIPLIER: process.env.RATE_LIMIT_MULTIPLIER ?? "200",
+      CRON_SECRET: process.env.CRON_SECRET,
     },
   },
   projects: [
@@ -135,10 +153,24 @@ export default defineConfig({
       // Admin panel, already authenticated via the saved session.
       name: "admin",
       dependencies: ["setup"],
-      testMatch: /admin-(?!login).*\.spec\.ts/,
+      testMatch: /admin-(?!login|mobile).*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 800 },
+        storageState: ADMIN_STATE,
+      },
+    },
+    {
+      // The admin panel on a phone. She uses it at a computer most of the
+      // time and on her iPhone some of the time, so the phone layout (the
+      // drawer in place of the sidebar) gets WebKit, the engine that phone
+      // runs. Only admin-mobile.spec.ts runs here; every other admin spec
+      // drives the desktop layout.
+      name: "admin-mobile",
+      dependencies: ["setup"],
+      testMatch: /admin-mobile\.spec\.ts/,
+      use: {
+        ...devices["iPhone 14"],
         storageState: ADMIN_STATE,
       },
     },
@@ -154,9 +186,10 @@ export default defineConfig({
       //
       // Sequencing it fixes the coupling without weakening sign-out: "log me
       // out everywhere" is the behaviour you want from an admin panel if a
-      // device goes missing.
+      // device goes missing. The phone project shares the same session, so
+      // this waits for it too.
       name: "admin-auth",
-      dependencies: ["admin"],
+      dependencies: ["admin", "admin-mobile"],
       testMatch: /admin-login\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
     },
@@ -167,11 +200,27 @@ export default defineConfig({
       // this much closer to the typical visitor than desktop Chrome ever was.
       name: "mobile",
       use: { ...devices["iPhone 14"] },
-      // Public pages only. The admin panel is a desktop tool the instructor
-      // uses at a computer, and its layout collapses the sidebar below `lg`,
-      // so running those specs here would test a screen nobody administers
-      // from.
-      testIgnore: [/auth\.setup\.ts/, /admin-.*\.spec\.ts/],
+      // Public pages only. The admin panel's phone layout has its own project
+      // above (admin-mobile), signed in; the rest of the admin specs drive the
+      // desktop layout. The sanitizer runs on the server, so no engine changes
+      // what it does; the chromium project covers it once.
+      testIgnore: [
+        /auth\.setup\.ts/,
+        /admin-.*\.spec\.ts/,
+        /sanitize\.spec\.ts/,
+        // Reads files, not pages; one engine is enough.
+        /brand-colors\.spec\.ts/,
+        /checkout-params\.spec\.ts/,
+        /updated-at\.spec\.ts/,
+        /plural\.spec\.ts/,
+        // Server routes and the database, not pages.
+        /cron\.spec\.ts/,
+        /stripe-webhook\.spec\.ts/,
+        /email-language\.spec\.ts/,
+        /plain-text\.spec\.ts/,
+        /email-layout\.spec\.ts/,
+        /announcements\.spec\.ts/,
+      ],
     },
   ],
 });

@@ -1,5 +1,5 @@
 import { buildPageMetadata } from "@/lib/metadata";
-import { absoluteUrl, SITE_NAME } from "@/lib/site-config";
+import { absoluteUrl } from "@/lib/site-config";
 import type { Metadata } from "next";
 
 /**
@@ -20,7 +20,7 @@ export async function generateMetadata({
   const { locale } = await params;
 
   return buildPageMetadata({
-    title: `Contact · ${SITE_NAME}`,
+    title: "Contact",
     description:
       locale === "ro"
         ? "Scrie-mi pentru colaborări, întrebări despre ateliere sau rezervări private."

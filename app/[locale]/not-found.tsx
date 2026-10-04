@@ -1,6 +1,7 @@
 import { getLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { buttonClasses } from "@/lib/button-styles";
+import { PageTransition } from "@/components/layout/view-transitions";
 
 /**
  * The page shown when an event or article does not exist.
@@ -28,33 +29,35 @@ export default async function NotFound() {
   const ro = locale === "ro";
 
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-4 py-16 text-center">
-      <p className="font-serif text-6xl text-rose-deep">404</p>
+    <PageTransition>
+      <div className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-4 py-16 text-center">
+        <p className="font-serif text-6xl text-rose-deep">404</p>
 
-      <h1 className="mt-6 font-serif text-3xl text-charcoal md:text-4xl">
-        {ro ? "Pagina nu a fost găsită" : "Page not found"}
-      </h1>
+        <h1 className="mt-6 font-serif text-3xl text-charcoal md:text-4xl">
+          {ro ? "Pagina nu a fost găsită" : "Page not found"}
+        </h1>
 
-      <p className="mt-4 text-charcoal-light">
-        {ro
-          ? "Poate evenimentul s-a încheiat, sau linkul are o greșeală. Hai să te ducem înapoi."
-          : "The event may have finished, or the link may have a typo. Let's get you back."}
-      </p>
+        <p className="mt-4 text-charcoal-light">
+          {ro
+            ? "Poate evenimentul s-a încheiat, sau linkul are o greșeală. Hai să te ducem înapoi."
+            : "The event may have finished, or the link may have a typo. Let's get you back."}
+        </p>
 
-      <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-        {/*
-          Styled as buttons via buttonClasses rather than <Button asChild>.
-          asChild clones its child, which silently does not work across a
-          Server Component boundary — it renders a <button> wrapped around the
-          link instead. See lib/button-styles.ts.
-        */}
-        <Link href="/events" className={buttonClasses({ size: "lg" })}>
-          {ro ? "Vezi evenimentele" : "See the events"}
-        </Link>
-        <Link href="/" className={buttonClasses({ variant: "secondary", size: "lg" })}>
-          {ro ? "Înapoi la pagina principală" : "Back to the home page"}
-        </Link>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          {/*
+            Styled as buttons via buttonClasses rather than <Button asChild>.
+            asChild clones its child, which silently does not work across a
+            Server Component boundary — it renders a <button> wrapped around the
+            link instead. See lib/button-styles.ts.
+          */}
+          <Link href="/events" className={buttonClasses({ size: "lg" })}>
+            {ro ? "Vezi evenimentele" : "See the events"}
+          </Link>
+          <Link href="/" className={buttonClasses({ variant: "secondary", size: "lg" })}>
+            {ro ? "Înapoi la pagina principală" : "Back to the home page"}
+          </Link>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }

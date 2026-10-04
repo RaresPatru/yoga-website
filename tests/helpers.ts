@@ -317,7 +317,7 @@ export async function tryInsertEvent(
 export async function eventsBySlug(slug: string) {
   const { data } = await (await adminScoped())
     .from("events")
-    .select("id, slug, price, currency, max_participants")
+    .select("id, slug, price, currency, max_participants, time, end_date, end_time, starts_at, ends_at")
     .eq("slug", slug);
   return data ?? [];
 }
@@ -327,9 +327,35 @@ export async function deleteWhatsappLink(label: string) {
   await (await adminScoped()).from("whatsapp_links").delete().eq("label", label);
 }
 
+/**
+ * Deletes a test's event and what it left on it. Testimonials outlive their
+ * event since 20260928000100_testimonial_event_link.sql, so a test that wrote
+ * one would otherwise leave it on /testimonials under the event's old title.
+ */
 export async function deleteEventBySlug(slug: string) {
-  const { error } = await (await adminScoped()).from("events").delete().eq("slug", slug);
+  const client = await adminScoped();
+  const { data: event } = await client.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (event) {
+    const { error: testimonialsError } = await client.from("testimonials").delete().eq("event_id", event.id);
+    if (testimonialsError) throw new Error(`deleteEventBySlug (testimonials) failed: ${testimonialsError.message}`);
+  }
+  const { error } = await client.from("events").delete().eq("slug", slug);
   if (error) throw new Error(`deleteEventBySlug failed: ${error.message}`);
+}
+
+/**
+ * Change an event's capacity, the way she would in the admin panel.
+ *
+ * Capacity is the one field whose value decides whether anybody may book at
+ * all — NULL and 0 mean sold out — so moving it is how a test gets an event
+ * from closed to open without driving the form.
+ */
+export async function updateEventCapacity(eventId: string, capacity: number | null) {
+  const { error } = await (await adminScoped())
+    .from("events")
+    .update({ max_participants: capacity })
+    .eq("id", eventId);
+  if (error) throw new Error(`updateEventCapacity failed: ${error.message}`);
 }
 
 export interface SeededPost {
@@ -352,6 +378,21 @@ export async function seedPost(overrides: Record<string, unknown> = {}): Promise
   const { data, error } = await (await adminScoped()).from("blog_posts").insert(row).select("id, slug").single();
   if (error) throw new Error(`seedPost failed: ${error.message}`);
   return data as SeededPost;
+}
+
+/** Updates a post as the admin would, and returns its timestamps afterwards. */
+export async function updatePost(
+  slug: string,
+  patch: Record<string, unknown>
+): Promise<{ created_at: string; updated_at: string }> {
+  const { data, error } = await (await adminScoped())
+    .from("blog_posts")
+    .update(patch)
+    .eq("slug", slug)
+    .select("created_at, updated_at")
+    .single();
+  if (error) throw new Error(`updatePost failed: ${error.message}`);
+  return data as { created_at: string; updated_at: string };
 }
 
 export async function deletePostBySlug(slug: string) {
@@ -498,4 +539,647 @@ export async function seedWaitingEntry(
     .single();
   if (error) throw new Error(`seedWaitingEntry failed: ${error.message}`);
   return (data as { id: string }).id;
+}
+
+/** The dashboard's five counts, read as the admin: the view applies her row policies. */
+export interface DashboardCounts {
+  active_events: number;
+  pending_payments: number;
+  draft_posts: number;
+  unread_messages: number;
+  pending_testimonials: number;
+}
+
+export async function dashboardCounts(): Promise<DashboardCounts> {
+  const { data, error } = await (await adminScoped()).from("admin_dashboard").select("*").single();
+  if (error) throw new Error(`dashboardCounts failed: ${error.message}`);
+  return data as DashboardCounts;
+}
+
+/** What is waiting on one event: the admin_event_overview row the dashboard reads. */
+export interface EventOverviewRow {
+  waiting: number;
+  pending_payments: number;
+  refund_requested: number;
+  offers_open: number;
+  refunded: number;
+  taken: number;
+  capacity: number | null;
+  status: string;
+}
+
+export async function eventOverview(eventId: string): Promise<EventOverviewRow> {
+  const { data, error } = await (await adminScoped())
+    .from("admin_event_overview")
+    .select("waiting, pending_payments, refund_requested, offers_open, refunded, taken, capacity, status")
+    .eq("event_id", eventId)
+    .single();
+  if (error) throw new Error(`eventOverview failed: ${error.message}`);
+  return data as EventOverviewRow;
+}
+
+/**
+ * A message as the contact form leaves it. Written with the service key, as
+ * app/api/contact/route.ts writes it.
+ */
+export async function seedMessage(overrides: Record<string, unknown> = {}): Promise<string> {
+  const { data, error } = await (await serviceClient())
+    .from("contact_messages")
+    .insert({
+      name: `Vizitator E2E ${unique("n")}`,
+      email: `msg-${unique("m")}@example.com`,
+      subject: "Mesaj E2E",
+      message: "Un mesaj de test, trimis de suita E2E.",
+      ...overrides,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedMessage failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+export async function deleteMessages(ids: string[]) {
+  const { error } = await (await serviceClient()).from("contact_messages").delete().in("id", ids);
+  if (error) throw new Error(`deleteMessages failed: ${error.message}`);
+}
+
+/**
+ * `count` messages at once, named "<name> 1" to "<name> N", a second apart
+ * and in the past, so their order is fixed and anything written during the
+ * test is newer than all of them.
+ */
+export async function seedManyMessages(count: number, name: string): Promise<string[]> {
+  const now = Date.now();
+  const rows = Array.from({ length: count }, (_, i) => ({
+    name: `${name} ${i + 1}`,
+    email: `msg-${unique("many")}@example.com`,
+    subject: "Mesaj E2E",
+    message: "Unul din mai multe mesaje de test.",
+    created_at: new Date(now - (count - i) * 1000).toISOString(),
+  }));
+  const { data, error } = await (await serviceClient()).from("contact_messages").insert(rows).select("id");
+  if (error) throw new Error(`seedManyMessages failed: ${error.message}`);
+  return (data as { id: string }[]).map((row) => row.id);
+}
+
+export interface MessageRow {
+  id: string;
+  name: string;
+  locale: string;
+  read_at: string | null;
+  starred: boolean;
+  archived_at: string | null;
+}
+
+/** A contact message as stored, or null once it is deleted. */
+export async function messageRow(id: string): Promise<MessageRow | null> {
+  const { data, error } = await (await serviceClient())
+    .from("contact_messages")
+    .select("id, name, locale, read_at, starred, archived_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`messageRow failed: ${error.message}`);
+  return data as MessageRow | null;
+}
+
+/** What the contact form stored from one address, newest first. */
+export async function messagesFrom(email: string): Promise<MessageRow[]> {
+  const { data, error } = await (await serviceClient())
+    .from("contact_messages")
+    .select("id, name, locale, read_at, starred, archived_at")
+    .eq("email", email.toLowerCase())
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`messagesFrom failed: ${error.message}`);
+  return data as MessageRow[];
+}
+
+/** How many of these messages still exist. */
+export async function messagesLeft(ids: string[]): Promise<number> {
+  const { count, error } = await (await serviceClient())
+    .from("contact_messages")
+    .select("id", { count: "exact", head: true })
+    .in("id", ids);
+  if (error) throw new Error(`messagesLeft failed: ${error.message}`);
+  return count ?? 0;
+}
+
+/** A date `days` from today in Bucharest, as YYYY-MM-DD (negative for the past). */
+export function bucharestDate(days: number): string {
+  // en-CA formats as YYYY-MM-DD. Noon keeps the arithmetic clear of the hour
+  // the clocks change.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Bucharest" }).format(new Date());
+  const date = new Date(`${today}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** A site_content row as it stands, or null when it has never been saved. */
+export type ContentSnapshot = { value_ro: string; value_en: string | null } | null;
+
+export async function contentSnapshot(key: string): Promise<ContentSnapshot> {
+  const { data, error } = await (await adminScoped())
+    .from("site_content")
+    .select("value_ro, value_en")
+    .eq("key", key)
+    .maybeSingle();
+  if (error) throw new Error(`contentSnapshot(${key}) failed: ${error.message}`);
+  return data as ContentSnapshot;
+}
+
+/** Writes a field, creating its row if needed, as the admin's Save does. */
+export async function putContent(key: string, valueRo: string, valueEn: string | null = null) {
+  const section = key.split(".")[0];
+  const { error } = await (await adminScoped())
+    .from("site_content")
+    .upsert({ key, section, value_ro: valueRo, value_en: valueEn }, { onConflict: "key" });
+  if (error) throw new Error(`putContent(${key}) failed: ${error.message}`);
+}
+
+/** Puts a field back as contentSnapshot found it, removing a row the test created. */
+export async function restoreContent(key: string, snapshot: ContentSnapshot) {
+  if (snapshot) return putContent(key, snapshot.value_ro, snapshot.value_en);
+  const { error } = await (await adminScoped()).from("site_content").delete().eq("key", key);
+  if (error) throw new Error(`restoreContent(${key}) failed: ${error.message}`);
+}
+
+/** Removes the FAQs a test created, found by their Romanian question. */
+export async function deleteFaqsByQuestion(questionRo: string) {
+  const { error } = await (await adminScoped()).from("faqs").delete().eq("question_ro", questionRo);
+  if (error) throw new Error(`deleteFaqsByQuestion failed: ${error.message}`);
+}
+
+/** A published FAQ at the top of the home page's list. Remove it with deleteFaqsByQuestion. */
+export async function seedFaq(questionRo: string, answerRo: string) {
+  const { error } = await (await adminScoped())
+    .from("faqs")
+    .insert({ question_ro: questionRo, answer_ro: answerRo, published: true, sort_order: -1 });
+  if (error) throw new Error(`seedFaq failed: ${error.message}`);
+}
+
+/** Inserts a FAQ the way a bare insert would, to check the table's defaults. */
+export async function insertBareFaq(questionRo: string): Promise<{ published: boolean }> {
+  const { data, error } = await (await adminScoped())
+    .from("faqs")
+    .insert({ question_ro: questionRo, answer_ro: "" })
+    .select("published")
+    .single();
+  if (error) throw new Error(`insertBareFaq failed: ${error.message}`);
+  return data as { published: boolean };
+}
+
+/** A post as the admin sees it, by id, or null. */
+export async function postById(id: string) {
+  const { data, error } = await (await adminScoped()).from("blog_posts").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`postById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** A post's unpublished changes (content_drafts.data), or null. */
+export async function draftFor(postId: string) {
+  const { data, error } = await (await adminScoped())
+    .from("content_drafts")
+    .select("data")
+    .eq("post_id", postId)
+    .maybeSingle();
+  if (error) throw new Error(`draftFor failed: ${error.message}`);
+  return (data?.data as Record<string, unknown> | undefined) ?? null;
+}
+
+/** Posts whose Romanian title starts with a test's marker: for cleaning up posts the editor created. */
+export async function deletePostsTitled(prefix: string) {
+  const { error } = await (await adminScoped()).from("blog_posts").delete().like("title_ro", `${prefix}%`);
+  if (error) throw new Error(`deletePostsTitled failed: ${error.message}`);
+}
+
+export async function deletePostById(id: string) {
+  const { error } = await (await adminScoped()).from("blog_posts").delete().eq("id", id);
+  if (error) throw new Error(`deletePostById failed: ${error.message}`);
+}
+
+/** How many posts exist in total, drafts included. */
+export async function postCount(): Promise<number> {
+  const { count, error } = await (await adminScoped())
+    .from("blog_posts")
+    .select("id", { count: "exact", head: true });
+  if (error) throw new Error(`postCount failed: ${error.message}`);
+  return count ?? 0;
+}
+
+/** Events whose Romanian title starts with a test's marker, newest first. */
+export async function eventsTitled(prefix: string) {
+  const { data, error } = await (await adminScoped())
+    .from("events")
+    .select("*")
+    .like("title_ro", `${prefix}%`)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`eventsTitled failed: ${error.message}`);
+  return (data ?? []) as Array<Record<string, unknown>>;
+}
+
+export async function deleteEventsTitled(prefix: string) {
+  const { error } = await (await adminScoped()).from("events").delete().like("title_ro", `${prefix}%`);
+  if (error) throw new Error(`deleteEventsTitled failed: ${error.message}`);
+}
+
+export async function eventById(id: string) {
+  const { data, error } = await (await adminScoped()).from("events").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`eventById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** An event's unpublished changes (content_drafts.data), or null. */
+export async function eventDraft(eventId: string) {
+  const { data, error } = await (await adminScoped())
+    .from("content_drafts")
+    .select("data")
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (error) throw new Error(`eventDraft failed: ${error.message}`);
+  return (data?.data as Record<string, unknown> | undefined) ?? null;
+}
+
+/** Saves private changes for a live event and publishes them, as the admin's editor does. */
+export async function publishEventDraftAs(eventId: string, changes: Record<string, unknown>) {
+  const client = await adminScoped();
+  const { error: draftError } = await client
+    .from("content_drafts")
+    .upsert({ event_id: eventId, data: changes }, { onConflict: "event_id" });
+  if (draftError) throw new Error(`publishEventDraftAs (draft) failed: ${draftError.message}`);
+  const { error } = await client.rpc("publish_event_draft", { p_event_id: eventId });
+  if (error) throw new Error(`publishEventDraftAs failed: ${error.message}`);
+}
+
+/** A waiting-list entry's offer state. */
+export async function waitingEntry(id: string) {
+  const { data, error } = await (await serviceClient())
+    .from("waiting_list")
+    .select("id, email, notified_at, claim_expires_at, claimed_at, removed_at")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(`waitingEntry failed: ${error.message}`);
+  return data as { id: string; email: string; notified_at: string | null; claim_expires_at: string | null; claimed_at: string | null; removed_at: string | null };
+}
+
+export async function deleteRegistration(id: string) {
+  const { error } = await (await serviceClient()).from("registrations").delete().eq("id", id);
+  if (error) throw new Error(`deleteRegistration failed: ${error.message}`);
+}
+
+/** A testimonial on a given event. Approved unless told otherwise. */
+export async function seedTestimonialOn(eventId: string, content: string, approved = true) {
+  const { data, error } = await (await adminScoped())
+    .from("testimonials")
+    .insert({ event_id: eventId, type: "text", content, approved, author_name: "Participantă E2E", rating: 5 })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedTestimonialOn failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+/** Calls the booking function directly, as the API does with the service key. */
+export async function registerDirectly(eventId: string) {
+  const { data, error } = await (await serviceClient()).rpc("register_for_event", {
+    p_event_id: eventId,
+    p_full_name: "Participant Direct",
+    p_email: `direct-${unique("m")}@example.com`,
+    p_phone: "+40721112233",
+  });
+  if (error) throw new Error(`registerDirectly failed: ${error.message}`);
+  return data as { success?: boolean; id?: string; error?: string; code?: string };
+}
+
+/** An email as the local mailbox holds it. */
+export interface MailboxMessage {
+  ID: string;
+  From: { Name: string; Address: string };
+  ReplyTo: Array<{ Name: string; Address: string }>;
+  Subject: string;
+  HTML: string;
+  Text: string;
+  Attachments: Array<{ FileName: string; ContentType: string }>;
+}
+
+/**
+ * The emails the site sent to an address, newest first, waiting up to
+ * `timeoutMs` for at least `atLeast` of them to arrive. Against the local
+ * database the site sends to this mailbox rather than to Resend
+ * (lib/email.ts), so this is where a test reads what somebody received.
+ */
+export async function emailsTo(address: string, atLeast = 1, timeoutMs = 15_000): Promise<MailboxMessage[]> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const search = await fetch(
+      `${MAILBOX_URL}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`
+    ).then((r) => r.json());
+    const summaries: Array<{ ID: string }> = search.messages ?? [];
+    if (summaries.length >= atLeast || Date.now() > deadline) {
+      return Promise.all(
+        summaries.map((s) => fetch(`${MAILBOX_URL}/api/v1/message/${s.ID}`).then((r) => r.json()))
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+}
+
+/** A participant row as the admin sees it in admin_participants. */
+export async function participantRow(id: string) {
+  const { data, error } = await (await adminScoped())
+    .from("admin_participants")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`participantRow failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** A booking's stored columns, read with the service key. */
+export async function registrationById(id: string) {
+  const { data, error } = await (await serviceClient()).from("registrations").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`registrationById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** Waiting-list rows for an event, every column. */
+export async function waitingListFor(eventId: string) {
+  const { data, error } = await (await serviceClient()).from("waiting_list").select("*").eq("event_id", eventId);
+  if (error) throw new Error(`waitingListFor failed: ${error.message}`);
+  return (data ?? []) as Array<Record<string, unknown>>;
+}
+
+/** Adds a waiting-list entry with any columns set, for states seedWaitingEntry does not cover. */
+export async function seedWaitingRow(eventId: string, overrides: Record<string, unknown> = {}) {
+  const { data, error } = await (await serviceClient())
+    .from("waiting_list")
+    .insert({
+      event_id: eventId,
+      full_name: `Așteptare E2E ${unique("w")}`,
+      email: `wait-${unique("m")}@example.com`,
+      phone: "+40721112233",
+      ...overrides,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedWaitingRow failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+/** Testimonials whose text is this, with the event columns a deletion keeps. */
+export async function testimonialsWithContent(content: string) {
+  const { data, error } = await (await adminScoped())
+    .from("testimonials")
+    .select("id, event_id, event_title_ro, event_title_en, event_date")
+    .eq("content", content);
+  if (error) throw new Error(`testimonialsWithContent failed: ${error.message}`);
+  return (data ?? []) as Array<{ id: string; event_id: string | null; event_title_ro: string | null; event_title_en: string | null; event_date: string | null }>;
+}
+
+export async function deleteTestimonialById(id: string) {
+  const { error } = await (await adminScoped()).from("testimonials").delete().eq("id", id);
+  if (error) throw new Error(`deleteTestimonialById failed: ${error.message}`);
+}
+
+/** Runs the daily clean-up function directly, as the cron route does. */
+export async function runDailyCleanup() {
+  const { data, error } = await (await serviceClient()).rpc("daily_cleanup");
+  if (error) throw new Error(`runDailyCleanup failed: ${error.message}`);
+  return data as { notes_cleared: number; abandoned_removed: number };
+}
+
+/** The booking made with this email, or null: how a test finds what a form created. */
+export async function registrationByEmail(email: string) {
+  const { data, error } = await (await serviceClient()).from("registrations").select("*").eq("email", email).maybeSingle();
+  if (error) throw new Error(`registrationByEmail failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** Many bookings on one event at once, for paging and "select all". */
+export async function seedManyRegistrations(eventId: string, count: number, prefix: string) {
+  const rows = Array.from({ length: count }, (_, i) => ({
+    event_id: eventId,
+    full_name: `${prefix} ${String(i + 1).padStart(3, "0")}`,
+    email: `${prefix.toLowerCase().replace(/\W+/g, "-")}-${i + 1}@example.com`,
+    phone: "+40721112233",
+    payment_status: "free",
+  }));
+  const { error } = await (await serviceClient()).from("registrations").insert(rows);
+  if (error) throw new Error(`seedManyRegistrations failed: ${error.message}`);
+}
+
+/** Calls the archive's permanent delete as the admin, the way the page does. */
+export async function deleteParticipantsAsAdmin(ids: string[]): Promise<number> {
+  const { data, error } = await (await adminScoped()).rpc("admin_delete_participants", { p_ids: ids });
+  if (error) throw new Error(`deleteParticipantsAsAdmin failed: ${error.message}`);
+  return data as number;
+}
+
+/** The personal link to write a testimonial, from the newest email to this address. */
+export async function reviewLinkFor(email: string): Promise<string> {
+  const messages = await emailsTo(email);
+  for (const message of messages) {
+    const link = message.HTML.match(/https?:\/\/[^"'<>\s]*\/testimonials\/write\?token=[\w-]+/)?.[0];
+    if (link) return link;
+  }
+  throw new Error(`no testimonial link arrived for ${email}`);
+}
+
+/** The testimonial written from a booking, every column, or null. */
+export async function testimonialForBooking(registrationId: string) {
+  const { data, error } = await (await adminScoped())
+    .from("testimonials")
+    .select("*")
+    .eq("registration_id", registrationId)
+    .maybeSingle();
+  if (error) throw new Error(`testimonialForBooking failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+/** Changes a testimonial as the admin does. */
+export async function updateTestimonial(id: string, patch: Record<string, unknown>) {
+  const { error } = await (await adminScoped()).from("testimonials").update(patch).eq("id", id);
+  if (error) throw new Error(`updateTestimonial failed: ${error.message}`);
+}
+
+/** A link for a booking with a token the test knows, as lib/reviews.ts stores one (only its hash). */
+export async function insertReviewLink(registrationId: string, token: string, expiresAt: Date) {
+  const { createHash } = await import("node:crypto");
+  const { error } = await (await serviceClient()).from("review_invitations").insert({
+    registration_id: registrationId,
+    token_hash: createHash("sha256").update(token).digest("hex"),
+    expires_at: expiresAt.toISOString(),
+  });
+  if (error) throw new Error(`insertReviewLink failed: ${error.message}`);
+}
+
+/** The links a booking holds. */
+export async function reviewLinksFor(registrationId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("review_invitations")
+    .select("id, used_at, expires_at")
+    .eq("registration_id", registrationId);
+  if (error) throw new Error(`reviewLinksFor failed: ${error.message}`);
+  return (data ?? []) as Array<{ id: string; used_at: string | null; expires_at: string }>;
+}
+
+/** The batches of waiting-list offers recorded for an event, oldest first. */
+export async function waitingListBatches(eventId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("waiting_list_notifications")
+    .select("batch_number, spots_opened, expires_at")
+    .eq("event_id", eventId)
+    .order("batch_number");
+  if (error) throw new Error(`waitingListBatches failed: ${error.message}`);
+  return (data ?? []) as Array<{ batch_number: number; spots_opened: number; expires_at: string }>;
+}
+
+/** An email's headers as the local mailbox holds them, each a list of values. */
+export async function emailHeaders(messageId: string): Promise<Record<string, string[]>> {
+  return fetch(`${MAILBOX_URL}/api/v1/message/${messageId}/headers`).then((r) => r.json());
+}
+
+/** Deletes every email the local mailbox holds for an address. */
+export async function clearMailbox(address: string) {
+  await fetch(`${MAILBOX_URL}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`, { method: "DELETE" });
+}
+
+/** An announcement written straight into the database, as the admin's editor would save it. */
+export async function seedAnnouncement(fields: Record<string, unknown>): Promise<string> {
+  const { data, error } = await (await adminScoped()).from("announcements").insert(fields).select("id").single();
+  if (error) throw new Error(`seedAnnouncement failed: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+export async function announcementById(id: string) {
+  const { data, error } = await (await adminScoped()).from("admin_announcements").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`announcementById failed: ${error.message}`);
+  return data as Record<string, unknown> | null;
+}
+
+export async function announcementRecipients(id: string) {
+  const { data, error } = await (await adminScoped())
+    .from("announcement_recipients")
+    .select("email, full_name, locale, status, reason, sent_at")
+    .eq("announcement_id", id);
+  if (error) throw new Error(`announcementRecipients failed: ${error.message}`);
+  return (data ?? []) as Array<{ email: string; full_name: string; locale: string; status: string; reason: string | null; sent_at: string | null }>;
+}
+
+/** Announcements whose Romanian subject starts with this, deleted with their recipients. */
+export async function deleteAnnouncementsTitled(prefix: string) {
+  const { error } = await (await adminScoped()).from("announcements").delete().like("subject_ro", `${prefix}%`);
+  if (error) throw new Error(`deleteAnnouncementsTitled failed: ${error.message}`);
+}
+
+export async function suppressionFor(email: string) {
+  const { data, error } = await (await adminScoped())
+    .from("email_suppressions")
+    .select("email, reason, created_at, announcement_id")
+    .eq("email", email.toLowerCase())
+    .maybeSingle();
+  if (error) throw new Error(`suppressionFor failed: ${error.message}`);
+  return data as { email: string; reason: string; created_at: string; announcement_id: string | null } | null;
+}
+
+/** Puts an address on the suppression list as of `at`, as an unsubscribe would. */
+export async function suppress(email: string, at: Date = new Date()) {
+  const { error } = await (await adminScoped())
+    .from("email_suppressions")
+    .upsert({ email: email.toLowerCase(), reason: "unsubscribed", created_at: at.toISOString() }, { onConflict: "email" });
+  if (error) throw new Error(`suppress failed: ${error.message}`);
+}
+
+export async function deleteSuppression(email: string) {
+  const { error } = await (await adminScoped()).from("email_suppressions").delete().eq("email", email.toLowerCase());
+  if (error) throw new Error(`deleteSuppression failed: ${error.message}`);
+}
+
+/** Sets when a booking ticked "send me news", or clears it. */
+export async function setMarketingConsent(registrationId: string, at: Date | null) {
+  const { error } = await (await serviceClient())
+    .from("registrations")
+    .update({ marketing_consent_at: at ? at.toISOString() : null })
+    .eq("id", registrationId);
+  if (error) throw new Error(`setMarketingConsent failed: ${error.message}`);
+}
+
+/** An email template's texts, to restore after a test changes them. */
+export async function templateTexts(type: string) {
+  const { data, error } = await (await adminScoped())
+    .from("email_templates")
+    .select("subject_ro, subject_en, body_ro, body_en")
+    .eq("type", type)
+    .single();
+  if (error) throw new Error(`templateTexts failed: ${error.message}`);
+  return data as { subject_ro: string; subject_en: string | null; body_ro: string; body_en: string | null };
+}
+
+export async function restoreTemplate(type: string, texts: Awaited<ReturnType<typeof templateTexts>>) {
+  const { error } = await (await adminScoped()).from("email_templates").update(texts).eq("type", type);
+  if (error) throw new Error(`restoreTemplate failed: ${error.message}`);
+}
+
+/** Writes announcement recipients directly, as a send cut short would leave them. Server key: only the server writes this table. */
+export async function putRecipients(
+  announcementId: string,
+  rows: Array<{ email: string; full_name: string; status: string; locale?: string; reason?: string | null }>
+) {
+  const { error } = await (await serviceClient()).from("announcement_recipients").upsert(
+    rows.map((row) => ({ announcement_id: announcementId, locale: "ro", reason: null, ...row })),
+    { onConflict: "announcement_id,email" }
+  );
+  if (error) throw new Error(`putRecipients failed: ${error.message}`);
+}
+
+/** How long an unpaid booking holds its seat, in minutes: the database's pending_hold_interval(). */
+export async function pendingHoldMinutes(): Promise<number> {
+  const { data, error } = await (await serviceClient()).rpc("pending_hold_interval");
+  if (error) throw new Error(`pendingHoldMinutes failed: ${error.message}`);
+  const [hours, minutes] = String(data).split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+/** Gives a booking a cancel link whose token the test knows, as a confirmation email would (only its hash is stored). */
+export async function setCancelToken(registrationId: string, token: string) {
+  const { createHash } = await import("node:crypto");
+  const { error } = await (await serviceClient())
+    .from("registrations")
+    .update({ cancel_token_hash: createHash("sha256").update(token).digest("hex") })
+    .eq("id", registrationId);
+  if (error) throw new Error(`setCancelToken failed: ${error.message}`);
+}
+
+/** The notices her dashboard shows for a booking, oldest first. */
+export async function noticesFor(registrationId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("admin_notifications")
+    .select("*")
+    .eq("registration_id", registrationId)
+    .order("created_at");
+  if (error) throw new Error(`noticesFor failed: ${error.message}`);
+  return (data ?? []) as Array<{ id: string; kind: string; details: Record<string, unknown>; seen_at: string | null; source_id: string | null }>;
+}
+
+/** Marks every notice seen, so a test starts from a dashboard with none. */
+export async function clearNotices() {
+  const { error } = await (await serviceClient())
+    .from("admin_notifications")
+    .update({ seen_at: new Date().toISOString() })
+    .is("seen_at", null);
+  if (error) throw new Error(`clearNotices failed: ${error.message}`);
+}
+
+/** Changes a booking's columns directly, for states the site reaches only over time (a lapsed hold, an old payment). */
+export async function updateRegistration(id: string, patch: Record<string, unknown>) {
+  const { error } = await (await serviceClient()).from("registrations").update(patch).eq("id", id);
+  if (error) throw new Error(`updateRegistration failed: ${error.message}`);
+}
+
+/** Every booking on an event with every column, newest first. */
+export async function bookingsOn(eventId: string) {
+  const { data, error } = await (await serviceClient())
+    .from("registrations")
+    .select("*")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`bookingsOn failed: ${error.message}`);
+  return (data ?? []) as Array<Record<string, unknown>>;
 }

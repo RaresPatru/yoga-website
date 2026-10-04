@@ -245,7 +245,7 @@ export function PhoneInput({
           aria-label={`${t("Prefix țară", "Country code")}: ${selected?.name ?? country} +${dial}`}
           className={cn(
             "flex w-[6.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-sage/30",
-            "bg-white/60 px-3 py-3 text-sm text-charcoal backdrop-blur-sm",
+            "bg-white/60 px-3 py-3 text-sm text-charcoal",
             hasError && "border-error"
           )}
         >
@@ -270,7 +270,7 @@ export function PhoneInput({
             // is a grid item with the same default — it widened the whole page
             // instead of overflowing its own box.
             "min-w-0 flex-1 rounded-xl border border-sage/30 bg-white/60 px-4 py-3 text-charcoal",
-            "placeholder:text-charcoal-light/50 backdrop-blur-sm",
+            "placeholder:text-charcoal-light/50",
             "transition-colors duration-200",
             hasError && "border-error"
           )}

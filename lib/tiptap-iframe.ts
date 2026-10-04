@@ -1,57 +1,64 @@
 import { Node } from "@tiptap/core";
-
-export interface IframeOptions {
-  allowFullscreen: boolean;
-  HTMLAttributes: Record<string, string | number | boolean>;
-}
+import { portraitMaxWidth, safeAspect } from "@/lib/embeds";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     iframe: {
-      setIframe: (options: { src: string; aspect?: string }) => ReturnType;
+      setIframe: (options: { src: string; aspect?: string; title?: string }) => ReturnType;
     };
   }
 }
 
-export const Iframe = Node.create<IframeOptions>({
+/**
+ * A video embedded in a post: a YouTube, Vimeo, Instagram or TikTok player
+ * (lib/embeds.ts decides which addresses qualify).
+ *
+ * Stored as a <div> that gives the video its shape, around the <iframe>:
+ *
+ *   <div style="aspect-ratio:9 / 16;max-width:22.5rem;…">
+ *     <iframe src="…" data-aspect="9 / 16" title="…"></iframe>
+ *   </div>
+ *
+ * THE SHAPE IS WRITTEN TWICE, ON PURPOSE
+ *
+ * The wrapper's style is what the page draws. The iframe's `data-aspect` is
+ * what the editor reads back when the post is opened again, because TipTap
+ * parses the <iframe>, not its wrapper. Until 26 September 2026 only the style
+ * was written, so every portrait reel came back as 16:9 the first time its
+ * post was re-saved (audit B34). Posts saved in that window have no
+ * `data-aspect`; `parseHTML` reads their wrapper's style instead.
+ *
+ * Portrait embeds are capped in width so that none is taller than about
+ * 40rem, which also sizes a 4:5 Instagram post properly (audit B26: only
+ * shapes starting with "9" used to be capped).
+ */
+export const Iframe = Node.create({
   name: "iframe",
-
   group: "block",
-
   atom: true,
-
-  addOptions() {
-    return {
-      allowFullscreen: true,
-      HTMLAttributes: {},
-    };
-  },
 
   addAttributes() {
     return {
       src: {
         default: null,
+        // Old posts point at youtube.com; the no-cookie host plays the same
+        // video without setting cookies before it is pressed.
+        parseHTML: (element) =>
+          element
+            .getAttribute("src")
+            ?.replace(/^https:\/\/(www\.)?youtube\.com\/embed\//, "https://www.youtube-nocookie.com/embed/") ?? null,
       },
-      /**
-       * Shape of the embed, as a CSS aspect-ratio value.
-       *
-       * Previously the wrapper was hardcoded to 16:9. That is right for YouTube
-       * and Vimeo and wrong for Instagram: reels and most Instagram posts are
-       * portrait, so they were letterboxed into a landscape box with thick bars
-       * down both sides — on a channel that is the instructor's entire
-       * marketing presence.
-       */
       aspect: {
         default: "16 / 9",
         parseHTML: (element) =>
-          element.getAttribute("data-aspect") || "16 / 9",
+          safeAspect(
+            element.getAttribute("data-aspect") ??
+              element.parentElement?.getAttribute("style")?.match(/aspect-ratio:\s*([\d.]+ \/ [\d.]+)/)?.[1]
+          ),
         renderHTML: (attributes) => ({ "data-aspect": attributes.aspect }),
       },
-      frameborder: {
-        default: 0,
-      },
-      allowfullscreen: {
-        default: this.options.allowFullscreen,
+      title: {
+        default: null,
       },
     };
   },
@@ -61,32 +68,24 @@ export const Iframe = Node.create<IframeOptions>({
   },
 
   renderHTML({ HTMLAttributes }) {
-    // Read `data-aspect`, not `aspect`.
-    //
-    // TipTap builds this object by calling each attribute's own renderHTML and
-    // merging the results — and the `aspect` attribute above emits the key
-    // `data-aspect`. Destructuring `aspect` here therefore always produced
-    // `undefined`, every embed silently fell back to 16:9, and portrait reels
-    // stayed letterboxed: the exact bug the attribute was added to fix.
-    const { "data-aspect": aspect, ...iframeAttrs } = HTMLAttributes as Record<string, string>;
-    const ratio = aspect || "16 / 9";
-    // A portrait embed stretched to the full column width would be taller than
-    // the viewport, so those are capped and centred; landscape still fills.
-    const isPortrait = ratio.startsWith("9");
+    const { "data-aspect": aspect, ...rest } = HTMLAttributes as Record<string, string>;
+    const ratio = safeAspect(aspect);
+    const maxWidth = portraitMaxWidth(ratio);
 
     return [
       "div",
       {
-        class: "relative w-full rounded-xl overflow-hidden my-4",
-        style: `aspect-ratio:${ratio};${isPortrait ? "max-width:360px;margin-left:auto;margin-right:auto;" : ""}`,
+        class: "relative my-6 w-full overflow-hidden rounded-xl",
+        style: `aspect-ratio:${ratio};${maxWidth ? `max-width:${maxWidth};margin-left:auto;margin-right:auto;` : ""}`,
       },
       [
         "iframe",
         {
-          ...iframeAttrs,
-          class: "absolute inset-0 w-full h-full",
-          width: undefined,
-          height: undefined,
+          ...rest,
+          "data-aspect": ratio,
+          class: "absolute inset-0 h-full w-full",
+          allowfullscreen: "true",
+          loading: "lazy",
         },
       ],
     ];
@@ -95,13 +94,10 @@ export const Iframe = Node.create<IframeOptions>({
   addCommands() {
     return {
       setIframe:
-        (options: { src: string; aspect?: string }) =>
+        (options) =>
         ({ tr, dispatch }) => {
-          const { selection } = tr;
           const node = this.type.create(options);
-          if (dispatch) {
-            tr.replaceRangeWith(selection.from, selection.to, node);
-          }
+          if (dispatch) tr.replaceRangeWith(tr.selection.from, tr.selection.to, node);
           return true;
         },
     };

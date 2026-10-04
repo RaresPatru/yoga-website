@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { anonStorageClient, deleteEventBySlug, seedEvent } from "./helpers";
+import { anonStorageClient, deleteEventBySlug, deleteTestimonial, seedEvent, seedTestimonial } from "./helpers";
 
 /**
  * What PostgREST exposes to a caller holding only the publishable key.
@@ -126,17 +126,19 @@ test.describe("the anonymous surface of the database", () => {
   ];
 
   /**
-   * Functions anon may execute. Both are deliberate and both are covered
-   * individually above: `is_admin` because RLS policies evaluate it with the
-   * caller's privileges, `pending_hold_interval` because the availability view
-   * calls it.
+   * Functions anon may execute. All three are deliberate: `is_admin` because
+   * RLS policies evaluate it with the caller's privileges, and
+   * `pending_hold_interval` and `holds_seat` because the availability view
+   * calls them, and Postgres checks a view's functions against the caller.
+   * `holds_seat` computes from the row it is handed and reads no table, so
+   * calling it directly reveals nothing.
    *
    * `register_for_event` must never appear here. It did once — reachable
    * through the PUBLIC grant Postgres adds at creation, which `pg_dump` does
    * not print — and booking a 350 RON retreat without paying was one HTTP
    * request.
    */
-  const PUBLIC_FUNCTIONS = ["is_admin", "pending_hold_interval"];
+  const PUBLIC_FUNCTIONS = ["holds_seat", "is_admin", "pending_hold_interval"];
 
   async function anonymousSurface() {
     // Runs the non-local database guard in helpers.ts before anything else
@@ -218,5 +220,33 @@ test.describe("the anonymous surface of the database", () => {
       after?.value_ro,
       `anon must not be able to update (error was ${updateError?.message ?? "none"})`
     ).not.toBe("overwritten by an anonymous caller");
+  });
+});
+
+/**
+ * Testimonials are public, but not all of them and not every column: a visitor
+ * sees the approved ones she has not hidden, and none of what links a
+ * testimonial to a booking (20260929000000_reviews.sql). The personal links
+ * to write one are not reachable at all.
+ */
+test.describe("what visitors see of testimonials", () => {
+  test("only approved, shown ones, without the booking behind them", async () => {
+    const anon = await anonStorageClient();
+    const hidden = await seedTestimonial(true, { hidden: true });
+    const pending = await seedTestimonial(false);
+    try {
+      for (const column of ["registration_id", "consent_at", "approved", "hidden"]) {
+        const { error } = await anon.from("testimonials").select(column).limit(1);
+        expect(error, `anon must not read testimonials.${column}`).not.toBeNull();
+      }
+      const { data } = await anon.from("testimonials").select("id").in("id", [hidden.id, pending.id]);
+      expect(data ?? []).toHaveLength(0);
+
+      const { data: links, error: linksError } = await anon.from("review_invitations").select("id").limit(1);
+      expect(linksError !== null || (links ?? []).length === 0, "review links are never readable").toBe(true);
+    } finally {
+      await deleteTestimonial(hidden);
+      await deleteTestimonial(pending);
+    }
   });
 });

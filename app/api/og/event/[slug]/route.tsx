@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
 import { createPublicClient } from "@/lib/supabase/public";
 import { LandscapeCard, OG_SIZE } from "@/lib/og-card";
-import { SITE_NAME } from "@/lib/site-config";
-import { formatDate } from "@/lib/utils";
+import { getSiteName } from "@/lib/site-content";
+import { formatEventSchedule } from "@/lib/utils";
 import { formatPrice } from "@/lib/money";
 
 /**
@@ -22,13 +22,16 @@ export async function GET(
 ) {
   const { slug } = await params;
   const locale = new URL(req.url).searchParams.get("locale") === "en" ? "en" : "ro";
+  /* The share card carries her business name, so it has to read the name she
+     set rather than the placeholder that used to be compiled in. */
+  const siteName = await getSiteName(locale);
 
   // No session: Row Level Security still applies, so an unpublished event
   // cannot be previewed by guessing its slug.
   const supabase = createPublicClient();
   const { data: event } = await supabase
     .from("events")
-    .select("title_ro, title_en, date, time, location, price, currency")
+    .select("title_ro, title_en, date, time, end_date, end_time, location, price, currency")
     .eq("slug", slug)
     .eq("published", true)
     .maybeSingle();
@@ -37,22 +40,26 @@ export async function GET(
     // Still return an image rather than a 404: a broken image in a share card
     // looks worse than a plain branded one.
     return new ImageResponse(
-      <LandscapeCard title={SITE_NAME} siteName={SITE_NAME} />,
+      <LandscapeCard title={siteName} siteName={siteName} />,
       OG_SIZE
     );
   }
 
   const title = locale === "ro" ? event.title_ro : event.title_en || event.title_ro;
   const free = locale === "ro" ? "Gratuit" : "Free";
+  // The start time is optional, so the eyebrow is the date alone when there is
+  // none (a missing time used to crash the whole card).
+  const schedule = formatEventSchedule(event, locale);
+  const eyebrow = schedule.time ? `${schedule.date} · ${schedule.time}` : schedule.date;
 
   return new ImageResponse(
     (
       <LandscapeCard
-        eyebrow={`${formatDate(event.date, locale)} · ${event.time.slice(0, 5)}`}
+        eyebrow={eyebrow}
         title={title}
         subtitle={event.location ?? undefined}
         badge={event.price === 0 ? free : formatPrice(event.price, event.currency, locale)}
-        siteName={SITE_NAME}
+        siteName={siteName}
       />
     ),
     {
