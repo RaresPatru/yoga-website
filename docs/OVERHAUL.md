@@ -30,7 +30,7 @@ reasons behind choices that last go in [DECISIONS.md](DECISIONS.md).
 | 8 | Messages: unread, starred, archive, letter view | done, 29 Sep |
 | 9 | Public polish and speed: loader, transitions, FAQ, blur, back to top | done, 29 Sep |
 | 10 | Stripe: the money path, Revolut Pay, cancelling, refunds, codes | done, 3 Oct |
-| 11 | PostHog analytics | not started |
+| 11 | PostHog analytics | done, 4 Oct |
 
 ---
 
@@ -129,6 +129,22 @@ Rares can overturn any of these.
   counts: the box asks about future events, not one event.
 - **She can stop announcements to one person** from their panel in
   Înscrieri, for someone who asked by message rather than through the link.
+- **Her own visits are not counted** (phase 11) while she is signed in to the
+  admin panel in that browser, so checking her own event page from her phone
+  does not inflate its figures.
+- **Global Privacy Control and Do Not Track are honoured** (phase 11): such a
+  browser is not counted at all. Few send either; without a banner, honouring
+  the ones that do is the visitor's only say.
+- **Pages behind a personal link are not counted** (phase 11): cancelling,
+  writing a testimonial, unsubscribing. They exist for one person each.
+- **A post is "read"** (phase 11) when the end of its text has come into view
+  and the reader has spent a quarter of its reading time on the page, between
+  10 seconds and a minute.
+- **No cookieless mode** (phase 11). PostHog can count unique visitors per day
+  with a hash of the IP address and browser, but every event is thrown away
+  unless a switch in her project is on, and the country map goes. Each page
+  load stays a new visitor; the reasons are in
+  [DECISIONS.md](DECISIONS.md#nothing-kept-and-nobody-a-person-memory-not-cookieless-mode).
 
 ---
 
@@ -260,7 +276,8 @@ those without a click:
 
 - **Embedded videos wait for a click.** Instagram, YouTube and TikTok videos
   stay a still preview until someone presses play, and the preview says so.
-- **Analytics will run without cookies**, once it is switched on (Phase 11).
+- **Analytics run without cookies** and keep nothing in the browser (phase 2,
+  checked in a browser in phase 11).
 
 **Health notes** are a special category. They need explicit consent and are
 deleted 30 days after the event.
@@ -1473,15 +1490,105 @@ an automatic refund for both methods.
 
 ### Phase 11: PostHog
 
-- [ ] **Where and how it runs:**
+- [x] **Where and how it runs:**
   - public pages only
   - no cookies
   - the EU host
   - loaded late
   - never on `localhost` or with development keys (S6)
-- [ ] **Private tokens stripped:** waiting-list and review tokens are removed
+- [x] **Private tokens stripped:** waiting-list and review tokens are removed
   from recorded addresses (S10).
-- [ ] **Events tracked:** event views, booking clicks and blog reads.
+- [x] **Events tracked:** event views, booking clicks and blog reads.
+
+**How it turned out** (4 October 2026). The full suite passed on a production
+build: 791 passed, 11 skipped, 1 flaky. The flaky one was a testimonial whose
+photo took the server more than 10 seconds to save once, and it passed on its
+retry; that page never loads the statistics.
+
+- **Only her site sends, and only to the EU.** Statistics come from the
+  site's public address alone (`NEXT_PUBLIC_SITE_URL`, which only production
+  has), so previews, development servers, the test suite and copies of the
+  site send nothing, and a page on this machine never sends to PostHog. They
+  go to PostHog's EU cloud, fixed in the code: `NEXT_PUBLIC_POSTHOG_HOST` is
+  honoured only for a stand-in on this machine. The CSP allows that one
+  address and no script or image from PostHog. Production's key in `.env` no
+  longer matters on this machine: no local build sends unless it is built to
+  on purpose (below), and the suite's build carries a placeholder key.
+- **Everything else PostHog can do is off, in the code.** No recordings of the
+  screen, no clicks recorded on their own, no surveys or heatmaps. PostHog's
+  settings are not fetched and nothing is loaded from it, so a switch flipped
+  in her project reaches no visitor. No cookie, nothing in the browser's
+  storage, and nobody becomes a person in PostHog.
+- **Who is not counted:** a browser signed in to the admin panel (her phone
+  included), the admin's previews, the pages behind someone's personal link
+  (cancelling, writing a testimonial, unsubscribing), browsers that send
+  Global Privacy Control or Do Not Track, and automated browsers.
+- **What is recorded** (`AnalyticsEvents` in `lib/analytics.ts`): page views
+  and page leaves; `event_viewed`; `booking_clicked`, then
+  `booking_completed`, `waitlist_joined` or `booking_failed` with its reason;
+  and `blog_post_read`, once the end of the text has come into view and the
+  reader has spent a quarter of its reading time on the page. Nothing typed
+  into a form.
+- **Keys and click identifiers** (`claim`, `token`, `checkout`, `fbclid`,
+  `igshid`, `gclid`…) are replaced with `redacted` in every property of every
+  event, inside other addresses too.
+- **The privacy policy draft** says what the statistics collect, the legal
+  basis and how long PostHog keeps them
+  (`20261004000000_statistics_privacy.sql`). The admin guide has a Statistics
+  section in Romanian.
+
+**How to test it on this machine**, since nothing here sends to PostHog:
+
+- **The suite** sends to a stand-in for PostHog (`tests/fake-posthog.ts`) and
+  checks what arrives, as it does with Stripe.
+- **By hand, against PostHog itself:** build with
+  `NEXT_PUBLIC_POSTHOG_DEBUG=1`, which lifts the address rules for that build
+  and logs every event, or the reason a visit is not counted, in the
+  browser's console. Use a key from a test project of your own rather than
+  hers. The PowerShell is in [CLAUDE.md](../CLAUDE.md).
+
+**Tests**
+
+- `analytics.spec.ts` (rewritten): the rules as plain functions (which
+  addresses send, where to, what is cleaned, which pages count, when an
+  address is a new page), the CSP, and in both engines against the stand-in:
+  a page view each with nothing stored and nothing asked of PostHog; keys and
+  click identifiers never sent; personal-link pages, Global Privacy Control,
+  Do Not Track and another address not counted; an event's page; a free
+  booking, the waiting list and a refusal with its reason; a paid booking
+  across Stripe's page; a post read to its end but not one scrolled past.
+- `admin-analytics.spec.ts` (new): a signed-in browser is not counted on the
+  site, and the admin panel and its previews send nothing.
+
+**Found along the way**
+
+- **The live site records sessions.** Production still runs the code of
+  22 September: it loads PostHog on every page, the admin panel included,
+  sets its cookie, and loaded PostHog's session recorder on 4 October,
+  because her PostHog project has session replay switched on. `feature`
+  fixed the cookie in phase 2 and the admin panel in phase 9; it reaches the
+  live site at the next merge (Needs Rares).
+- **A phone on the Wi-Fi counted as a visitor.** The phase 9 rule was "not on
+  localhost", and a phone opening the dev server at `192.168.x.x` carried
+  production's key from `.env` straight past it. Every preview did too.
+- **The admin's previews counted as visits.** They live under the public
+  layout (`/[locale]/preview`).
+- **The first cleaning would have lost every event.** It blanked any
+  property called `token`, and PostHog files each event under the project
+  key in exactly that property. The stand-in accepted it; it now refuses an
+  event without the key, as PostHog does. The same test run found click
+  identifiers copied into `$session_entry_fbclid`, which the cleaning now
+  covers.
+- **posthog-js drops automated browsers,** so the suite's own browsers sent
+  nothing until they were made to look like a visitor's (`asVisitor`).
+  Without that, every "nothing is sent" test would have passed for the wrong
+  reason. The site now asks the same question before fetching the library,
+  which keeps it out of every other test and saves crawlers the download.
+- **A page view could be filed under the wrong page.** Views from before the
+  library arrived took their path from wherever the visitor was by then.
+  Each view and event now carries the address and time it happened at.
+- **PRIVACY.md had drifted:** it named a file that no longer exists and still
+  gave the 7-day cancellation rule that phase 10 replaced.
 
 ---
 
@@ -1531,7 +1638,23 @@ an automatic refund for both methods.
 - **The cancellation rules with her:** 48 hours, full refunds only, and her
   approval after that are Rares' assumptions of 3 October. They live in
   `lib/cancel-rules.ts` and in the terms draft.
-- **Phase 11:** a PostHog project on the EU cloud.
+- ~~**Phase 11:** a PostHog project on the EU cloud.~~ It is already there:
+  the key in `.env` belongs to a project on the EU cloud, and the live site
+  uses it. In that project (PostHog's settings, eu.posthog.com):
+  - **Session replay off now, and the recordings deleted.** The live site
+    records sessions until the next merge, the admin panel included, so the
+    recordings so far are of your own visits and may show test participants'
+    details. Autocapture, heatmaps and surveys can go off too. The code
+    refuses them all from the next merge; the switches are a second lock.
+  - **"Discard client IP data" on** (Project → General → IP data capture),
+    if it is not already; EU organisations start with it on. Country and city
+    still work.
+  - **Sign PostHog's data processing agreement** in the business's name
+    (GDPR art. 28): app.posthog.com/legal → New → DPA. Free on any plan.
+  - **At handover,** move the project to her, or invite her as an owner.
+  - In Vercel, `NEXT_PUBLIC_POSTHOG_HOST` is no longer read and can go, and
+    `NEXT_PUBLIC_POSTHOG_KEY` is needed in Production only. Leaving both does
+    no harm.
 
 ---
 

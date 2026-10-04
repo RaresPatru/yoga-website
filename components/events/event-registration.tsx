@@ -14,6 +14,7 @@ import { formatPrice, toCurrency } from "@/lib/money";
 import { NOTE_MAX_LENGTH } from "@/lib/validate-attendee";
 import { REVOLUT_PAY_CURRENCIES } from "@/lib/payment-methods";
 import { EVENT_TIME_ZONE } from "@/lib/utils";
+import { track } from "@/components/providers/analytics";
 import { Users, Check, AlertCircle, Clock } from "lucide-react";
 
 /**
@@ -79,6 +80,8 @@ function Outcome({
 
 interface EventRegistrationProps {
   eventId: string;
+  /** The event's address, which names it in the statistics. */
+  slug: string;
   price: number;
   /** ISO code from the event row — never assumed, since it decides what is charged. */
   currency: string;
@@ -167,9 +170,16 @@ const PROCESSING_GAP_MS = 2000;
  * booking was gone by the time the money came. The id is taken out of the
  * address at once: it is a key to that checkout's state, and a copied link
  * should not carry it.
+ *
+ * STATISTICS
+ *
+ * Pressing the button is booking_clicked; what came of it is
+ * booking_completed, waitlist_joined or booking_failed with its reason
+ * (lib/analytics.ts). Nothing typed into the form is sent.
  */
 export function EventRegistration({
   eventId,
+  slug,
   price,
   currency,
   maxParticipants,
@@ -201,6 +211,23 @@ export function EventRegistration({
    * to draw, and a drawn form is not permission to book.
    */
   const isFull = !maxParticipants || taken >= maxParticipants;
+
+  /*
+   * What came of a booking, for the statistics: recorded when the panel
+   * changes to say so, however it got there (the form, a claim link, or the
+   * way back from Stripe).
+   */
+  useEffect(() => {
+    if (stage === "registered" || stage === "claimed" || stage === "paid") {
+      track("booking_completed", {
+        event_slug: slug,
+        paid: stage === "paid",
+        via: stage === "registered" ? "form" : stage === "claimed" ? "claim" : "checkout",
+      });
+    } else if (stage === "waitlisted") {
+      track("waitlist_joined", { event_slug: slug });
+    }
+  }, [stage, slug]);
 
   const post = (url: string, body: unknown) =>
     fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -240,11 +267,15 @@ export function EventRegistration({
     const claimToken = searchParams.get("claim");
     if (!claimToken) return;
 
+    const failed = (reason: string) =>
+      track("booking_failed", { event_slug: slug, waitlist: false, reason: `claim_${reason}` });
+
     post(`/api/register/claim-spot/${claimToken}`, { locale })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
+          failed(typeof data.code === "string" ? data.code : res.status === 410 ? "expired" : `http_${res.status}`);
           // Somebody booked the seat first. Not an error of theirs, and not a
           // dead link: the offer was a head start, and they keep their place.
           if (data.code === "taken") {
@@ -273,8 +304,11 @@ export function EventRegistration({
         if (goPay(data)) return;
         setStage("claimed");
       })
-      .catch(() => setError(t("claim_invalid")));
-  }, [searchParams, t, locale]);
+      .catch(() => {
+        failed("network");
+        setError(t("claim_invalid"));
+      });
+  }, [searchParams, t, locale, slug]);
 
   // Back from Stripe: ?checkout=<session id>, and &paid=1 after paying.
   useEffect(() => {
@@ -356,9 +390,22 @@ export function EventRegistration({
 
   const submit = async (e: React.FormEvent, waitlisting: boolean) => {
     e.preventDefault();
-    if (!captchaToken) return setError(t("error_captcha"));
-    if (!phoneValid) return setError(t("error_phone"));
-    if (form.note.trim() && !noteConsent) return setError(t("error_note_consent"));
+    // Sent at once: a paid booking leaves for Stripe moments later.
+    track("booking_clicked", { event_slug: slug, paid: price > 0, waitlist: waitlisting }, { leaving: true });
+    const failed = (reason: string) => track("booking_failed", { event_slug: slug, waitlist: waitlisting, reason });
+
+    if (!captchaToken) {
+      failed("captcha");
+      return setError(t("error_captcha"));
+    }
+    if (!phoneValid) {
+      failed("phone");
+      return setError(t("error_phone"));
+    }
+    if (form.note.trim() && !noteConsent) {
+      failed("note_consent");
+      return setError(t("error_note_consent"));
+    }
 
     setSubmitting(true);
     setError("");
@@ -379,7 +426,10 @@ export function EventRegistration({
     try {
       const res = await post(waitlisting ? "/api/register/waiting-list" : "/api/register", details);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return fail(errorKey(data.code, res.status, waitlisting));
+      if (!res.ok) {
+        failed(typeof data.code === "string" ? data.code : `http_${res.status}`);
+        return fail(errorKey(data.code, res.status, waitlisting));
+      }
 
       if (waitlisting) {
         setStage("waitlisted");
@@ -387,12 +437,14 @@ export function EventRegistration({
         // Paid: the server opened the checkout; the booking is held while
         // they pay.
         if (goPay(data)) return;
+        failed("no_checkout");
         return fail("error_stripe");
       } else {
         setStage("registered");
       }
       setSubmitting(false);
     } catch {
+      failed("network");
       fail("error_generic");
     }
   };

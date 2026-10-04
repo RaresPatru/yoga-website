@@ -32,7 +32,7 @@ every page's footer. Each shows the date it was last saved.
 | Paying | nothing; the card goes to Stripe | Stripe confirms the payment |
 | Writing a testimonial | the text, rating, chosen name, and a photo or video link if added | published with their consent, once she approves it (consent) |
 | The contact form | name, email, message | to reply (legitimate interest) |
-| Browsing | page views, without cookies | to see what is useful (legitimate interest) |
+| Browsing | page views, where a visit came from, device and browser, country and city from the IP address, booking steps without anyone's details, posts read to the end; no cookies, nothing stored in the browser | to see what is useful (legitimate interest) |
 
 Since phase 5 (26 September 2026) the forms ask for both, and the policy
 draft says so: `20260928000000_participants.sql` added its paragraphs where
@@ -49,7 +49,14 @@ advertising and embedded social media. What the site sets:
 - **The admin's session**: only for her, when she signs in.
 - **Statistics run without cookies.** Since 25 September 2026 PostHog keeps
   nothing in the visitor's browser (`persistence: "memory"` in
-  `components/providers/posthog-provider.tsx`).
+  `components/providers/analytics.tsx`), checked in a browser since phase 11
+  (`tests/analytics.spec.ts`). Since then (4 October 2026) they also go only
+  to PostHog's EU cloud, come only from the site's public address, leave out
+  her own visits, previews, pages behind a personal link and browsers that
+  send Global Privacy Control or Do Not Track, and record no screens, clicks
+  or form contents ([DECISIONS.md](DECISIONS.md#visitor-statistics)). The
+  privacy policy draft says what they collect, why and for how long
+  (`20261004000000_statistics_privacy.sql`).
 
 - **Videos in posts and event descriptions** (YouTube, Vimeo, Instagram,
   TikTok) load only when a visitor presses play. Until then the page shows a
@@ -82,9 +89,11 @@ filled in, the pages show a dashed marker in its place.
 These are suggestions written into the text. They are hers to change, and
 they are business decisions rather than facts:
 
-- **Cancellation**: a full refund when cancelled at least 7 days before; later,
-  no refund, but the place can be given to someone else. A full refund when she
-  cancels.
+- **Cancellation**: since phase 10 (3 October 2026), Rares' assumptions until
+  she confirms them: an automatic full refund up to 48 hours before the start;
+  later, the place is freed and the refund is her decision; refunds are only
+  ever full, and a full refund when she cancels. They live in
+  `lib/cancel-rules.ts` and in the terms draft. (The first draft said 7 days.)
 - **How long bookings are kept**: 3 years from the event. Waiting lists the
   same since phase 5 (the draft first said until the event ends, but the
   admin archive keeps them). Nothing deletes old bookings yet; once she
@@ -104,9 +113,20 @@ they are business decisions rather than facts:
   Directive 2011/83/EU art. 16(l)), under which the 14-day right to withdraw
   does not apply.
 - The health and photo paragraphs in the terms.
-- Transfers outside the EEA: several processors are American companies, and
-  PostHog currently sends statistics to its US host (phase 11 moves it to the
-  EU).
+- Transfers outside the EEA: several processors are American companies.
+  PostHog keeps the statistics on its EU cloud (Frankfurt) since phase 11, and
+  its project was on the EU cloud already.
+- **Statistics without a banner.** The site asks no consent for them because
+  nothing is stored on or read back from the visitor's device beyond what the
+  page itself needs, and the legal basis is legitimate interest. That is the
+  usual reading of the ePrivacy rule (Law 506/2004 art. 4(5) in Romania), but
+  the EDPB's Guidelines 2/2023 read "gaining access to the device" broadly
+  enough to take in any script that collects details from the browser, which
+  would need consent. A lawyer should say which reading Romania follows; the
+  alternative is a consent banner (audit C2).
+- **PostHog's data processing agreement.** GDPR art. 28 requires a contract
+  with each processor. PostHog's is self-serve on any plan, signed in the
+  business's name from its legal page.
 
 ## Other rules the site follows
 

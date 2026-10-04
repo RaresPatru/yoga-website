@@ -1,16 +1,29 @@
 import type { FullConfig } from "@playwright/test";
 import type { Server } from "node:http";
 import { startFakeStripe } from "./fake-stripe";
+import { startFakePosthog } from "./fake-posthog";
+
+/** Starts a stand-in, or uses whatever already listens on its port. */
+async function standIn(name: string, start: () => Promise<Server>): Promise<Server | null> {
+  try {
+    return await start();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+    console.warn(`[global-setup] The ${name} stand-in's port is taken; using whatever listens there.`);
+    return null;
+  }
+}
 
 /**
- * Starts the stand-in for Stripe, then warms the server once before any test
- * runs.
+ * Starts the stand-ins for Stripe and PostHog, then warms the server once
+ * before any test runs.
  *
- * The stand-in (tests/fake-stripe.ts) lives in this process for the whole
- * run, and the teardown returned below closes it. The site's server reaches
- * it through STRIPE_API_BASE (playwright.config.ts). If something already
- * listens on its port, a stand-in left by an earlier run or one a developer
- * started, that one is used.
+ * The stand-ins (tests/fake-stripe.ts, tests/fake-posthog.ts) live in this
+ * process for the whole run, and the teardown returned below closes them.
+ * The site reaches them through STRIPE_API_BASE and NEXT_PUBLIC_POSTHOG_HOST
+ * (playwright.config.ts). If something already listens on a port, a
+ * stand-in left by an earlier run or one a developer started, that one is
+ * used.
  *
  * WARMING
  *
@@ -27,13 +40,7 @@ import { startFakeStripe } from "./fake-stripe";
  * as a puzzling timeout inside an unrelated spec.
  */
 async function globalSetup(config: FullConfig) {
-  let fakeStripe: Server | null = null;
-  try {
-    fakeStripe = await startFakeStripe();
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
-    console.warn("[global-setup] The fake Stripe's port is taken; using whatever listens there.");
-  }
+  const standIns = [await standIn("Stripe", startFakeStripe), await standIn("PostHog", startFakePosthog)];
 
   const baseURL =
     config.projects[0]?.use?.baseURL ?? "http://localhost:3100";
@@ -65,7 +72,9 @@ async function globalSetup(config: FullConfig) {
   }
 
   return async () => {
-    await new Promise<void>((resolve) => (fakeStripe ? fakeStripe.close(() => resolve()) : resolve()));
+    await Promise.all(
+      standIns.map((server) => new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve())))
+    );
   };
 }
 

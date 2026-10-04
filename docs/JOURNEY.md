@@ -1766,6 +1766,59 @@ of Stripe's API, were checked against it too. The one thing the sandbox
 showed that no test could: the payment page names the business "Yoga
 sandbox", the Stripe account's public name, which only she can change.
 
+### Phase 11: statistics that leave the visitor alone
+
+**Rares asked how PostHog could be tested on this machine when this machine
+never sends to it.** The answer copied phase 10: a stand-in that receives what
+the site would send. The old rule, "not on localhost", was also the wrong
+rule. A phone on the Wi-Fi opens the dev server at `192.168.x.x`, which is not
+localhost, with production's key from `.env`, and every preview passed it too.
+The rule now is that statistics come from the site's public address and from
+nowhere else, and that a page on this machine never sends to PostHog itself.
+A stand-in on this machine may receive them, which is what made testing
+possible at all.
+
+**Looking at what was actually live changed the priorities.** The key in
+`.env` belongs to a project on PostHog's EU cloud, so that part of the plan
+was done already. But the project had session replay switched on, and the
+live site, still on the code of 22 September, loaded PostHog's recorder on
+every page, the admin panel included, and set its cookie. `feature` had fixed
+the cookie in phase 2 and the admin panel in phase 9, but a switch in
+PostHog's settings could still have turned recordings on for every visitor,
+because the library obeys those settings unless told otherwise. So the site
+now switches off everything it does not use in its own code and does not
+fetch PostHog's settings at all. What a visitor's browser sends is decided by
+code someone reviews, not by a toggle on a page nobody watches.
+
+**The first test run found nothing, and that was the useful result.** Not
+one event reached the stand-in: posthog-js quietly drops automated browsers,
+and Playwright's are automated three ways at once (`navigator.webdriver`, the
+user agent, the browser's brand list). Every "nothing is sent" test would
+have passed whatever the code did. With the suite's browsers made to look
+like a visitor's, the next run found two real faults in the cleaning: click
+identifiers survived under `$session_entry_fbclid`, and the cleaning blanked
+the property called `token`, which is where PostHog reads the project key it
+files each event under. PostHog would have thrown away every event in
+production, and the stand-in, which checked nothing, had accepted them. It
+now refuses an event without the key, the way PostHog does.
+
+**Six events, chosen for the questions she will ask.** Which events people
+look at (`event_viewed`), how many press the button (`booking_clicked`), how
+many end up with a place (`booking_completed`) or on the waiting list
+(`waitlist_joined`), what stopped the rest (`booking_failed`, with the
+server's reason), and which posts are read to the end (`blog_post_read`).
+None carries a name, an address or anything typed. Her own visits are not
+counted while she is signed in, and neither are the pages behind someone's
+personal link, nor a browser that asks not to be tracked.
+
+**Where the law came in.** Statistics without a banner rest on nothing being
+stored on the visitor's device, which is true and now tested, and on
+legitimate interest. The EDPB reads "access to the device" more broadly than
+that, so whether Romania needs consent even for this is a question for the
+lawyer who reads the legal pages; PRIVACY.md says so. The privacy policy
+draft now says what is collected, why and for how long, and PostHog's data
+processing agreement waits to be signed in the business's name.
+
 ---
 
 ## Decisions worth defending
@@ -1818,8 +1871,7 @@ Proven in production, not just in tests: a real card payment through Stripe →
 webhook → registration marked `completed` → confirmation email with a calendar
 invite at the correct local time.
 
-Two things are known-outstanding and are deliberately not fixed in code, because
-neither is a code problem:
+Three things are known-outstanding, and none of them waits on code:
 
 - **The money path has run against the Stripe sandbox, not yet on a
   deployment.** `charge.refunded` is subscribed now, and Phase 10 ran payment,
@@ -1827,6 +1879,10 @@ neither is a code problem:
   server; the waiting list's part runs in the suite, against the stand-in. A
   payment on the deployed site waits for Phase 10's migration to reach
   production.
+- **The live site records sessions until the next merge.** It runs the code of
+  22 September, and her PostHog project has session replay on. Phase 11
+  switches it off in the code; the switch in PostHog can go off now, before
+  any merge.
 - **The launch blocker is content, not engineering.** Her photo, her story, the
   About text, the FAQs and a real business name to replace the placeholder. All
   editable from the admin panel; the list is in

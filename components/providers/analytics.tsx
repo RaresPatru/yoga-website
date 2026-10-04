@@ -2,47 +2,77 @@
 
 import { Suspense, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import type { PostHog } from "posthog-js";
+import type { CaptureResult, PostHog } from "posthog-js";
+import {
+  analyticsHost,
+  isCounted,
+  pageKey,
+  scrubbed,
+  whyNotCounted,
+  withoutSecrets,
+  type AnalyticsEvents,
+} from "@/lib/analytics";
 
 /**
- * Page views on the public site, counted by PostHog.
+ * Visitor statistics, counted by PostHog on its EU cloud.
  *
- * Only public pages render this (app/[locale]/layout.tsx), so the admin panel
- * never loads it and her own work is never counted as visits.
+ * The rules (where it runs, what is cleaned out, what each event carries) are
+ * in lib/analytics.ts. This file loads the library and hands it events.
+ *
+ * WHERE IT RUNS
+ *
+ * Only public pages render <Analytics /> (app/[locale]/layout.tsx), so the
+ * admin panel never loads it, and a browser signed in to the admin panel is
+ * not counted on the public site either: her own visits are not her
+ * visitors. Nor is a browser that sends Global Privacy Control or Do Not
+ * Track, one driven by a program, the admin's previews, or a page reached
+ * through someone's personal link. And only the site's public address sends
+ * anything: a development server, a preview or the test suite never reaches
+ * her statistics.
  *
  * WHEN IT LOADS
  *
  * posthog-js is not part of the page's own JavaScript. It is fetched once the
  * page has finished loading and the browser has a quiet moment, so on a phone
- * it never competes with the page for the network or for the processor while
- * the visitor is waiting to read. A visit that ends before then is simply not
- * counted, which is the right trade for a statistic.
+ * it never competes with the page while the visitor is waiting to read.
+ * Events from before then wait for it, each with the address and time it
+ * happened at; a visit that ends before then is not counted, which is the
+ * right trade for a statistic.
  *
- * WHERE IT DOES NOT RUN
+ * WHAT IT DOES NOT DO
  *
- * Without a key, and on localhost: a development server or the test suite on
- * this machine would otherwise count as visits in her statistics.
+ * No cookie and nothing in the browser's storage, no person profiles, no
+ * clicks recorded on their own, no recordings of the screen, no surveys. Each
+ * is switched off here rather than in PostHog's settings, and the settings
+ * are not even fetched, so nothing changed there can switch them back on.
  */
 
-/**
- * The query parameters that are keys, not places: a waiting-list claim
- * (?claim=), a link to write a testimonial or to cancel a booking (?token=),
- * and the Stripe checkout a visitor came back from (?checkout=). Whoever holds
- * one can use it, so none leaves this site in an analytics event.
- */
-const SECRET_PARAMS = ["claim", "token", "checkout"];
+const DEBUG = process.env.NEXT_PUBLIC_POSTHOG_DEBUG === "1";
 
-function withoutSecrets(url: string): string {
-  return url.replace(new RegExp(`([?&])(${SECRET_PARAMS.join("|")})=[^&#]*`, "g"), "$1$2=redacted");
+/** The admin's session cookie, which Supabase names sb-<project>-auth-token (split into .0, .1… when long). */
+function signedIn(): boolean {
+  return /(?:^|;\s*)sb-[^=;]+-auth-token(?:\.\d+)?=/.test(document.cookie);
 }
 
-/** Every address PostHog attaches to an event, with the keys taken out. */
-function sanitizeProperties(properties: Record<string, unknown>): Record<string, unknown> {
-  for (const key of ["$current_url", "$referrer", "$initial_current_url", "$initial_referrer", "$pathname"]) {
-    const value = properties[key];
-    if (typeof value === "string") properties[key] = withoutSecrets(value);
-  }
-  return properties;
+/**
+ * A browser driven by a program, as tests and some crawlers are. posthog-js
+ * drops what such a browser sends, on these same signs among others; asking
+ * first spares it the download.
+ */
+function automated(): boolean {
+  const nav = navigator as Navigator & { userAgentData?: { brands?: { brand: string }[] } };
+  return (
+    nav.webdriver === true ||
+    nav.userAgent.includes("HeadlessChrome") ||
+    !!nav.userAgentData?.brands?.some((entry) => entry.brand.includes("HeadlessChrome"))
+  );
+}
+
+/** Global Privacy Control, or the older Do Not Track. */
+function optedOut(): boolean {
+  const nav = navigator as Navigator & { globalPrivacyControl?: boolean; msDoNotTrack?: string };
+  const win = window as Window & { doNotTrack?: string };
+  return nav.globalPrivacyControl === true || [nav.doNotTrack, nav.msDoNotTrack, win.doNotTrack].some((v) => v === "1" || v === "yes");
 }
 
 /** Waits for the page to finish loading, then for the browser to be idle. */
@@ -61,29 +91,142 @@ function afterLoadAndIdle(): Promise<void> {
   );
 }
 
+/**
+ * The last word before anything leaves the browser: no keys or click
+ * identifiers anywhere in it, and nothing from a page that is not counted
+ * (PostHog's own $pageleave can be sent from one).
+ */
+function cleanEvent(event: CaptureResult | null): CaptureResult | null {
+  if (!event) return null;
+  const pathname = event.properties?.$pathname;
+  if (typeof pathname === "string" && !isCounted(pathname)) return null;
+  return {
+    ...event,
+    properties: scrubbed(event.properties),
+    ...(event.$set ? { $set: scrubbed(event.$set) } : {}),
+    ...(event.$set_once ? { $set_once: scrubbed(event.$set_once) } : {}),
+  };
+}
+
 let client: Promise<PostHog | null> | null = null;
 
 /** PostHog, loaded and set up once per visit; null where it does not run. */
 function posthog(): Promise<PostHog | null> {
   client ??= (async () => {
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    const local = ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
-    if (!key || local) return null;
+    const host = analyticsHost();
+    const reason = whyNotCounted({
+      key,
+      host,
+      page: { origin: window.location.origin, hostname: window.location.hostname },
+      site: process.env.NEXT_PUBLIC_SITE_URL,
+      debug: DEBUG,
+      signedIn: signedIn(),
+      optedOut: optedOut(),
+      automated: automated(),
+    });
+    if (reason || !key) {
+      if (DEBUG) console.info(`[analytics] Not counting this visit: ${reason}.`);
+      return null;
+    }
     await afterLoadAndIdle();
     const { default: instance } = await import("posthog-js");
     instance.init(key, {
-      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://app.posthog.com",
+      api_host: host,
+      // Page views are sent below, with the address they happened at.
       capture_pageview: false,
+      // How long a page was read, and how far down; sent as the visitor leaves it.
+      capture_pageleave: true,
+      autocapture: false,
+      rageclick: false,
+      capture_dead_clicks: false,
+      capture_heatmaps: false,
+      capture_exceptions: false,
+      capture_performance: false,
+      disable_session_recording: true,
+      disable_surveys: true,
+      disable_product_tours: true,
+      disable_conversations: true,
+      disable_web_experiments: true,
+      // PostHog's settings are not fetched, and nothing is loaded from it, so
+      // a switch flipped there cannot turn any of the above back on.
+      advanced_disable_flags: true,
+      disable_external_dependency_loading: true,
       // Nothing is stored in the visitor's browser: no cookie, no
-      // localStorage. Each page load counts as a fresh anonymous visitor.
-      // The cookie policy (legal.cookies) says the statistics run without
-      // cookies, which is what lets the site go without a consent banner.
+      // localStorage. Each page load counts as a fresh anonymous visitor. The
+      // cookie policy (legal.cookies) says the statistics run without cookies,
+      // which is what lets the site go without a consent banner.
       persistence: "memory",
-      sanitize_properties: sanitizeProperties,
+      person_profiles: "never",
+      before_send: cleanEvent,
+      debug: DEBUG,
     });
     return instance;
   })().catch(() => null);
   return client;
+}
+
+/** Where and when something happened, taken at the moment it did: PostHog may load after the visitor has moved on. */
+interface Moment {
+  url: string;
+  pathname: string;
+  time: Date;
+}
+
+function now(): Moment {
+  return { url: withoutSecrets(window.location.href), pathname: window.location.pathname, time: new Date() };
+}
+
+function send(event: string, properties: Record<string, unknown>, at: Moment, leaving = false) {
+  if (!isCounted(at.pathname)) return;
+  void posthog().then((instance) =>
+    instance?.capture(
+      event,
+      { ...properties, $current_url: at.url, $pathname: at.pathname },
+      // Sent at once rather than with the next batch, when the visitor may be
+      // about to leave for Stripe.
+      { timestamp: at.time, ...(leaving ? { send_instantly: true } : {}) }
+    )
+  );
+}
+
+let lastPage: string | null = null;
+
+/** Counts the page being shown, once (lib/analytics.ts, pageKey). */
+function countPage() {
+  const key = pageKey(window.location.pathname, window.location.search);
+  if (key === lastPage) return;
+  lastPage = key;
+  send("$pageview", {}, now());
+}
+
+/**
+ * Records one of the site's events (lib/analytics.ts, AnalyticsEvents).
+ * `leaving`: the page may navigate away straight after, so it is sent at once.
+ */
+export function track<K extends keyof AnalyticsEvents>(
+  name: K,
+  properties: AnalyticsEvents[K],
+  options: { leaving?: boolean } = {}
+) {
+  // An event is never recorded ahead of the view of the page it happened on.
+  countPage();
+  send(name, { ...properties }, now(), options.leaving);
+}
+
+/** Records an event when the page that renders it is shown: for server pages, which cannot call track(). */
+export function TrackView<K extends keyof AnalyticsEvents>({
+  name,
+  properties,
+}: {
+  name: K;
+  properties: AnalyticsEvents[K];
+}) {
+  const signature = JSON.stringify(properties);
+  useEffect(() => {
+    track(name, JSON.parse(signature) as AnalyticsEvents[K]);
+  }, [name, signature]);
+  return null;
 }
 
 /**
@@ -100,9 +243,7 @@ function PageviewTracker() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const query = searchParams?.toString();
-    const url = withoutSecrets(`${pathname}${query ? `?${query}` : ""}`);
-    void posthog().then((instance) => instance?.capture("$pageview", { $current_url: url }));
+    countPage();
   }, [pathname, searchParams]);
 
   return null;

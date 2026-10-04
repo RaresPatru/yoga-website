@@ -23,9 +23,10 @@ which is a first-party answer to the business's actual requirement.
 
 ### Suspense boundaries wrap the component that needs them, never the app
 
-`PostHogProvider` calls `useSearchParams()`, which requires a Suspense boundary,
-and that boundary had been put in the root layout around `{children}` — the
-entire application.
+`PostHogProvider` (now `Analytics`, in `components/providers/analytics.tsx`)
+calls `useSearchParams()`, which requires a Suspense boundary, and that
+boundary had been put in the root layout around `{children}` — the entire
+application.
 
 The cost was not a rendering bug but an HTTP one. With everything inside
 Suspense, Next flushes the document shell immediately and streams the rest, so
@@ -1352,7 +1353,9 @@ each page load is a fresh anonymous visitor. That is what lets the cookie
 policy say the statistics run without cookies, and the site go without a
 consent banner. It was planned for phase 11 and brought forward to phase 2,
 because the cookie policy written in phase 2 had to be true on the day it
-appeared.
+appeared. Phase 11 checked it in a browser for the first time, against the
+suite's stand-in, and kept it over PostHog's cookieless mode
+([Visitor statistics](#nothing-kept-and-nobody-a-person-memory-not-cookieless-mode)).
 
 ### The wordmark goes home again
 
@@ -1650,7 +1653,9 @@ in until then; once she picks any, only her picks show, in her order.
 PostHog records the address of every page. A testimonial link (`?token=`) and
 a waiting-list claim (`?claim=`) are keys: whoever holds one can use it. The
 provider replaces both with "redacted" in every event before it leaves the
-browser.
+browser. Since phase 11 the same goes for Stripe's `?checkout=` and for
+advertising click identifiers, in every property
+([Visitor statistics](#keys-and-click-identifiers-are-cleaned-out-of-everything)).
 
 ### One email layout, and the preview runs the code that sends
 
@@ -2066,14 +2071,14 @@ cream page it blurred nothing and cost each element a compositing layer.
 `tests/ui-consistency.spec.ts` lists every file allowed to ask for a blur, so
 a new one is a decision rather than a habit.
 
-### PostHog: public pages only, after the page, never from this machine
+### PostHog: public pages only, after the page
 
 It is rendered by the public layout alone, so the admin panel never loads it
 and her own work is never counted. It is not part of any page's JavaScript:
 it is fetched once the page has loaded and the browser has a quiet moment, so
-on a phone it never competes with the page. On localhost it does not load at
-all, so a development server and the test suite stay out of her statistics
-(the local half of audit S6, done ahead of phase 11).
+on a phone it never competes with the page. Phase 9 also kept it off
+localhost; phase 11 replaced that with a stricter rule, under
+[Visitor statistics](#visitor-statistics).
 
 ### "Înapoi sus" comes and goes with the top bar
 
@@ -2083,3 +2088,104 @@ bar. Always shown, it sat on whatever was in the bottom corner of a phone,
 the last FAQ's + among them; someone looking for the top scrolls up anyway.
 It moves keyboard focus to the start of the content, as "Sari la conținut"
 does, because the button it leaves is about to disappear.
+
+## Visitor statistics
+
+PostHog, set up in phase 11 (4 October 2026). The rules are in
+`lib/analytics.ts`, the loading in `components/providers/analytics.tsx`.
+
+### Counted from her site alone, and sent only to the EU
+
+Statistics come from one address: the site's public one,
+`NEXT_PUBLIC_SITE_URL`, which only production sets. A preview, a development
+server, the test suite or a copy of the site somewhere else sends nothing,
+and a page on this machine never sends to PostHog whatever the settings say.
+Until phase 11 the rule was "not on localhost", which a phone on the Wi-Fi
+opening the dev server at `192.168.x.x` walked straight past, carrying
+production's key from `.env`, and which every preview passed too.
+
+Where they go is fixed in the code: PostHog's EU cloud, `eu.i.posthog.com`
+in Frankfurt. `NEXT_PUBLIC_POSTHOG_HOST` is honoured only for an address on
+this machine, the suite's stand-in, so no setting in Vercel can send
+visitors' data to the US; a key from an American project gets nothing
+through. The CSP allows that one address for connections and nothing of
+PostHog's as a script or an image.
+
+### Everything else PostHog can do is switched off in the code
+
+PostHog's project settings can switch on recordings of the screen, surveys,
+heatmaps and clicks recorded on their own, and the library obeys them unless
+its configuration says otherwise. On 4 October her project had session replay
+on, and the live site, still on the code of 22 September, loaded the
+recorder. Each is now switched off in the site's own configuration, PostHog's
+settings are not fetched at all (`advanced_disable_flags`) and nothing is
+loaded from PostHog (`disable_external_dependency_loading`), so a switch
+flipped there reaches no visitor. What is sent is page views, page leaves
+(how long a page was read, and how far down) and the six events in
+`AnalyticsEvents`.
+
+### Nothing kept, and nobody a person: memory, not cookieless mode
+
+`persistence: "memory"` and `person_profiles: "never"`: no cookie, nothing in
+the browser's storage, a fresh anonymous visitor on every page load (see
+[above](#visitor-statistics-keep-nothing-in-the-browser)). PostHog's newer
+cookieless mode counts unique visitors per day with a hash its servers make
+from the IP address and the browser, and was considered and not used. It
+needs a switch in her project, without which PostHog throws every event
+away; it loses the country map and PostHog's bot filtering, because the IP
+address is stripped before those run; and it would make the cookie policy's
+"we cannot recognise you from one visit to the next" untrue within a day.
+The cost of memory: a visitor who comes back or reloads counts again, and a
+paid booking finished after Stripe's page (a new page load) cannot be joined
+in a funnel to the click that began it. The counts still compare.
+
+### Keys and click identifiers are cleaned out of everything
+
+Every string in every event passes through `withoutSecrets`, which replaces
+the value of a key (`claim`, `token`, `checkout`) or of an advertising click
+identifier (`fbclid`, `igshid`, `gclid`…), plain or percent-encoded inside
+another address, with `redacted`. A property holding a click identifier on
+its own (`fbclid`, `$session_entry_fbclid`) is cleaned too. A property called
+`token` is not: it is PostHog's own, the project key it files the event
+under. The first version of the cleaning blanked it as well, which PostHog
+would have answered by throwing away every event; the suite's stand-in now
+refuses an event without the key, as PostHog does.
+
+### Who is not counted
+
+Her: a browser signed in to the admin panel (Supabase's `sb-…-auth-token`
+cookie) is not counted on the public site, the admin panel never loads the
+library, and its previews (`/[locale]/preview`) are not counted. Pages behind
+someone's personal link (cancelling, writing a testimonial, unsubscribing),
+which exist for one person each and show their details. A browser that sends
+Global Privacy Control or Do Not Track, which does not even fetch the
+library. And a browser driven by a program (`navigator.webdriver`,
+"HeadlessChrome"), which posthog-js would drop anyway; the site asks first
+and spares it the download.
+
+### A page view each, and what counts as a read post
+
+One page view per address, sent with the address and time it happened at even
+when the library arrives later, and ahead of any event on that page. An
+address that differs only in the keys or in `paid` is the same view: the
+booking panel takes them out of the address after Stripe's return, and that
+tidying is not a second visit. A post counts as read when the end of its text
+has come into view and the reader has spent a quarter of its reading time on
+the page, between 10 seconds and a minute.
+
+### Tested against a stand-in, checked by hand with a switch
+
+`tests/fake-posthog.ts` receives what the test build sends, refuses what
+PostHog would refuse, and answers anything else (settings, flags, scripts)
+with a 404 the tests look for. The site sends to it because the test build
+sets `NEXT_PUBLIC_POSTHOG_HOST` to its address on this machine. The browsers
+of the tests that read it are made to look like a visitor's (`asVisitor` in
+`tests/analytics-helpers.ts`), because automated ones are left out, and a
+test expecting nothing would otherwise pass for the wrong reason. Every other
+test's browser stays automated, so the rest of the suite never loads the
+library.
+
+`NEXT_PUBLIC_POSTHOG_DEBUG=1` in a build lifts the address rules for a
+deliberate check from localhost or a preview, and logs each event, and the
+reason when a visit is not counted, in the browser's console. It never lifts
+the visitor's refusal or her own exclusion.

@@ -18,6 +18,7 @@ import {
   type PublicTestimonial,
 } from "@/components/testimonials/testimonial-card";
 import { BookingClosed, EventView } from "@/components/events/event-view";
+import { TrackView } from "@/components/providers/analytics";
 import type { Metadata } from "next";
 import { PageTransition } from "@/components/layout/view-transitions";
 
@@ -213,6 +214,7 @@ export default async function EventDetailPage({
     phase === "upcoming" ? (
       <EventRegistration
         eventId={event.id}
+        slug={event.slug}
         price={event.price}
         currency={toCurrency(event.currency)}
         maxParticipants={event.max_participants}
@@ -241,6 +243,15 @@ export default async function EventDetailPage({
           type="application/ld+json"
           // Serialised JSON only; no user input reaches this as markup.
           dangerouslySetInnerHTML={{ __html: JSON.stringify(eventSchema) }}
+        />
+        <TrackView
+          name="event_viewed"
+          properties={{
+            event_slug: event.slug,
+            phase,
+            paid: event.price > 0,
+            sold_out: phase === "upcoming" && isFull,
+          }}
         />
 
         <EventView

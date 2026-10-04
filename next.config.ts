@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { networkInterfaces } from "node:os";
 import createNextIntlPlugin from "next-intl/plugin";
+import { analyticsHost } from "./lib/analytics";
 
 const withNextIntl = createNextIntlPlugin();
 
@@ -58,7 +59,12 @@ function localAddresses(): string[] {
  *                             is not present in production builds.
  *   'unsafe-inline' (style)   Tailwind and Motion both set inline styles.
  *   challenges.cloudflare.com The Turnstile CAPTCHA widget and its iframe.
- *   *.posthog.com             Analytics.
+ *   eu.i.posthog.com          Visitor statistics, sent to PostHog's EU cloud
+ *                             (lib/analytics.ts). Connections only: the library
+ *                             is part of the site's own JavaScript and loads
+ *                             nothing from PostHog, so no script or image of
+ *                             theirs is allowed. In the test build this is the
+ *                             suite's stand-in on this machine instead.
  *   *.supabase.co             The database/API and the public media bucket.
  *   youtube / vimeo / instagram / tiktok  Embedded video in posts and event
  *                             descriptions, loaded only when a visitor presses
@@ -116,12 +122,12 @@ function contentSecurityPolicy({ framedBySelf = false } = {}): string {
 
   return [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://challenges.cloudflare.com https://*.posthog.com`,
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://challenges.cloudflare.com`,
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob: ${supabaseOrigin} https://media.istockphoto.com https://*.posthog.com`,
+    `img-src 'self' data: blob: ${supabaseOrigin} https://media.istockphoto.com`,
     `media-src 'self' blob: ${supabaseOrigin}`,
     "font-src 'self' data:",
-    `connect-src 'self' ${supabase} https://*.posthog.com https://challenges.cloudflare.com${devSocket}`,
+    `connect-src 'self' ${supabase} ${analyticsHost()} https://challenges.cloudflare.com${devSocket}`,
     // Google is deliberately absent. An embedded map was tried here and taken
     // out again: it cost 1.23MB across 39 requests from Google on a page that
     // otherwise contacts them not at all, handed over every visitor's IP address

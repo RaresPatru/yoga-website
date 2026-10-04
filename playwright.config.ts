@@ -113,6 +113,13 @@ export default defineConfig({
       // local database and with a test key, so it can never steer a real
       // payment.
       STRIPE_API_BASE: "http://127.0.0.1:12111",
+      // The stand-in for PostHog (tests/fake-posthog.ts), with a placeholder
+      // key in place of production's from .env. lib/analytics.ts sends
+      // statistics anywhere but PostHog's EU cloud only when the address is
+      // on this machine, so the suite's visits can never reach her figures.
+      NEXT_PUBLIC_POSTHOG_KEY: "phc_test_stand_in",
+      NEXT_PUBLIC_POSTHOG_HOST: "http://127.0.0.1:12112",
+      NEXT_PUBLIC_POSTHOG_DEBUG: "",
       RESEND_API_KEY: process.env.RESEND_API_KEY!,
       RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL!,
       NEXT_PUBLIC_SITE_URL: "http://localhost:3100",

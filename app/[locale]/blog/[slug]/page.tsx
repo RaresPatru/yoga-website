@@ -7,6 +7,7 @@ import { absoluteUrl } from "@/lib/site-config";
 import { getSiteContent, getSiteName } from "@/lib/site-content";
 import { localisePost } from "@/lib/blog";
 import { Article } from "@/components/blog/article";
+import { ReadTracker } from "@/components/blog/read-tracker";
 import type { Metadata } from "next";
 import { PageTransition } from "@/components/layout/view-transitions";
 
@@ -113,6 +114,7 @@ export default async function BlogPostPage({
             readingTime: (minutes) => t("reading_time", { minutes }),
           }}
         />
+        <ReadTracker slug={post.slug} readingMinutes={view.readingMinutes} />
       </>
     </PageTransition>
   );

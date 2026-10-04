@@ -326,6 +326,28 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   key. A server you started yourself and Playwright reuses lacks that
   variable, so every paid test fails with "Invalid API Key": let Playwright
   start it. Tests steer the stand-in through `tests/stripe-helpers.ts`.
+- **Nothing on this machine sends statistics to PostHog.** `lib/analytics.ts`
+  counts visits only at the site's public address (`NEXT_PUBLIC_SITE_URL`,
+  set in Vercel for Production alone) and sends only to PostHog's EU cloud,
+  never from a page on this machine. The suite sends to a stand-in instead
+  (`tests/fake-posthog.ts`, `127.0.0.1:12112`, through
+  `NEXT_PUBLIC_POSTHOG_HOST` in `playwright.config.ts`), and needs a browser
+  that looks like a visitor's (`asVisitor` in `tests/analytics-helpers.ts`):
+  an automated one is silently left out, by the site and by posthog-js, so a
+  test that expects nothing would pass for the wrong reason. To watch it against PostHog itself, in
+  PowerShell, with a key from a test project of your own rather than hers:
+  ```powershell
+  $env:NEXT_PUBLIC_POSTHOG_DEBUG = "1"; $env:NEXT_PUBLIC_POSTHOG_KEY = "phc_…"
+  $env:NEXT_PUBLIC_TURNSTILE_SITE_KEY = "1x00000000000000000000AA"; $env:TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA"
+  npm run build; npm run start          # then open http://localhost:3000/ro
+  Remove-Item Env:NEXT_PUBLIC_POSTHOG_DEBUG, Env:NEXT_PUBLIC_POSTHOG_KEY, Env:NEXT_PUBLIC_TURNSTILE_SITE_KEY, Env:TURNSTILE_SECRET_KEY
+  ```
+  The Turnstile test keys let the booking form send, for the booking events.
+  The browser's console then shows every event, or why a visit is not
+  counted: being signed in to the admin panel in that browser is a reason.
+  Use a production build: `npm run dev` runs effects twice and doubles some
+  events. The build then holds the debug switch, so build again before
+  anything else uses it.
 - **Deleting a booking clears `waiting_list.claimed_registration_id`**
   (`ON DELETE SET NULL`). Code that must find who claimed a booking reads them
   before the delete; reading after it found nobody, which left anyone whose

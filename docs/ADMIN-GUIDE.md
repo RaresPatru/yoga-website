@@ -17,7 +17,8 @@ cunoștințe tehnice pentru nimic din ce urmează.
 6. [Mesaje de la vizitatori](#6-mesaje)
 7. [Email-uri și anunțuri](#7-email-uri-și-anunțuri)
 8. [Coduri de reducere](#8-coduri-de-reducere)
-9. [Când ceva nu merge](#9-când-ceva-nu-merge)
+9. [Statistici](#9-statistici)
+10. [Când ceva nu merge](#10-când-ceva-nu-merge)
 
 ---
 
@@ -537,7 +538,53 @@ Cine a plătit cu un cod are în panoul lui suma plătită și codul.
 
 ---
 
-## 9. Când ceva nu merge
+## 9. Statistici
+
+**Unde:** în contul PostHog al site-ului, pe [eu.posthog.com](https://eu.posthog.com),
+nu în panoul site-ului.
+
+La **Web analytics** vezi vizitele: ce pagini se deschid, de unde vin oamenii
+(Instagram, Google, direct), de pe telefon sau de pe calculator, din ce țară
+și oraș. Pe lângă vizite, site-ul numără câteva lucruri, pe care le găsești
+după nume la **Activity**, sau într-un grafic nou (**Product analytics** →
+**New insight**):
+
+| Nume | Ce înseamnă |
+|---|---|
+| `event_viewed` | cineva a deschis pagina unui eveniment |
+| `booking_clicked` | cineva a apăsat butonul de înscriere (sau pe cel al listei de așteptare) |
+| `booking_completed` | a primit locul: o înscriere gratuită, un loc luat din lista de așteptare sau o plată confirmată |
+| `booking_failed` | înscrierea nu a mers, cu motivul: de exemplu `full` (locurile s-au ocupat între timp), `already_registered` (adresa are deja un loc), `phone` (telefon greșit) |
+| `waitlist_joined` | cineva a intrat pe lista de așteptare |
+| `blog_post_read` | un articol citit până la capăt |
+
+La fiecare scrie și despre ce eveniment sau articol e vorba (`event_slug`,
+`post_slug`: adresa lui de pe site).
+
+**Ce nu se numără:**
+
+- vizitele tale, cât timp ești autentificată în panou în acel browser, pe
+  telefon sau pe calculator, și previzualizările;
+- paginile la care se ajunge din linkurile personale din emailuri (anularea,
+  testimonialul, dezabonarea);
+- vizitele din browserele setate să ceară să nu fie urmărite;
+- nimic din ce scriu oamenii în formulare și nicio înregistrare a ecranului.
+
+> **Fiecare vizită apare ca un vizitator nou.** Site-ul nu păstrează nimic în
+> browserul oamenilor (de aceea nu are nevoie de banner de cookie-uri), așa că
+> cine revine altă dată sau reîncarcă pagina e numărat din nou. Numerele sunt
+> bune pentru comparații (ce eveniment atrage mai mult, de unde vin oamenii,
+> câți dintre cei care apasă pe înscriere ajung să aibă loc), nu pentru a
+> număra persoane.
+
+> **Ca să știi câte vizite vin din Instagram**, pune la sfârșitul linkului din
+> bio `?utm_source=instagram`, de exemplu `…/ro/events?utm_source=instagram`.
+> Aplicația Instagram nu spune întotdeauna site-ului de unde vine vizita; așa
+> o spune linkul.
+
+---
+
+## 10. Când ceva nu merge
 
 **Nu pot intra în panou.** Verifică emailul și parola. Dacă apare mesajul
 „Contul acesta nu are acces la panoul de administrare", contul există dar nu are

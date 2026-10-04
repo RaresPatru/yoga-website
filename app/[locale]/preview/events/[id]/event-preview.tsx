@@ -147,6 +147,7 @@ export function EventPreview({ id, locale }: { id: string; locale: string }) {
               <div inert>
                 <EventRegistration
                   eventId={booking.eventId}
+                  slug={data.slug}
                   price={booking.price}
                   currency={booking.currency}
                   maxParticipants={booking.capacity}
