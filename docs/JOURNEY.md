@@ -1876,9 +1876,9 @@ Three things are known-outstanding, and none of them waits on code:
 - **The money path has run against the Stripe sandbox, not yet on a
   deployment.** `charge.refunded` is subscribed now, and Phase 10 ran payment,
   refund and the freed seat end to end against the sandbox from a local
-  server; the waiting list's part runs in the suite, against the stand-in. A
-  payment on the deployed site waits for Phase 10's migration to reach
-  production.
+  server; the waiting list's part runs in the suite, against the stand-in.
+  The migrations reached production on 5 October, after a rehearsal on a copy
+  of its data; a payment on the deployed site waits for the merge to `main`.
 - **The live site records sessions until the next merge.** It runs the code of
   22 September, and her PostHog project has session replay on. Phase 11
   switches it off in the code; the switch in PostHog can go off now, before

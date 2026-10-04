@@ -1622,8 +1622,17 @@ retry; that page never loads the statistics.
 - **Her address for replies** in Conținut site → Email-uri (or the address
   for personal data requests in Pagini legale). Until one is filled in,
   replies go to the sending address.
-- **Before merging to `main`:** run `npx supabase migration list --linked`,
-  then `npx supabase db push` for the new migrations.
+- ~~**Before merging to `main`:** run `npx supabase migration list --linked`,
+  then `npx supabase db push` for the new migrations.~~ Done on 5 October
+  2026, at Rares' request: the fifteen migrations of phases 0 to 11, first
+  rehearsed on a copy of production's data, where all applied, and
+  `migration list --linked` now shows every one recorded. Production's
+  schema is ahead of the live site, which still runs the code of
+  22 September: its pages load, and its booking call reaches the new
+  function, whose added parameters have defaults. Its testimonials query
+  filters on `approved`, a column visitors can no longer read, so testimonials
+  would not show there until the merge (production has none yet). The merge
+  to `main` is now code only.
 - **Stripe, before taking real money** (Phase 10):
   - ~~add `refund.failed` to the webhook endpoint~~ done by Rares on 3 October
     2026; the endpoint now sends all four events the site handles.
