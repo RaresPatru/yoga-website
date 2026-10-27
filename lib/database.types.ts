@@ -73,6 +73,37 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"announcement_codes": {
+                  Row: {
+                    "announcement_id": string,"code": string,"in_en": boolean,"in_ro": boolean
+                  }
+                  Insert: {
+                    "announcement_id": string,"code": string,"in_en": boolean,"in_ro": boolean
+                  }
+                  Update: {
+                    "announcement_id"?: string,"code"?: string,"in_en"?: boolean,"in_ro"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "announcement_codes_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
+      referencedRelation: "admin_announcements"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "announcement_codes_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
+      referencedRelation: "admin_code_recipients"
+      referencedColumns: ["announcement_id"]
+    },{
+      foreignKeyName: "announcement_codes_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
+      referencedRelation: "announcements"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"announcement_recipients": {
                   Row: {
                     "announcement_id": string,"email": string,"full_name": string,"locale": string,"reason": string | null,"sent_at": string | null,"status": string,"unsubscribe_token_hash": string | null
@@ -94,19 +125,25 @@ isOneToOne: false
       foreignKeyName: "announcement_recipients_announcement_id_fkey"
       columns: ["announcement_id"]
 isOneToOne: false
+      referencedRelation: "admin_code_recipients"
+      referencedColumns: ["announcement_id"]
+    },{
+      foreignKeyName: "announcement_recipients_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
       referencedRelation: "announcements"
       referencedColumns: ["id"]
     }
                   ]
                 },"announcements": {
                   Row: {
-                    "audience": NonNullable<Json>,"body_en": string | null,"body_ro": string,"created_at": string,"id": string,"send_started_at": string | null,"sent_at": string | null,"status": string,"subject_en": string | null,"subject_ro": string,"updated_at": string
+                    "audience": NonNullable<Json>,"body_en": string | null,"body_ro": string,"codes_checked_at": string | null,"created_at": string,"id": string,"send_started_at": string | null,"sent_at": string | null,"status": string,"subject_en": string | null,"subject_ro": string,"updated_at": string
                   }
                   Insert: {
-                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
+                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"codes_checked_at"?: string | null,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
+                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"codes_checked_at"?: string | null,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -191,6 +228,12 @@ isOneToOne: true
 isOneToOne: false
       referencedRelation: "admin_announcements"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "email_suppressions_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
+      referencedRelation: "admin_code_recipients"
+      referencedColumns: ["announcement_id"]
     },{
       foreignKeyName: "email_suppressions_announcement_id_fkey"
       columns: ["announcement_id"]
@@ -454,6 +497,13 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"admin_code_recipients": {
+                  Row: {
+                    "announcement_id": string | null,"announcement_subject": string | null,"code": string | null,"email": string | null,"full_name": string | null,"locale": string | null,"sent_at": string | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"admin_dashboard": {
                   Row: {
                     "active_events": number | null,"draft_posts": number | null,"pending_payments": number | null,"pending_testimonials": number | null,"refund_requests": number | null,"unread_messages": number | null,"unseen_notices": number | null
@@ -470,7 +520,7 @@ isOneToOne: false
                   ]
                 },"admin_participants": {
                   Row: {
-                    "admin_note": string | null,"amount_paid": number | null,"archived": boolean | null,"cancelled_at": string | null,"created_at": string | null,"discount_code": string | null,"email": string | null,"email_key": string | null,"event_currency": string | null,"event_date": string | null,"event_ends_at": string | null,"event_id": string | null,"event_price": number | null,"event_starts_at": string | null,"event_title": string | null,"full_name": string | null,"id": string | null,"kind": string | null,"locale": string | null,"marketing_consent_at": string | null,"note_consent_at": string | null,"offer_expires_at": string | null,"paid_currency": string | null,"paid_online": boolean | null,"participant_note": string | null,"payment_status": string | null,"phone": string | null,"refund_failed_at": string | null,"refund_requested_at": string | null,"refunded_at": string | null,"removal_reason": string | null,"removed_at": string | null,"search_text": string | null,"status": string | null
+                    "admin_note": string | null,"amount_paid": number | null,"archived": boolean | null,"cancelled_at": string | null,"code_received": boolean | null,"code_used": boolean | null,"created_at": string | null,"discount_code": string | null,"email": string | null,"email_key": string | null,"event_currency": string | null,"event_date": string | null,"event_ends_at": string | null,"event_id": string | null,"event_price": number | null,"event_starts_at": string | null,"event_title": string | null,"full_name": string | null,"id": string | null,"kind": string | null,"locale": string | null,"marketing_consent_at": string | null,"note_consent_at": string | null,"offer_expires_at": string | null,"paid_currency": string | null,"paid_online": boolean | null,"participant_note": string | null,"payment_status": string | null,"phone": string | null,"received_codes": (string)[] | null,"refund_failed_at": string | null,"refund_requested_at": string | null,"refunded_at": string | null,"removal_reason": string | null,"removed_at": string | null,"search_text": string | null,"status": string | null
                   }
                   Relationships: [
                     

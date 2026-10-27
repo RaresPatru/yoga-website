@@ -364,6 +364,7 @@ test.describe("glass only where something passes behind it", () => {
     "app/globals.css",
     // The admin panel's sticky bars, dialogs and overlays.
     "components/admin/blog/editor-bar.tsx",
+    "components/admin/codes/code-dialog.tsx",
     "components/admin/content/form-bar.tsx",
     "components/admin/media-library.tsx",
     "components/admin/messages/letter.tsx",

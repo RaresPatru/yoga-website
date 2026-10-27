@@ -987,6 +987,33 @@ Three implementation notes:
 `/events` is deliberately left as a plain chronological listing. It is an index,
 not a recommendation, and someone who opens it wants to see the calendar.
 
+### What she types wraps anywhere, and a slide is never wider than its carousel
+
+On 5 October 2026 the live home page's event card ran off the right of a
+Galaxy S22 and could be dragged sideways inside the carousel. The cause was the
+event's place: a Google Maps link pasted into Locație, forty characters without
+a space. A flex item will not shrink below its content unless told it may, so
+the carousel's slide (`flex: 0 0 100%`) grew to fit the link: 392px on a
+360px phone, and 392px on a 390px iPhone too. The events list had the same
+fault one level down: the card's meta row scrolled the whole page 17px.
+
+Two rules, both now in place:
+
+- **A slide is exactly the carousel's width** (`min-width: 0` on
+  `.event-carousel-track > li`), whatever is in it.
+- **Her title, description and place wrap anywhere** on the cards and the
+  event page (`wrap-anywhere`, with `min-w-0` on the flex and grid items
+  around them). `overflow-wrap: anywhere` and not `break-words`: only the
+  first lets the browser count a long string as breakable when it works out
+  how narrow the box can go. `break-words` still sizes the box to the whole
+  string and only then breaks what overflows, which is no help inside a flex
+  row or a carousel slide.
+
+`tests/public-home.spec.ts` and `tests/public-events.spec.ts` seed an event
+whose place is that same link and check the slide, the card and the page at
+360px. The page itself never scrolled on the home page, which is why the
+existing "does not scroll sideways" test passed throughout.
+
 ### One Playwright worker, measured rather than assumed
 
 This went 3 → 2 → 1, each step for the same reason: the suite drives two browser
@@ -1096,6 +1123,18 @@ three declarations under one name. The header wordmark had exactly that: the
 tooltip computed as fully opaque, would have passed any assertion on `opacity`
 or `content`, and painted nothing. It was found by looking at a screenshot, and
 `tests/public-events.spec.ts` now fails if any trigger hides its overflow.
+
+**Half a second under the pointer before it shows** (Rares, 5 October 2026).
+Shown at once, every tooltip a pointer merely passed over flashed up, and
+running along the editor's toolbar lit each label in turn. 500 ms is about
+where the browser's own `title` waits and Chrome's `interest-delay-start`
+defaults. The delay is a `transition-delay` on the hover rule only, so the
+tooltip leaves without waiting, and keyboard focus shows it at once. It holds
+under reduced motion too: a pause is not movement, so there the transition
+has no duration and the same delay. The two places that hide a tooltip when
+its menu opens (the calendar on an event's date, the editor's shortcuts)
+switch the transition off, or the label would sit over the menu for half a
+second.
 
 ### The map is a link, and the calendar is the date
 
@@ -1948,6 +1987,72 @@ page and counts its uses, so the site keeps no table of codes, only, on each
 booking, the amount actually charged and the code used. Every session allows
 codes. A code cannot be tied to one event, because each checkout names its own
 line rather than a stored Stripe product.
+
+### A changed code is a new code, and a deleted one is switched off
+
+Stripe never changes a promotion code once it is made, beyond switching it on
+or off and the notes it keeps on it (metadata), and has no way to delete one:
+a code may have been used, and the record of that payment must keep pointing
+at what was charged. A coupon's amount is just as fixed. Rares asked for
+editing and deleting on 5 October 2026, and on 27 October chose to have them
+built this way once it was explained:
+
+- **Editing** switches the old version off and makes a new one with the
+  word she wants, the same one unless she changed it (lib/stripe-codes.ts).
+  The old goes off first, because Stripe allows one active code per word and
+  because its count then stops moving; if the new one cannot be made, the old
+  one is switched back on and nothing has changed. The notes on the new version
+  carry the line on: the first version's id and date, a version number, how
+  often the earlier versions were used, and since when the word has been the
+  word. Her list shows the highest version of each line, with one running
+  count, and a limit she types is for all uses, so the new version is allowed
+  what is left of it. A limit at or below the uses already made is refused.
+  A new coupon is made when the amount or the word changes; the same one
+  serves when only the last day or the uses do.
+- **Deleting** switches the code off and notes when, which takes it off her
+  list. Stripe keeps it, off, as the record. Undo (in the message, for a few
+  seconds) takes the note away and switches it back on if it was on.
+- **Switching on** a code past its last day or out of uses is refused with a
+  pointer to Edit: Stripe would refuse it anyway, and an edit with a new day or
+  more uses is the way to bring it back.
+
+The cost: anyone looking in Stripe's own Dashboard sees every version, each
+replaced one switched off. Someone paying at the very second of an edit, with
+the old version already applied, may have to type the code again.
+
+### Who received a code is read from her announcements
+
+She hands codes out inside her announcements, so whether a code "was sent to
+someone" is a question about those (Rares chose this on 27 October 2026 over a
+separate "email this code" action, which would have spent emails from her
+allowance). When an announcement has gone out, the server records which of
+her codes its subject and text carried, and in which language's version
+(`announcement_codes`, from lib/announcement-codes.ts); a code made later is
+never counted as sent by an earlier announcement. A sent announcement not yet
+looked at (one from before this existed, or sent while Stripe could not be
+reached) is looked at when the codes screen next opens.
+
+**A code is recognised as a whole word, in capitals,** as the codes screen
+shows it, its copy button copies it and the editor's Cod menu inserts it.
+Capitals, because a code is often an ordinary word: VARA would otherwise be
+found in every announcement that says "vara", and YOGA in all of them. Only
+the text a reader sees is searched, so a code inside a link's address does
+not count.
+
+**When the screen asks first** (Rares, 5 and 27 October 2026): only when
+someone received the code and can still use it now (switched on, before its
+last day, uses left). Then deleting it, switching it off, or changing its
+word, amount or last day asks, and lists who received it. Changing only the
+number of uses never asks, and a code nobody can use any more asks nothing.
+Making or renaming a code with a word that was emailed before asks too,
+whatever became of that code, because the people who received it could use
+the new one. Counts start from when the word was given, so someone who
+received the word a code had before an edit is not counted for the new word.
+
+The same record gives Registrations its two extra choices in the status menu,
+"Cod primit" and "Cod folosit", and the participant panel its list of codes.
+They sit beside a booking's status rather than replacing it, because someone
+can have paid and used a code.
 
 ### The test suite talks to a stand-in for Stripe
 

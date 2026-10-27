@@ -223,8 +223,11 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   below their content's minimum — and an `<input>` claims about 20 characters.
   The overflow therefore does not stay local: the column grows, then the grid,
   then the document, and the whole page scrolls sideways on a phone. Put
-  `min-w-0` on flex/grid children that hold text or inputs, and `break-words` on
-  anything the instructor types.
+  `min-w-0` on flex/grid children that hold text or inputs, and `wrap-anywhere`
+  on anything the instructor types. `break-words` is not enough there: it
+  breaks a long word only after the box has been sized to it, so a map link
+  she pasted as an event's place still widened its flex row and the home
+  page's carousel slide, and the card ran off a 360px phone (5 October 2026).
 - **Public pages must not use `lib/supabase/server.ts`.** It reads the visitor's
   cookies, so a visitor carrying an expired session makes Supabase refresh it
   mid-render — which writes a cookie, which a Server Component may not do. The
@@ -352,6 +355,12 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   (`ON DELETE SET NULL`). Code that must find who claimed a booking reads them
   before the delete; reading after it found nobody, which left anyone whose
   claimed checkout expired off the waiting list for good until 3 October 2026.
+- **Stripe never changes or deletes a promotion code.** An edit on Coduri de
+  reducere switches the old version off and makes a new one; a deletion
+  switches the code off and notes it. Notes on each code (metadata, `META` in
+  `lib/promotion-codes.ts`) tie the versions into one code with one count, so
+  read her codes through `currentCodes()` (`lib/stripe-codes.ts`), never
+  straight from Stripe's list, or every version shows.
 - **Every Stripe session carries `metadata.db`**, the database that made it,
   because the sandbox is one account and Stripe sends every copy of the site's
   events to every endpoint. The webhook ignores sessions from another

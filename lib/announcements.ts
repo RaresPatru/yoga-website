@@ -7,6 +7,8 @@ import { cardEventsFor, eventCardIds, loadCardEvents } from "@/lib/email-preview
 import { exclusions, parseAudience, resolveAudience } from "@/lib/announcement-audience";
 import { sendEmails, senderOf, type OutgoingEmail } from "@/lib/email";
 import { hashToken, newToken, plausibleToken } from "@/lib/tokens";
+import { hasWords, versionOf } from "@/lib/announcement-version";
+import { recordAnnouncementCodes } from "@/lib/stripe-codes";
 
 /**
  * Sending an announcement, and unsubscribing from them. Server only: it uses
@@ -39,10 +41,6 @@ export interface SendReport {
   sent: number;
   failed: number;
   excluded: number;
-}
-
-function hasWords(html: string): boolean {
-  return html.replace(/<[^>]*>/g, "").trim() !== "" || /data-event-card=/.test(html);
 }
 
 /** Their own unsubscribe links: the page with a button, and the one mail apps press for them. */
@@ -124,8 +122,7 @@ export async function sendAnnouncement(
   const base = settings.brand.siteUrl;
   const cardRows = await loadCardEvents(service, eventCardIds(claimed.body_ro, claimed.body_en));
   const content = (locale: EmailLocale) => ({
-    subject: (locale === "en" && claimed.subject_en?.trim()) || claimed.subject_ro,
-    body: (locale === "en" && claimed.body_en?.trim() && hasWords(claimed.body_en) && claimed.body_en) || claimed.body_ro,
+    ...versionOf(claimed, locale),
     cards: cardEventsFor(cardRows, locale, base),
   });
   const byLocale = { ro: content("ro"), en: content("en") };
@@ -233,6 +230,18 @@ export async function sendAnnouncement(
     .update({ status: "sent", sent_at: claimed.sent_at ?? now(), send_started_at: null })
     .eq("id", id);
   if (doneError) throw doneError;
+
+  // Which of her discount codes it carried, so the codes screen can say who
+  // received one. A failure here costs only that record, which the codes
+  // screen makes up the next time it opens; it must not report a send that
+  // happened as failed.
+  if (!claimed.codes_checked_at) {
+    try {
+      await recordAnnouncementCodes(service, { only: id });
+    } catch (error) {
+      console.error(`Could not record the discount codes in announcement ${id}:`, error);
+    }
+  }
 
   const { data: totals, error: totalsError } = await service
     .from("announcement_recipients")

@@ -254,6 +254,18 @@ Starea plății:
 | S-a retras | Și-a anulat singur înscrierea, din linkul din email. Locul s-a eliberat. |
 | Anulat | L-ai scos tu de pe eveniment. |
 
+Tot în meniul stărilor, la **Coduri de reducere**:
+
+| Alegere | Pe cine arată |
+|---|---|
+| Cod primit | pe cei cărora le-ai trimis un cod de reducere într-un anunț |
+| Cod folosit | înscrierile plătite cu un cod |
+
+Pe rândul lor apare, lângă stare, „Cod primit: VARA10" sau „Cod folosit:
+VARA10", iar în panoul persoanei, la **Coduri de reducere**, ce cod a primit
+(în ce anunț și când) și cu ce cod a plătit. Și aceste alegeri pot deveni
+destinatarii unui anunț, de exemplu „toți cei care au primit un cod".
+
 > **Datele acestea sunt personale.** Numele, emailurile și telefoanele
 > participantelor sunt vizibile **doar** aici, doar pentru tine. Nu apar nicăieri
 > pe site public. Pe site se vede doar numărul de locuri ocupate.
@@ -496,7 +508,8 @@ anunțuri, dar emailurile despre înscrierile lui vin în continuare.
    **Anunț nou**: pleacă la toți cei care au acceptat anunțuri.
 2. Scrie subiectul și textul, în română și în engleză. Cu butonul
    **Eveniment** pui un eveniment ca un card: poza, data, locul și un buton
-   spre pagina lui.
+   spre pagina lui. Cu butonul **Cod** pui unul dintre codurile tale de
+   reducere, așa cum apare în listă.
 3. Verifică **Destinatarii** (câți îl primesc, cine rămâne pe dinafară) și
    previzualizarea. Poți să-ți trimiți un test.
 4. Apasă **Trimite anunțul**. După ce pleacă nu se mai poate opri.
@@ -528,8 +541,41 @@ VARA10 ai 10% reducere până pe 31 august".
 
 Codul merge la toate evenimentele cu plată; o sumă fixă merge doar la
 evenimentele cu prețul în moneda ei. În listă vezi de câte ori a fost folosit.
-Un cod nu se poate șterge, doar opri (**Oprește**), și îl poți porni din nou.
 Cine a plătit cu un cod are în panoul lui suma plătită și codul.
+
+Lângă fiecare cod:
+
+- **Butonul de copiere**, lângă cuvânt, îl copiază, ca să-l lipești într-un
+  mesaj fără să-l selectezi.
+- **Editează** schimbă orice: cuvântul, reducerea (și din procent în sumă
+  fixă), ultima zi, numărul de folosiri. Folosirile de până acum rămân
+  numărate, iar numărul de folosiri pe care îl scrii e pentru toate, cu cele
+  de până acum cu tot. Un cod expirat merge din nou dacă îi dai o zi nouă.
+- **Oprește** îl oprește: la plată nu mai merge, până îl pornești din nou.
+  Un cod expirat sau care nu mai are folosiri nu se poate porni așa;
+  editează-l.
+- **Coșul** îl șterge din listă. Imediat după, mesajul din colț are
+  **Anulează**, dacă te-ai răzgândit.
+
+**„Trimis pe email la 3 persoane"** apare sub un cod pe care l-ai pus într-un
+anunț trimis. Apasă și vezi cine l-a primit, în ce anunț, și cine a plătit
+deja cu el. Site-ul recunoaște codul în anunț când e scris cu majuscule, cum
+apare în listă (butonul **Cod** din anunț îl pune exact așa).
+
+**Când te întreabă înainte.** Dacă un cod a ajuns pe email la cineva și încă
+poate fi folosit, site-ul te întreabă și îți arată cui l-ai trimis înainte să-l
+ștergi, să-l oprești sau să-i schimbi cuvântul, reducerea sau ultima zi:
+emailul lor ar promite altceva decât primesc la plată. Numărul de folosiri îl
+poți schimba fără întrebare. Un cod expirat sau fără folosiri rămase nu mai
+valorează nimic, deci nu te întreabă. Te mai întreabă și dacă dai unui cod nou
+un cuvânt pe care l-ai mai trimis pe email: cei care l-au primit l-ar putea
+folosi și pe cel nou.
+
+> **De ce rămâne codul în Stripe.** Stripe nu schimbă și nu șterge niciodată un
+> cod, ca o plată veche să arate mereu ce s-a plătit. Când îl editezi, site-ul
+> oprește codul vechi și face unul nou în locul lui; când îl ștergi, îl oprește
+> și îl scoate din lista ta. Pentru cine scrie codul la plată nu se vede nicio
+> diferență. Doar dacă te uiți direct în Stripe vezi și versiunile vechi, oprite.
 
 > **Când anunți o reducere**, ea se socotește față de cel mai mic preț al
 > evenimentului din ultimele 30 de zile, iar codul trebuie să meargă tot timpul

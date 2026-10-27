@@ -1063,6 +1063,16 @@ export async function announcementRecipients(id: string) {
   return (data ?? []) as Array<{ email: string; full_name: string; locale: string; status: string; reason: string | null; sent_at: string | null }>;
 }
 
+/** The discount codes the server recorded in an announcement once it was sent (announcement_codes). */
+export async function announcementCodes(announcementId: string) {
+  const { data, error } = await (await adminScoped())
+    .from("announcement_codes")
+    .select("code, in_ro, in_en")
+    .eq("announcement_id", announcementId);
+  if (error) throw new Error(`announcementCodes failed: ${error.message}`);
+  return (data ?? []) as Array<{ code: string; in_ro: boolean; in_en: boolean }>;
+}
+
 /** Announcements whose Romanian subject starts with this, deleted with their recipients. */
 export async function deleteAnnouncementsTitled(prefix: string) {
   const { error } = await (await adminScoped()).from("announcements").delete().like("subject_ro", `${prefix}%`);

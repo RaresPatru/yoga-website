@@ -61,6 +61,7 @@ because only one of the two was done.
 | `email_templates` | The automatic emails' subjects and texts, RO and EN, with `{{placeholders}}`. | Editable config | `/admin/emails`, `lib/email.ts` |
 | `announcements` | Emails she writes herself: the texts, who they are for (`audience`), `status` draft / sending / sent. | Admin only | `/admin/emails`, `lib/announcements.ts` |
 | `announcement_recipients` | Per announcement and address: `pending`, `sent`, `failed` or `excluded` with the reason, and the unsubscribe link's SHA-256. | Personal data; the admin reads, only the server writes | `lib/announcements.ts` |
+| `announcement_codes` | Per announcement: the discount codes its subject and text carried (in capitals), `in_ro` and `in_en` for which version had each. | The admin reads, only the server writes | `lib/stripe-codes.ts`, after a send and when the codes screen opens |
 | `email_suppressions` | Everyone who unsubscribed from announcements (`unsubscribed`), or whom she stopped (`admin`). | Admin and server only | `/api/unsubscribe`, the participant panel |
 | `whatsapp_links` | Saved invite URLs. | **A URL is a capability** | `/admin/events` |
 | `admins` | Who may enter `/admin`. | Revoked from everyone; read only by `is_admin()` | by hand |
@@ -72,6 +73,7 @@ because only one of the two was done.
 | `admin_event_overview` | **View.** Per event: people waiting in line, payments pending. | `security_invoker`; `select` for `authenticated` only | the dashboard (reads) |
 | `admin_participants` | **View.** Every booking and every unclaimed waiting-list entry, with its event, a status, `archived` and a search text. | `security_invoker`; `select` for `authenticated`, and for `service_role` to work out an announcement's recipients | `/admin/registrations`, `lib/announcement-audience.ts` (reads) |
 | `admin_announcements` | **View.** Every announcement with how many were sent, failed, are pending and were left out. | `security_invoker`; `select` for `authenticated` only | `/admin/emails` (reads) |
+| `admin_code_recipients` | **View.** One row per discount code and person an announcement carried it to: their email went out, and the version they were sent had it. | `security_invoker`; `select` for `authenticated` and `service_role` | `/admin/codes`, the participant panel, `admin_participants` |
 
 `whatsapp_links` is the only table on this schema that is admin-only for
 *reading* as well as writing. Anyone holding a WhatsApp invite URL can join the
@@ -144,6 +146,21 @@ once, on the first attempt, so a send cut short carries on from the ones
 still `pending`; `send_started_at` keeps two sends from running at once.
 `email_suppressions` rows are lowercase, one per address; an address that
 unsubscribes twice has its date moved forward.
+
+**Discount codes** (`20261027000000_discount_code_tracking.sql`). The codes
+themselves live in Stripe (DECISIONS.md, "Promotion codes live in Stripe");
+the database records only who was told about one. Once an announcement has
+gone out, the server writes which of her codes it carried to
+`announcement_codes` and stamps `announcements.codes_checked_at`; one sent
+while Stripe could not be reached, or before this existed, is looked at when
+the codes screen next opens. A code counts only if it existed in Stripe when
+the announcement went out. `admin_code_recipients` joins that to the
+recipients whose email went out, by language: an English reader received a
+code if the English version carried it. `admin_participants` gained
+`received_codes` (every code the address received, alphabetical),
+`code_received` and `code_used` (the booking was paid with a code), the two
+extra choices of the Registrations status menu. Deleting a sent
+announcement from the history takes its record of codes with it.
 
 **Offering freed seats** is `offer_waiting_list_seats()` then
 `settle_waiting_list_offers()`, both under the lock on the event row that

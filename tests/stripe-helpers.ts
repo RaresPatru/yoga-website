@@ -50,7 +50,25 @@ export const setStripeWebhooks = (on: boolean) => control("/__control", { webhoo
 /** Make Stripe refuse refunds, as it does when it cannot make one. */
 export const setStripeRefundsFail = (fail: boolean) => control("/__control", { failRefunds: fail });
 
+export interface FakePromotionCode {
+  id: string;
+  code: string;
+  active: boolean;
+  promotion: { type: "coupon"; coupon: string };
+  max_redemptions: number | null;
+  expires_at: number | null;
+  times_redeemed: number;
+  metadata: Record<string, string>;
+}
+
 export const stripeSessions = (): Promise<FakeSession[]> => control("/__sessions");
+
+/** Every promotion code the stand-in holds, every version of each. */
+export const stripePromotionCodes = (): Promise<FakePromotionCode[]> => control("/__promotion_codes");
+
+/** A code past its last day (`expires_at` in the past) or out of uses, without waiting for either. */
+export const ageCode = (id: string, changes: { expires_at?: number; times_redeemed?: number }): Promise<FakePromotionCode> =>
+  control(`/__promotion_codes/${id}`, changes);
 export const stripeRefunds = (): Promise<FakeRefund[]> => control("/__refunds");
 export const stripeCalls = (): Promise<Call[]> => control("/__calls");
 

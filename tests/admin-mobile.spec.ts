@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { deleteMessages, seedMessage, unique } from "./helpers";
+import { adminAccessToken, deleteMessages, seedMessage, unique } from "./helpers";
 
 /**
  * The admin panel on a phone: the `admin-mobile` project runs this on iPhone
@@ -51,6 +51,44 @@ test.describe("the admin panel on a phone", () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth
     );
     expect(overflow, "nothing should scroll sideways").toBeLessThanOrEqual(0);
+  });
+
+  /**
+   * Each code's row gained a copy button, Edit and a bin beside On/Off, on a
+   * screen she mostly reaches from her phone. All of it has to fit, and so
+   * does the edit dialog, whose form drops to one column when it is narrow.
+   */
+  test("discount codes fit the screen, and so does editing one", async ({ page, request }) => {
+    const word = `TELEFON${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
+    const headers = { Authorization: `Bearer ${await adminAccessToken()}` };
+    const made = await request.post("/api/admin/promotion-codes", {
+      headers,
+      data: { code: word, kind: "amount", value: 25, currency: "RON", maxRedemptions: 20 },
+    });
+    expect(made.status()).toBe(200);
+    const { id } = (await made.json()).code as { id: string };
+    try {
+      await page.goto("/admin/codes");
+      const item = page
+        .getByRole("region", { name: "Codurile tale" })
+        .locator(":scope > ul > li")
+        .filter({ has: page.getByText(word, { exact: true }) });
+      await expect(item.getByRole("button", { name: `Șterge ${word}` })).toBeVisible();
+      const sideways = () =>
+        page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(await sideways(), "nothing should scroll sideways").toBeLessThanOrEqual(0);
+
+      await item.getByRole("button", { name: `Editează ${word}` }).click();
+      const dialog = page.getByRole("dialog", { name: `Editezi codul ${word}` });
+      await expect(dialog.getByLabel("Suma")).toHaveValue("25");
+      const box = (await dialog.boundingBox())!;
+      const width = page.viewportSize()!.width;
+      expect(box.x, "the dialog starts on the screen").toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, "and ends on it").toBeLessThanOrEqual(width);
+      expect(await sideways(), "nothing should scroll sideways").toBeLessThanOrEqual(0);
+    } finally {
+      await request.delete(`/api/admin/promotion-codes/${id}`, { headers });
+    }
   });
 
   test("the close button, Escape and a tap outside all close the drawer", async ({ page }) => {

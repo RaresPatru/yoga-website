@@ -99,6 +99,7 @@ interface PromotionCode {
   times_redeemed: number;
   created: number;
   restrictions: Json;
+  metadata: Record<string, string>;
 }
 
 export interface Call {
@@ -302,11 +303,36 @@ function createSession(params: Json): Session {
   return session;
 }
 
+/**
+ * Whether Stripe would take the code at checkout: switched on, before the
+ * moment it expires, with uses left, and its coupon not deleted.
+ */
+function redeemable(code: PromotionCode): boolean {
+  if (!code.active) return false;
+  if (code.expires_at !== null && code.expires_at <= now()) return false;
+  if (code.max_redemptions !== null && code.times_redeemed >= code.max_redemptions) return false;
+  return state.coupons.get(code.promotion.coupon)?.valid !== false;
+}
+
+/** Stripe's metadata parameter: a key set to "" is removed, as Stripe does. */
+function mergeMetadata(into: Record<string, string>, params: unknown): Record<string, string> {
+  const next = { ...into };
+  if (params && typeof params === "object") {
+    for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+      if (value === "" || value === null) delete next[key];
+      else next[key] = String(value);
+    }
+  }
+  return next;
+}
+
 /** Pays a session: the visitor pressed Plătește. A promotion code, when given and valid, comes off first. */
 export async function paySession(session: Session, code?: string | null): Promise<Session> {
   if (session.status !== "open") return session;
   if (code && session.allow_promotion_codes) {
-    const promo = [...state.promotionCodes.values()].find((p) => p.active && p.code.toLowerCase() === code.toLowerCase());
+    const promo = [...state.promotionCodes.values()].find(
+      (p) => redeemable(p) && p.code.toLowerCase() === code.toLowerCase()
+    );
     const coupon = promo ? state.coupons.get(promo.promotion.coupon) : null;
     if (promo && coupon) {
       const off = coupon.percent_off
@@ -460,7 +486,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL, pa
     return remember(200, coupon);
   }
   if (method === "GET" && path === "/v1/promotion_codes") {
-    let codes = [...state.promotionCodes.values()].sort((a, b) => b.created - a.created);
+    // Newest first, as Stripe lists them; among codes made in the same
+    // second, the one made last.
+    let codes = [...state.promotionCodes.values()].reverse().sort((a, b) => b.created - a.created);
     if (params.code) codes = codes.filter((c) => c.code.toLowerCase() === String(params.code).toLowerCase());
     if (params.active !== undefined) codes = codes.filter((c) => String(c.active) === String(params.active));
     return send(res, 200, list(codes.map((c) => promotionView(c, expandList(params))), path));
@@ -469,25 +497,53 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL, pa
     const promotion = (params.promotion ?? {}) as Json;
     const coupon = state.coupons.get(String(promotion.coupon ?? ""));
     if (!coupon) return stripeError(res, 400, "resource_missing", "No such coupon");
+    const word = String(params.code ?? "");
+    const active = params.active === undefined ? true : params.active === "true";
+    // Stripe's rule: one active code per word, whatever its case.
+    if (active && [...state.promotionCodes.values()].some((p) => p.active && p.code.toLowerCase() === word.toLowerCase())) {
+      return stripeError(res, 400, "promotion_code_already_exists", "An active promotion code with this code already exists.");
+    }
+    if (params.expires_at !== undefined && Number(params.expires_at) <= now()) {
+      return stripeError(res, 400, "parameter_invalid_integer", "expires_at must be in the future.");
+    }
     const code: PromotionCode = {
       id: nextId("promo"),
       object: "promotion_code",
-      code: String(params.code ?? ""),
-      active: true,
+      code: word,
+      active,
       promotion: { type: "coupon", coupon: coupon.id },
       max_redemptions: params.max_redemptions !== undefined ? Number(params.max_redemptions) : null,
       expires_at: params.expires_at !== undefined ? Number(params.expires_at) : null,
       times_redeemed: 0,
-      created: now() + state.counter,
+      // The real moment, as Stripe's is: the site compares it with when an
+      // announcement went out, to know whether a code existed then.
+      created: now(),
       restrictions: {},
+      metadata: mergeMetadata({}, params.metadata),
     };
     state.promotionCodes.set(code.id, code);
     return remember(200, promotionView(code, expandList(params)));
   }
+  if ((match = path.match(/^\/v1\/promotion_codes\/([^/]+)$/)) && method === "GET") {
+    const code = state.promotionCodes.get(match[1]);
+    if (!code) return stripeError(res, 404, "resource_missing", `No such promotion code: '${match[1]}'`);
+    return send(res, 200, promotionView(code, expandList(params)));
+  }
   if ((match = path.match(/^\/v1\/promotion_codes\/([^/]+)$/)) && method === "POST") {
     const code = state.promotionCodes.get(match[1]);
     if (!code) return stripeError(res, 404, "resource_missing", `No such promotion code: '${match[1]}'`);
+    if (params.active === "true" && !code.active) {
+      // Stripe switches a code back on only while it could still be used,
+      // and only if no other live code has its word.
+      const taken = [...state.promotionCodes.values()].some(
+        (p) => p.id !== code.id && p.active && p.code.toLowerCase() === code.code.toLowerCase()
+      );
+      if (taken || !redeemable({ ...code, active: true })) {
+        return stripeError(res, 400, "promotion_code_not_reactivatable", "This promotion code cannot be reactivated.");
+      }
+    }
     if (params.active !== undefined) code.active = params.active === "true";
+    if (params.metadata !== undefined) code.metadata = mergeMetadata(code.metadata, params.metadata);
     return remember(200, promotionView(code, expandList(params)));
   }
 
@@ -551,7 +607,16 @@ async function handleControl(req: IncomingMessage, res: ServerResponse, url: URL
     return send(res, 200, [...state.sessions.values()].map((s) => ({ ...sessionView(s), params: s.params })));
   }
   if (path === "/__refunds") return send(res, 200, [...state.refunds.values()]);
+  if (path === "/__promotion_codes") return send(res, 200, [...state.promotionCodes.values()]);
   let match: RegExpMatchArray | null;
+  // A code past its last day or out of uses, without waiting for either.
+  if ((match = path.match(/^\/__promotion_codes\/([^/]+)$/)) && req.method === "POST") {
+    const code = state.promotionCodes.get(match[1]);
+    if (!code) return send(res, 404, { error: "No such promotion code" });
+    if (typeof params.expires_at === "number") code.expires_at = params.expires_at;
+    if (typeof params.times_redeemed === "number") code.times_redeemed = params.times_redeemed;
+    return send(res, 200, code);
+  }
   if ((match = path.match(/^\/__sessions\/([^/]+)\/pay$/)) && req.method === "POST") {
     const session = state.sessions.get(match[1]);
     if (!session) return send(res, 404, { error: "No such session" });

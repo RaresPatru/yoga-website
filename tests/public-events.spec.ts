@@ -927,6 +927,42 @@ test.describe("tooltips look like the site, and are actually drawn", () => {
     expect(style.hiddenAtRest).toBe(true);
     expect(style.content).toContain("calendar");
   });
+
+  /**
+   * A pointer passing over a control on its way elsewhere should not light
+   * up its label (Rares, 5 October 2026). Read from the transition the
+   * browser started rather than timed with a clock: the delay is a number on
+   * it, and a test that waited 100 ms and looked would fail on a slow runner
+   * for reasons that have nothing to do with the code.
+   */
+  test("a tooltip waits half a second under the pointer, and leaves at once", async ({ page }) => {
+    await page.goto("/ro/events/yoga-in-parc");
+    const date = page.locator('summary[data-tooltip="Adaugă în calendar"]');
+    test.skip(!(await page.evaluate(() => matchMedia("(hover: hover)").matches)), "only a pointer can hover");
+
+    /** The delay and target of the opacity transition running on the tooltip, if any. */
+    const transition = () =>
+      date.evaluate((el) => {
+        const running = el
+          .getAnimations({ subtree: true })
+          .find(
+            (a) =>
+              (a.effect as KeyframeEffect | null)?.pseudoElement === "::after" &&
+              (a as CSSTransition).transitionProperty === "opacity"
+          );
+        return running ? { delay: Number(running.effect?.getTiming().delay) } : null;
+      });
+
+    await date.hover();
+    expect(await transition(), "hovering starts a delayed fade-in").toEqual({ delay: 500 });
+    await expect
+      .poll(() => date.evaluate((el) => getComputedStyle(el, "::after").opacity))
+      .toBe("1");
+
+    await page.mouse.move(0, 0);
+    const leaving = await transition();
+    expect(leaving === null || leaving.delay === 0, "leaving does not wait").toBe(true);
+  });
 });
 
 /**
@@ -1558,5 +1594,42 @@ test.describe("an event's life", () => {
     expect((await registerDirectly(today.id)).code).toBe("started");
     const tomorrow = track(await seedEvent({ date: bucharestDate(1), time: null, max_participants: 10 }));
     expect((await registerDirectly(tomorrow.id)).success).toBe(true);
+  });
+});
+
+/**
+ * A place with no space in it, such as a map link she pasted into the
+ * Locație field, used to push the events list sideways on a 360px phone: the
+ * card's meta row could not shrink below the link, and the page scrolled
+ * 17px to the right (measured on the live site, 5 October 2026). The home
+ * page's carousel had the same fault; tests/public-home.spec.ts covers it.
+ */
+test.describe("a place she typed without spaces", () => {
+  const link = "https://maps.app.goo.gl/hWYCG64kYRnPuv9z5";
+
+  test("wraps on the events list and the event's page instead of widening them", async ({ page }) => {
+    const event = await seedEvent({
+      date: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+      location: link,
+    });
+    try {
+      await page.setViewportSize({ width: 360, height: 800 });
+      for (const path of ["/ro/events", `/ro/events/${event.slug}`]) {
+        await page.goto(path);
+        const place = page.locator("main span", { hasText: link }).last();
+        await expect(place).toBeVisible();
+
+        const sideways = await page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+        );
+        expect(sideways, `${path} scrolls sideways`).toBeLessThanOrEqual(0);
+        const box = (await place.boundingBox())!;
+        expect(box.x + box.width, `the place runs off the screen on ${path}`).toBeLessThanOrEqual(360);
+        const lines = await place.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
+        expect(lines, `the link did not wrap on ${path}`).toBeGreaterThan(1);
+      }
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
   });
 });

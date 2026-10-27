@@ -16,6 +16,8 @@ import { useAdminData } from "@/lib/admin/use-admin-data";
 import { useLeaveGuard } from "@/lib/admin/use-leave-guard";
 import { translateHtml, translateTexts } from "@/lib/admin/translate";
 import { eventChoices } from "@/lib/admin/participants";
+import { listCodes } from "@/lib/admin/promotion-codes";
+import { codeStatus } from "@/lib/promotion-codes";
 import {
   EmailRequestError,
   announcementRecipients,
@@ -159,6 +161,13 @@ function AnnouncementEditor({
     when: eventDay(event.date, ui),
   }));
   const pickable = cardOptions.filter((option) => upcoming.some((event) => event.id === option.id));
+
+  // Her codes that work now, for the editor's Cod menu. Stripe being
+  // unreachable only leaves the menu empty; she can still type a code.
+  const { data: codes } = useAdminData(async () => {
+    const now = Date.now();
+    return (await listCodes()).filter((code) => codeStatus(code, now) === "active").map((code) => code.code);
+  });
 
   const subjectMissing = !draft.subject_ro.trim();
   const bodyMissing = !hasWords(draft.body_ro);
@@ -352,6 +361,7 @@ function AnnouncementEditor({
             romanian={mode === "en" ? { subject: draft.subject_ro, body: draft.body_ro } : undefined}
             variables={ANNOUNCEMENT_VARIABLES}
             cards={pickable.length || cardOptions.length ? cardOptions : []}
+            codes={codes ?? []}
             subjectError={tried && mode === "ro" && subjectMissing ? t("admin.mail.subject_required") : null}
             bodyError={tried && mode === "ro" && bodyMissing ? t("admin.mail.body_required") : null}
           />

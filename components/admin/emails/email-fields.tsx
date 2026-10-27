@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import { Bold, CalendarPlus, Heading2, Italic, Link2, List, ListOrdered, Plus } from "lucide-react";
+import { Bold, CalendarPlus, Heading2, Italic, Link2, List, ListOrdered, Plus, TicketPercent } from "lucide-react";
 import { VARIABLES, isLinkVariable, isVariableName, type EmailLocale, type VariableName } from "@/lib/email-content";
 import {
   emailBodyExtensions,
@@ -46,6 +46,7 @@ export function EmailFields({
   romanian,
   variables,
   cards,
+  codes,
   subjectError,
   bodyError,
 }: {
@@ -59,6 +60,8 @@ export function EmailFields({
   variables: readonly VariableName[];
   /** For an announcement: the events it may show as cards. */
   cards?: CardOption[];
+  /** For an announcement: her discount codes that work now, to put in the text. */
+  codes?: string[];
   subjectError?: string | null;
   bodyError?: string | null;
 }) {
@@ -137,6 +140,7 @@ export function EmailFields({
           describedBy={[`${id}-body-help`, bodyError ? `${id}-body-error` : null].filter(Boolean).join(" ")}
           label={label}
           cards={cards}
+          codes={codes}
           onReady={setBodyEditor}
           chips={
             <Chips
@@ -277,6 +281,7 @@ function BodyEditor({
   describedBy,
   label,
   cards,
+  codes,
   onReady,
   chips,
 }: {
@@ -287,6 +292,7 @@ function BodyEditor({
   describedBy: string;
   label: (name: string) => string;
   cards?: CardOption[];
+  codes?: string[];
   onReady: (editor: Editor | null) => void;
   chips: React.ReactNode;
 }) {
@@ -404,6 +410,42 @@ function BodyEditor({
                         editor?.chain().focus().insertContent({ type: "emailEventCard", attrs: { id: card.id } }).run(),
                     }))
                   : [{ id: "none", label: t("admin.announce.no_events"), disabled: true, onSelect: () => {} }]
+              }
+            />
+          )}
+          {/*
+            One of her codes, in bold and in capitals, as the codes screen
+            shows it: that is the form the site recognises once the
+            announcement is sent, to tell her later who received it
+            (lib/announcement-codes.ts).
+          */}
+          {codes && (
+            <MenuButton
+              label={t("admin.announce.add_code")}
+              tooltip={t("admin.announce.add_code")}
+              triggerClassName="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm text-charcoal hover:bg-sage/15"
+              trigger={
+                <>
+                  <TicketPercent className="h-4 w-4" aria-hidden="true" />
+                  {t("admin.announce.code")}
+                </>
+              }
+              items={
+                codes.length
+                  ? codes.map((code) => ({
+                      id: code,
+                      label: code,
+                      onSelect: () =>
+                        editor
+                          ?.chain()
+                          .focus()
+                          .insertContent([
+                            { type: "text", text: code, marks: [{ type: "bold" }] },
+                            { type: "text", text: " " },
+                          ])
+                          .run(),
+                    }))
+                  : [{ id: "none", label: t("admin.announce.no_codes"), disabled: true, onSelect: () => {} }]
               }
             />
           )}
