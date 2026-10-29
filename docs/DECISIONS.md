@@ -419,67 +419,18 @@ button does rather than reading out two letters.
 
 ## Dependencies
 
-### Four packages are deliberately held back
+### Three packages are deliberately held back
 
-Everything else tracks the latest release. These four do not, and each has a
+Everything else tracks the latest release. These three do not, and each has a
 reason that outlived the upgrade that produced it. Re-checking them is cheap;
-raising them because they look stale is how the site breaks. All four were
+raising them because they look stale is how the site breaks. All three were
 re-checked on 28 October 2026, and every reason still held.
 
-A fifth, `stripe`, was held on 22 until 29 October 2026, when the checkout
-moved to the API version stripe-node 23 speaks ("Payment methods are listed
-in the code, not left to Stripe's settings").
-
-**`isomorphic-dompurify` stays on 2.x.** Every release after 2.26.0 runs on
-jsdom 27 or later, up to jsdom 30 in 4.x. jsdom loads its dependencies with
-`require()`, and one of them, `@exodus/bytes`, is `"type": "module"`:
-ES-module-only. Vercel's functions refuse to `require()` an ES module. So every
-page that renders stored HTML answers 500: blog posts, event descriptions,
-About and the home page. Each fails with:
-
-```
-Failed to load external module jsdom-…: Error [ERR_REQUIRE_ESM]: require() of
-ES Module …/@exodus/bytes/encoding-lite.js from
-…/html-encoding-sniffer/lib/html-encoding-sniffer.js not supported
-```
-
-**It is not about the Node version.** That error took production down in August
-2026, before `engines` pinned Node 24. Node 24 *can* `require()` an ES module,
-and `next start` on Node 24 serves the upgrade without complaint. Then on
-23 September 2026 a preview of 4.3.0 ran on Vercel's Node 24.x ("fluid"
-functions). It failed with exactly that error on every route that sanitizes,
-while the 2.26.0 preview beside it answered 200. Whatever Vercel's function
-loader does, it does not allow this. A local production build is therefore no
-evidence either way.
-
-`tests/sanitize.spec.ts` reproduces Vercel's refusal: it loads the package with
-Node's `--no-experimental-require-module`. An upgrade that would take the site
-down fails CI first.
-
-This unblocks when either of these happens:
-- jsdom stops depending on an ES-module-only package, or ships CommonJS.
-  On 28 October 2026 isomorphic-dompurify 4.6.0 asked for jsdom 30.1, which
-  now requires `@exodus/bytes` directly as well as through
-  `html-encoding-sniffer` 7.
-- Vercel documents that its functions allow `require()` of an ES module.
-
-Either way, prove it on a preview before trusting it:
-
-```powershell
-$preview = "https://yoga-website-<id>-patru.vercel.app"   # from the Vercel check on the commit
-foreach ($path in "/ro", "/en", "/ro/about") {            # all three render sanitized HTML
-  vercel curl $path --deployment $preview -- --silent --output NUL --write-out "$path %{http_code}`n"
-}
-vercel logs --deployment $preview --level error --since 30m
-```
-
-Previews sit behind Vercel Authentication. `vercel curl` gets past it with the
-project's "Protection Bypass for Automation" secret, and creates that secret
-if the project has none.
-
-Holding the wrapper does not hold the sanitizer. DOMPurify, the part that
-decides what HTML survives, has an override of its own (below) and stays on
-the newest 3.x.
+Two more were held until recently: `stripe` on 22 until 29 October 2026, when
+the checkout moved to the API version stripe-node 23 speaks ("Payment methods
+are listed in the code, not left to Stripe's settings"), and
+`isomorphic-dompurify` on 2.26.0 until 30 October 2026, when a setting in
+Vercel let it move ("`isomorphic-dompurify` needs a switch in Vercel", below).
 
 **`typescript` is `~6.0.3`, not `^6`.** `@typescript-eslint/parser` declares
 `typescript: ">=4.8.4 <6.1.0"` as a *required* peer. A caret would let
@@ -501,7 +452,7 @@ to happen first: Next.js supporting TypeScript 7, and typescript-eslint widening
 its peer range. Found 28 October 2026.
 
 **`eslint` stays on 9.** ESLint 10 itself would be fine — the config is already
-flat, there are no `eslint-env` comments, and Node 24 satisfies its engines. The
+flat, there are no `eslint-env` comments, and Node 26 satisfies its engines. The
 blocker is Next's lint preset: `eslint-config-next` pulls
 `eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, and
 all three cap their peer at `^9`. Only `eslint-plugin-react-hooks` accepts `^10`.
@@ -513,9 +464,88 @@ That costs nothing at runtime, because lint never ships; it is one more
 reason to move the day the plugins do.
 
 **`@types/node` tracks the runtime, not the registry.** `engines.node` pins
-Vercel to 24.x, so the types must describe Node 24. Taking `@types/node` 26
-would type APIs the deployed runtime does not have — a build that passes and a
-function that throws.
+Vercel to 26.x (24.x until 30 October 2026), so the types describe Node 26.
+Types for a newer Node would describe APIs the deployed runtime does not have —
+a build that passes and a function that throws.
+
+### `isomorphic-dompurify` needs a switch in Vercel
+
+The sanitizer runs on jsdom, and jsdom loads its dependencies with
+`require()`. Two of the ones jsdom 30 needs are ES modules only:
+`@exodus/bytes` (directly and through `html-encoding-sniffer` 7) and `parse5`
+8. Node allows `require()` of an ES module (on by default since 22.12), but
+Vercel's functions switch it off unless the project says otherwise. Every page
+that renders stored HTML then answers 500: the home page, About, blog posts,
+event pages, the legal pages and testimonials. Each fails with:
+
+```
+Failed to load external module jsdom-…: Error [ERR_REQUIRE_ESM]: require() of
+ES Module …/@exodus/bytes/encoding-lite.js from
+…/html-encoding-sniffer/lib/html-encoding-sniffer.js not supported
+```
+
+That took production down in August 2026. A 4.3.0 preview failed the same way
+on 23 September 2026, on Vercel's Node 24, while `next start` on Node 24 served
+it without complaint, so a local production build is no evidence either way.
+Until 30 October 2026 the package was held on 2.26.0, the last release on
+jsdom 26, which needs no ES module.
+
+**The switch.** Vercel's "Advanced Node.js Usage" page (updated 27 April 2026)
+documents it: `NODE_OPTIONS=--experimental-require-module` in the project's
+Environment Variables. It is set for Preview since 30 October 2026, as a
+Config variable, and is added for Production before the upgrade reaches
+`main` (OVERHAUL.md). With it the site runs isomorphic-dompurify 4.6.0 on
+jsdom 30.1.3. DOMPurify's makers ask for the newest jsdom, because older ones
+have bugs that let XSS through even when DOMPurify does everything right, and
+the site's security policy allows inline scripts (`'unsafe-inline'` in
+`next.config.ts`), so the sanitizer is the only defence against a script in
+stored HTML.
+
+Checked on 30 October 2026, before the preview:
+- with the feature off the package fails with the error above, and with
+  exactly the value set in Vercel it loads;
+- 95 inputs, every value with HTML in the seeded local database and 46 known
+  attack and edge cases, each sanitized the three ways `lib/sanitize.ts`
+  does, gave identical output on 2.26.0 with jsdom 26 and on 4.6.0 with jsdom
+  30. Both run DOMPurify 3.4.17; only jsdom changed.
+
+**Removing the switch brings the 500s back.** `tests/sanitize.spec.ts` checks
+both halves. One test loads the package through `NODE_OPTIONS` with the value
+set in Vercel, so a Node that stops accepting the option fails CI before it
+fails the live site. The other loads it with the feature off and expects
+Vercel's error. The day that one fails, jsdom no longer needs the switch, and
+`NODE_OPTIONS` can come out of Vercel.
+
+**The spelling is Vercel's, not Node's newer one.** Node renamed the option
+`--require-module` in 24.15.0 and kept the old name as a "Legacy" alias, which
+in Node's stability index means unlikely to be removed, not deprecated. The
+old name works on every Node from 22.0 to 26; the new one does not, and a Node
+that meets an option it does not know refuses to start. The first two previews
+with the switch failed that way, two seconds into `npm install`, on a
+misspelt value ("is not allowed in NODE_OPTIONS", exit code 9).
+
+Living with it:
+- The switch is a setting in Vercel, not in the code: re-add it if the project
+  is ever recreated or moved.
+- `NODE_OPTIONS` holds all of Node's start-up options in one value. Add
+  another with a space; never replace it.
+- Before raising `engines.node`, check the new Node still accepts the option.
+  If Vercel ever documents require(esm) as on by default, remove it.
+
+Prove any change here on a preview:
+
+```powershell
+$preview = "https://yoga-website-<id>-patru.vercel.app"   # from the Vercel check on the commit
+foreach ($path in "/ro", "/en", "/ro/about") {            # all three render sanitized HTML
+  vercel curl $path --deployment $preview -- --silent --output NUL --write-out "$path %{http_code}`n"
+}
+vercel logs --deployment $preview --query "level:error" --since 30m
+```
+
+Previews sit behind Vercel Authentication. `vercel curl` gets past it with the
+project's "Protection Bypass for Automation" secret, and creates that secret
+if the project has none. (Vercel CLI 65.7 has no `vercel logs --level` and
+names the query in its place.)
 
 ### `sharp` no longer needs an override
 
@@ -543,12 +573,6 @@ An override is a floor under a package that something else depends on. Each
 one here answers an advisory, and each should go once the packages that depend
 on it ask for a fixed version themselves. As of 28 October 2026:
 
-- **`dompurify` under `isomorphic-dompurify`, `^3.4.17`.** The wrapper is held
-  on 2.26.0 (above), and its own range would accept DOMPurify releases with
-  known bypasses. Raised from 3.4.13 for the advisories of 22 October 2026,
-  GHSA-cg2g-xh64-v4q7 (critical) and GHSA-mrv2-3pqr-j5jr (high). The site uses
-  neither `SAFE_FOR_TEMPLATES` nor `IN_PLACE`, the two options they concern.
-  Goes when the wrapper can move.
 - **`postcss-selector-parser` under `@tailwindcss/typography`, `^6.1.5`.** The
   typography plugin pins 6.0.10 exactly; GHSA-rj75-hqrm-r3gf (moderate,
   quadratic parsing) is fixed in 6.1.5. It only ever parses the site's own
@@ -566,7 +590,10 @@ on it ask for a fixed version themselves. As of 28 October 2026:
 
 Removed on 28 October 2026 because the parents caught up: `sharp` (above), and
 `js-yaml`, which ESLint's `@eslint/eslintrc` now requires at `^4.3.2`, past
-GHSA-2883-xcg3-v3hh.
+GHSA-2883-xcg3-v3hh. And on 30 October 2026, `dompurify` under
+`isomorphic-dompurify`. It lifted DOMPurify past the advisories of 22 October
+2026 (GHSA-cg2g-xh64-v4q7, critical; GHSA-mrv2-3pqr-j5jr, high) while the
+wrapper was held on 2.26.0; 4.6.0 asks for `^3.4.17` itself.
 
 ---
 

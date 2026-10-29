@@ -14,7 +14,7 @@ the `node` lines work unchanged in PowerShell.
 
 ## Prerequisites
 
-Node 24, Docker Desktop running, `.env.test` (copy `.env.test.example`,
+Node 26, Docker Desktop running, `.env.test` (copy `.env.test.example`,
 paste the keys `supabase start` prints), and once per Playwright upgrade the
 two browser engines:
 

@@ -28,7 +28,7 @@ deployed on Vercel.
 
 ## Running it locally
 
-**Prerequisites:** Node 24 (pinned in `.nvmrc` and `engines`), Docker Desktop
+**Prerequisites:** Node 26 (pinned in `.nvmrc` and `engines`), Docker Desktop
 (for the local database). The commands below are PowerShell; the `npm` and
 `npx` lines are the same in any shell.
 

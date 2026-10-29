@@ -1615,11 +1615,36 @@ retry; that page never loads the statistics.
 - **The page transitions on an iPhone,** on the preview: Playwright's WebKit
   runs them but does not draw them in its screenshots.
 - **Vercel settings:**
-  - Phase 5: add a `CRON_SECRET` environment variable (a random string of at
-    least 16 characters). Until it is set, the daily job refuses to run.
+  - ~~Phase 5: add a `CRON_SECRET` environment variable (a random string of at
+    least 16 characters). Until it is set, the daily job refuses to run.~~
+    Set on 5 October 2026, for Production only, which is right: Vercel runs
+    scheduled jobs only on the production deployment. The job runs with it:
+    on 15 and 16 October, at 03:47 UTC both mornings, it sent the testimonial
+    invitations for a test event, which it does only after the secret has
+    been accepted and the clean-up has worked. That record is in Resend's
+    log, not Vercel's: on the Hobby plan Vercel keeps function logs for an
+    hour and request records for 12 hours, and Settings → Cron Jobs lists
+    the job without its runs (checked 30 October).
   - Phase 7: a verified sending domain and From address in Resend
     (`RESEND_FROM_EMAIL`). Its name does not matter: emails go out under the
-    site's name.
+    site's name. **Not done yet** (checked 30 October 2026): Resend has no
+    domain, and production sends from `onboarding@resend.dev`, Resend's test
+    address, which delivers only to the Resend account's own address. Every
+    other address is refused: the invitations above came back 403 ("can only
+    send to your own email address"), and 422 for addresses at
+    `example.com`. Verifying a domain means adding records to its DNS, so
+    this waits for her own domain; a `vercel.app` address cannot be one.
+  - **Before the sanitizer upgrade reaches `main`** (isomorphic-dompurify
+    4.6.0 on Node 26, on `feature` since 30 October 2026): give
+    `NODE_OPTIONS` = `--experimental-require-module` to Production as well.
+    Rares added it for Preview on 30 October (Environment Variables, type
+    Config). A variable reaches only deployments built after it is saved, so
+    it has to be there before `main` is pushed: without it every page that
+    renders stored HTML answers 500 from the moment the merge deploys
+    (DECISIONS.md, "`isomorphic-dompurify` needs a switch in Vercel").
+    Optional, the same day: Settings → Build and Deployment → Node.js
+    Version → 26.x. `engines` in package.json already decides, so this only
+    brings the setting in line.
 - **Her address for replies** in Conținut site → Email-uri (or the address
   for personal data requests in Pagini legale). Until one is filled in,
   replies go to the sending address.

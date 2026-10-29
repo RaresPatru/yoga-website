@@ -19,6 +19,10 @@ import {
  * lib/embeds.ts. Registered once at module load: DOMPurify keeps hooks on a
  * global instance, so adding this per call would stack duplicates.
  * Removing the node drops the whole embed rather than leaving an empty frame.
+ *
+ * For the same reason, never call isomorphic-dompurify's `clearWindow()`. It
+ * swaps that instance for a fresh one without this hook, and frames from any
+ * host would then get through.
  */
 DOMPurify.addHook("uponSanitizeElement", (node, data) => {
   if (data.tagName !== "iframe") return;

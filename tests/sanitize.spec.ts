@@ -15,24 +15,46 @@ import { deletePostBySlug, seedPost } from "./helpers";
  */
 test.describe("the sanitizer's package", () => {
   /**
-   * Vercel's functions will not require() an ES module, even on Node 24,
-   * which can. jsdom loads its dependencies with require(), and from jsdom 27
-   * one of them, @exodus/bytes, is ES-module-only: every page that sanitizes
-   * then answers 500 on Vercel while `next start` serves it happily here.
-   * That happened in production in August 2026 and again on a preview in
-   * September; see "isomorphic-dompurify stays on 2.x" in docs/DECISIONS.md.
-   *
-   * Switching that one Node feature off reproduces Vercel's error exactly, so
-   * an upgrade that would take the site down fails here first. If Node ever
-   * drops the flag, this fails with "bad option" rather than passing quietly.
+   * jsdom loads its dependencies with require(), and from jsdom 27 one of
+   * them, @exodus/bytes, is an ES module. Node allows that, but Vercel's
+   * functions switch it off unless the project sets this value in
+   * NODE_OPTIONS, which this one does, for Production and Preview. Without
+   * it every page that sanitizes answers 500, as production did in August
+   * 2026 and a preview in September; see "isomorphic-dompurify needs a switch
+   * in Vercel" in docs/DECISIONS.md. Keep this constant and Vercel's value
+   * the same.
    */
-  test("loads without require() of ES modules, as Vercel's functions demand", () => {
-    const load = spawnSync(
-      process.execPath,
-      ["--no-experimental-require-module", "-e", "require('isomorphic-dompurify')"],
-      { cwd: process.cwd(), encoding: "utf8" }
+  const VERCEL_NODE_OPTIONS = "--experimental-require-module";
+
+  /** Loads the package in a fresh Node, with these NODE_OPTIONS or none. */
+  function loadSanitizer(args: string[], nodeOptions: string | null) {
+    const env = { ...process.env };
+    delete env.NODE_OPTIONS;
+    if (nodeOptions) env.NODE_OPTIONS = nodeOptions;
+    return spawnSync(process.execPath, [...args, "-e", "require('isomorphic-dompurify')"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env,
+    });
+  }
+
+  // Through NODE_OPTIONS, as Vercel passes it: a Node that stops accepting the
+  // option refuses to start ("is not allowed in NODE_OPTIONS"), here first
+  // rather than on every page of the live site.
+  test("loads with the NODE_OPTIONS set in Vercel", () => {
+    const load = loadSanitizer([], VERCEL_NODE_OPTIONS);
+    expect(load.status, `isomorphic-dompurify cannot load with Vercel's NODE_OPTIONS:\n${load.stderr}`).toBe(0);
+  });
+
+  // Switching the feature off reproduces Vercel's error exactly. The day this
+  // fails, jsdom no longer needs the switch, and NODE_OPTIONS can come out of
+  // Vercel.
+  test("still needs that switch: without it, it fails as Vercel's functions did", () => {
+    const load = loadSanitizer(["--no-experimental-require-module"], null);
+    expect(load.status).not.toBe(0);
+    expect(load.stderr, "isomorphic-dompurify now loads without require(esm): see docs/DECISIONS.md").toContain(
+      "ERR_REQUIRE_ESM"
     );
-    expect(load.status, `isomorphic-dompurify cannot load the way Vercel loads it:\n${load.stderr}`).toBe(0);
   });
 });
 

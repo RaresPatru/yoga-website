@@ -507,13 +507,17 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   transition. And a named element's descendants lose their backdrop blur
   (measured in Chromium; Playwright's WebKit draws no backdrop blur at all), so
   the top bar's name is on its glass `<nav>`, not on `<header>`.
-- **Vercel's functions will not `require()` an ES module, even on Node 24.**
-  `next start` on Node 24 loads such a dependency without complaint. The same
-  build on Vercel answers 500 with `ERR_REQUIRE_ESM`. That is why
-  `isomorphic-dompurify` is held at 2.26.0; see DECISIONS.md, which also has the
-  PowerShell to check a preview. It applies to any server-side package whose
-  CommonJS code requires an ES-module-only one. A local production build is no
-  evidence here: deploy a preview and load a page that uses the package.
+- **Vercel's functions will not `require()` an ES module unless
+  `NODE_OPTIONS` says so.** The sanitizer's jsdom needs it, so Vercel must
+  hold `NODE_OPTIONS` = `--experimental-require-module` wherever the site
+  runs (Preview since 30 October 2026; Production before that work reaches
+  `main`, OVERHAUL.md). Without it every page that renders stored HTML
+  answers 500 with `ERR_REQUIRE_ESM`, as production did in August 2026, while
+  `next start` here serves the same build without complaint: a local
+  production build is no evidence, so deploy a preview and load a page that
+  uses the package. The switch is a Vercel setting, not code; DECISIONS.md
+  ("`isomorphic-dompurify` needs a switch in Vercel") has what keeps it
+  working and the PowerShell to check a preview.
 - **A WebKit flake that only CI sees may need Linux to reproduce.** Playwright
   ships a different WebKit port on Windows and on Linux, with different frame
   timing. The navigation drawer that closed itself as it opened did so on about

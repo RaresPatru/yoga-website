@@ -45,13 +45,15 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          # Matches the development machine. package-lock.json is written by
-          # whichever npm the developer runs, and npm major versions disagree
-          # about how optional peer dependencies are recorded — npm 12 resolves
-          # a nested @swc/helpers for next-intl's @swc/core that npm 10 does
-          # not. `npm ci` then refuses the lock it was handed. Keeping the two
-          # on the same major is what stops that class of failure.
-          node-version: 24
+          # The major Vercel runs (`engines` in package.json) and the
+          # development machine's. It comes with npm 11, while the
+          # development machine writes package-lock.json with npm 12, and npm
+          # majors can disagree about how optional peer dependencies are
+          # recorded: npm 12 resolved a nested @swc/helpers for next-intl's
+          # @swc/core that npm 10 did not, and `npm ci` refused the lock it
+          # was handed. After a change to the lock, `npx -y npm@11 ci
+          # --ignore-scripts` in a clean copy shows whether this job accepts it.
+          node-version: 26
           cache: npm
 
       # `npm ci` installs exactly what package-lock.json specifies, unlike
@@ -82,8 +84,8 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          # Node 24 for the reason given in the quality job above.
-          node-version: 24
+          # Node 26 for the reasons given in the quality job above.
+          node-version: 26
           cache: npm
 
       - run: npm ci
