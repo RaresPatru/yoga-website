@@ -1990,10 +1990,12 @@ needs a line of code; the benefit is that the booking rules never meet one
 they were not written for.
 
 Until 29 October 2026 the list went in `payment_method_types`. Stripe's API
-version `2026-09-30.endive`, which stripe-node 23 is pinned to, refuses that
-field with a 400 ("The `payment_method_types` parameter is no longer supported
-when creating a Checkout Session"), so the library and the field moved
-together. The new field filters rather than dictates: Stripe keeps from it what
+version `2026-09-30.endive`, the one stripe-node 23.0 is pinned to, refuses
+that field with a 400 ("The `payment_method_types` parameter is no longer
+supported when creating a Checkout Session"), and every endive version after
+it does too, so the library and the field moved together. (23.1 moved to
+`2026-10-28.endive`, a monthly version that only adds; the sandbox answered it
+the same way.) The new field filters rather than dictates: Stripe keeps from it what
 suits the price. Checked against the sandbox that day, old field against new:
 
 - a session in lei offers card and Revolut Pay under both, and Revolut Pay
