@@ -419,11 +419,12 @@ button does rather than reading out two letters.
 
 ## Dependencies
 
-### Four packages are deliberately held back
+### Five packages are deliberately held back
 
-Everything else tracks the latest release. These four do not, and each has a
+Everything else tracks the latest release. These five do not, and each has a
 reason that outlived the upgrade that produced it. Re-checking them is cheap;
-raising them because they look stale is how the site breaks.
+raising them because they look stale is how the site breaks. All five were
+re-checked on 28 October 2026, and every reason still held.
 
 **`isomorphic-dompurify` stays on 2.x.** Every release after 2.26.0 runs on
 jsdom 27 or later, up to jsdom 30 in 4.x. jsdom loads its dependencies with
@@ -453,6 +454,9 @@ down fails CI first.
 
 This unblocks when either of these happens:
 - jsdom stops depending on an ES-module-only package, or ships CommonJS.
+  On 28 October 2026 isomorphic-dompurify 4.6.0 asked for jsdom 30.1, which
+  now requires `@exodus/bytes` directly as well as through
+  `html-encoding-sniffer` 7.
 - Vercel documents that its functions allow `require()` of an ES module.
 
 Either way, prove it on a preview before trusting it:
@@ -469,13 +473,28 @@ Previews sit behind Vercel Authentication. `vercel curl` gets past it with the
 project's "Protection Bypass for Automation" secret, and creates that secret
 if the project has none.
 
+Holding the wrapper does not hold the sanitizer. DOMPurify, the part that
+decides what HTML survives, has an override of its own (below) and stays on
+the newest 3.x.
+
 **`typescript` is `~6.0.3`, not `^6`.** `@typescript-eslint/parser` declares
 `typescript: ">=4.8.4 <6.1.0"` as a *required* peer. A caret would let
 `npm install` pick 6.1 the day it ships and break the lint chain — and Vercel
 runs `npm install`, not `npm ci`, so it is free to resolve differently from CI.
 The tilde keeps us inside the peer range no matter what is published. TypeScript
-7 is out for the same reason, one major further along. Re-checked 22 September
-2026: typescript-eslint 8.70 still declares `<6.1.0`.
+7 is out for the same reason, one major further along. Re-checked 28 October
+2026: typescript-eslint 8.72.1 still declares `<6.1.0`.
+
+TypeScript 7 has a second blocker, and it is Next.js itself. 7 is the compiler
+rewritten in Go, and its package is mostly a native `tsc`: the main entry
+exports only the version (`lib/version.cjs`), and the programming interface
+moved under `typescript/unstable/*`, in a new shape. `next build` type-checks
+through the old interface: `typescript.createProgram`,
+`createIncrementalProgram` and `getPreEmitDiagnostics`, in
+`next/dist/lib/typescript/runTypeCheck.js` (16.4.3). With TypeScript 7
+installed, the build would fail before lint is ever reached. So two things have
+to happen first: Next.js supporting TypeScript 7, and typescript-eslint widening
+its peer range. Found 28 October 2026.
 
 **`eslint` stays on 9.** ESLint 10 itself would be fine — the config is already
 flat, there are no `eslint-env` comments, and Node 24 satisfies its engines. The
@@ -483,25 +502,80 @@ blocker is Next's lint preset: `eslint-config-next` pulls
 `eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, and
 all three cap their peer at `^9`. Only `eslint-plugin-react-hooks` accepts `^10`.
 This unblocks when those three ship v10 support, which is not ours to do.
-Re-checked 22 September 2026: all three still cap at `^9`.
+Re-checked 28 October 2026: `eslint-plugin-react` 7.37.5 caps at `^9.7`,
+`eslint-plugin-import` 2.32.0 and `eslint-plugin-jsx-a11y` 6.10.2 at `^9`.
+ESLint 9 is now past its support window, and npm says so on every install.
+That costs nothing at runtime, because lint never ships; it is one more
+reason to move the day the plugins do.
 
 **`@types/node` tracks the runtime, not the registry.** `engines.node` pins
 Vercel to 24.x, so the types must describe Node 24. Taking `@types/node` 26
 would type APIs the deployed runtime does not have — a build that passes and a
 function that throws.
 
-### `sharp` is overridden to a floor, and the floor has to move
+**`stripe` stays on 22 until the checkout moves to Stripe's new API.**
+stripe-node 23 (30 September 2026) is pinned to API version
+`2026-09-30.endive`, which takes `payment_method_types` out of creating a
+Checkout Session in favour of `allowed_payment_method_types`. The checkout asks
+for card and Revolut Pay through exactly that field (`lib/stripe-checkout.ts`),
+so taking 23 changes how a payment is requested, not just a version number.
+The stand-in (`tests/fake-stripe.ts`) and `tests/checkout-params.spec.ts` would
+have to learn the new field. What Stripe then offers is a question for the
+sandbox, not the stand-in: for instance, whether Revolut Pay comes to depend on
+the account's payment method settings. Make it its own change, tried in the
+sandbox, and move the webhook endpoint's API version in the same step
+(OVERHAUL.md has where both stand).
 
-The override exists to force `sharp` *up* past some libvips CVEs, from whatever
-version Next asked for at the time. That made it a security floor. It then
-silently became a ceiling: Next moved to `sharp: "^0.35.4"` while the override
-still said `0.35.3`, so npm was holding the image optimiser *below* what Next
-declared — the opposite of the intent. When Next raises its own range past the
-floor, raise the override to match rather than leaving it pinned underneath.
+### `sharp` no longer needs an override
 
-The `allowScripts` key moves with it. Those keys are `name@version` on purpose:
+Until 28 October 2026 an override forced Next's copy of `sharp` *up* past
+advisories in the image libraries it bundles (libvips, libheif, librsvg), from
+whatever version Next asked for at the time. That made it a security floor,
+and it once silently became a ceiling: Next moved to `sharp: "^0.35.4"` while
+the override still said `0.35.3`, so npm was holding the image optimiser
+*below* what Next declared. Next 16.4.3 asks
+for `^0.35.5` itself, the release that fixed the last advisory
+(GHSA-wq5f-xc86-pv6w), so the override had nothing left to do and is gone. If
+a new advisory lands before Next raises its range, bring it back as a caret
+range, `"next": { "sharp": "^0.35.6" }`, never an exact version (CLAUDE.md, "An
+exact version in `overrides` freezes that package for good").
+
+The site's own `sharp` dependency (it re-saves testimonial photos,
+`lib/review-photo.ts`) is an exact version, and its `allowScripts` key names
+that version: raise the two together. Those keys are `name@version` on purpose:
 an approval to run a build script is an approval for *that* build, so it expires
 when the version changes rather than carrying over to code nobody looked at.
+
+### What each override is for, and when it can go
+
+An override is a floor under a package that something else depends on. Each
+one here answers an advisory, and each should go once the packages that depend
+on it ask for a fixed version themselves. As of 28 October 2026:
+
+- **`dompurify` under `isomorphic-dompurify`, `^3.4.17`.** The wrapper is held
+  on 2.26.0 (above), and its own range would accept DOMPurify releases with
+  known bypasses. Raised from 3.4.13 for the advisories of 22 October 2026,
+  GHSA-cg2g-xh64-v4q7 (critical) and GHSA-mrv2-3pqr-j5jr (high). The site uses
+  neither `SAFE_FOR_TEMPLATES` nor `IN_PLACE`, the two options they concern.
+  Goes when the wrapper can move.
+- **`postcss-selector-parser` under `@tailwindcss/typography`, `^6.1.5`.** The
+  typography plugin pins 6.0.10 exactly; GHSA-rj75-hqrm-r3gf (moderate,
+  quadratic parsing) is fixed in 6.1.5. It only ever parses the site's own
+  stylesheet, at build time. `npm audit fix --force` offers to downgrade the
+  plugin to 0.5.4 instead; don't. Goes when the plugin's own pin passes 6.1.5.
+- **`nanoid`, `^3.3.18`.** Reached only through `postcss` since the unused
+  `ics` was removed (29 October 2026); GHSA-2v37-7h3g-55p8 is fixed in 3.3.18.
+  postcss asks for a fixed nanoid itself from 8.5.27, but the `postcss`
+  override below still allows 8.5.26, which asks for `^3.3.17`. Goes when that
+  floor reaches 8.5.27.
+- **`postcss`, `^8.5.26`.** Next pins one exact postcss and
+  `@tailwindcss/postcss` accepts anything from 8.5.16; the override holds both
+  to one current copy, above GHSA-fxqj-rqcc-2cmp (fixed in 8.5.23). Goes when
+  `@tailwindcss/postcss` asks for a fixed version itself.
+
+Removed on 28 October 2026 because the parents caught up: `sharp` (above), and
+`js-yaml`, which ESLint's `@eslint/eslintrc` now requires at `^4.3.2`, past
+GHSA-2883-xcg3-v3hh.
 
 ---
 

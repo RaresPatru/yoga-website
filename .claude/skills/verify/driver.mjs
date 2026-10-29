@@ -33,7 +33,6 @@ const BASE = option("--base", "http://localhost:3100");
 const OUT = join(process.cwd(), ".playwright", "verify");
 const SHOTS = join(OUT, "shots");
 const ADMIN_STATE = join(OUT, "admin-state.json");
-const STRIPE = "http://127.0.0.1:12111";
 const POSTHOG = "http://127.0.0.1:12112";
 const MAILPIT = "http://127.0.0.1:54324";
 mkdirSync(SHOTS, { recursive: true });

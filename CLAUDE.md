@@ -38,7 +38,9 @@ wrong.
   `tests/rpc-exposure.spec.ts` enumerates everything the publishable key can
   reach and fails on anything unlisted; `docs/DATABASE.md` has the template.
 
-  **Migrations reach production with `npx supabase db push`.** The remote has
+  **Migrations reach production with `npx supabase db push --linked`.** Name
+  the target: the CLI's next major version sends a bare `db push` to the
+  local database, and 2.122 already warns about it. The remote has
   kept a migration ledger since 11 September 2026, when the migrations existing
   at the time were adopted with `migration repair --status applied` after
   diffing both schemas to prove they matched. `npx supabase migration list
@@ -127,7 +129,7 @@ identical in both shells — only environment variables and deleting files diffe
 ```powershell
 npx supabase start                # local database (needs Docker Desktop)
 npx supabase db reset --local     # replay every migration + seed.sql. LOCAL — never --linked
-npx supabase db push              # send new migrations to production
+npx supabase db push --linked     # send new migrations to production
 npm run dev                       # local database — prints which one on startup
 npm run dev:prod                  # the live database; everything you do there is live
 npm run mock:images               # rebuild /public/mock from ./mock-images
@@ -520,6 +522,14 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   the `mcr.microsoft.com/playwright:v<version>-noble` image with
   `baseURL: "http://host.docker.internal:3100"`. Log what the page actually did
   before trusting a theory about why it failed.
+- **Never press anything inside the navigation drawer before it has
+  arrived.** Wait for `gapFromEdge` to reach 0, as `tests/public-home.spec.ts`
+  does. A control reached for mid-slide is off-screen, and Playwright scrolls
+  it into view itself; the drawer reads that scroll as the panel leaving, and
+  shuts. The WebKit in Playwright 1.64 (27.2) starts the slide a few frames
+  later than 26.6 did, and the language test that skipped the wait then failed
+  five times in six (28 October 2026). A finger tap on the visible button
+  always worked.
 - **Escape never leaves the TipTap editor.** ProseMirror cancels every Escape
   pressed inside it (`captureKeyDown` in prosemirror-view), and a cancelled
   Escape is not a close request, so a popover opened while the caret stays in

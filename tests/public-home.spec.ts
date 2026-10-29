@@ -155,6 +155,14 @@ test.describe("home page (RO)", () => {
   });
 });
 
+/** How far the drawer panel's right edge still is from the right of the screen. */
+const gapFromEdge = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => {
+    const sheet = document.querySelector(".nav-drawer-sheet");
+    if (!sheet) return -1;
+    return Math.round(window.innerWidth - sheet.getBoundingClientRect().right);
+  });
+
 test.describe("home page language switching", () => {
   // Below `lg` the switcher sits inside the drawer, so it has to be opened
   // first. Running this on both viewports is worth the extra few lines: an
@@ -189,7 +197,17 @@ test.describe("home page language switching", () => {
     // The switcher is scoped to #mobile-menu because the header still holds a
     // second, display:none copy; an unscoped locator matches that one first and
     // then times out clicking something invisible.
+    //
+    // And it is pressed only once the panel has arrived, as in the drawer's own
+    // tests below. Reached for straight away, it was still off-screen and not
+    // yet moving, so Playwright scrolled it into view itself, and that scroll
+    // reads to the drawer as the panel leaving: it shut. WebKit 27.2
+    // (Playwright 1.64) starts the slide a few frames later than 26.6, and
+    // the test then failed five times in six. A finger cannot hit a button that
+    // is not on screen yet; every tap on one that was switched the language.
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
     await page.locator('button[aria-controls="mobile-menu"]').click();
+    await expect.poll(() => gapFromEdge(page)).toBe(0);
     await page.locator("#mobile-menu").getByRole("button", { name: label }).click();
   };
 
@@ -269,14 +287,6 @@ test.describe("home page navigation drawer", () => {
   const drawer = (page: import("@playwright/test").Page) => page.locator("#mobile-menu");
   const trigger = (page: import("@playwright/test").Page) =>
     page.locator('button[aria-controls="mobile-menu"]');
-
-  /** How far the panel's right edge still is from the right of the screen. */
-  const gapFromEdge = (page: import("@playwright/test").Page) =>
-    page.evaluate(() => {
-      const sheet = document.querySelector(".nav-drawer-sheet");
-      if (!sheet) return -1;
-      return Math.round(window.innerWidth - sheet.getBoundingClientRect().right);
-    });
 
   // The panel slides, so "visible" arrives well before "arrived". Every test
   // here waits for it to be flush with the edge before touching anything.

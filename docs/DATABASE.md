@@ -537,8 +537,10 @@ better: `npx supabase migration list --linked`. The ledger behind it,
 1. Write the migration in `supabase/migrations/`.
 2. `npx supabase db reset` and run the suite.
 3. Commit it.
-4. `npx supabase db push` — applies every migration the remote has no record of,
-   in filename order, inside a transaction. `--dry-run` first to see the list.
+4. `npx supabase db push --linked` — applies every migration the remote has no
+   record of, in filename order, inside a transaction. `--dry-run` first to see
+   the list. Keep `--linked`: from the CLI's next major version a bare
+   `db push` goes to the local database instead.
 
    If it ever refuses with `LegacyDbPushMissingRemoteError`, a local migration
    sorts *before* the last one the remote has applied. `--include-all` overrides
