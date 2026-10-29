@@ -419,12 +419,16 @@ button does rather than reading out two letters.
 
 ## Dependencies
 
-### Five packages are deliberately held back
+### Four packages are deliberately held back
 
-Everything else tracks the latest release. These five do not, and each has a
+Everything else tracks the latest release. These four do not, and each has a
 reason that outlived the upgrade that produced it. Re-checking them is cheap;
-raising them because they look stale is how the site breaks. All five were
+raising them because they look stale is how the site breaks. All four were
 re-checked on 28 October 2026, and every reason still held.
+
+A fifth, `stripe`, was held on 22 until 29 October 2026, when the checkout
+moved to the API version stripe-node 23 speaks ("Payment methods are listed
+in the code, not left to Stripe's settings").
 
 **`isomorphic-dompurify` stays on 2.x.** Every release after 2.26.0 runs on
 jsdom 27 or later, up to jsdom 30 in 4.x. jsdom loads its dependencies with
@@ -512,19 +516,6 @@ reason to move the day the plugins do.
 Vercel to 24.x, so the types must describe Node 24. Taking `@types/node` 26
 would type APIs the deployed runtime does not have — a build that passes and a
 function that throws.
-
-**`stripe` stays on 22 until the checkout moves to Stripe's new API.**
-stripe-node 23 (30 September 2026) is pinned to API version
-`2026-09-30.endive`, which takes `payment_method_types` out of creating a
-Checkout Session in favour of `allowed_payment_method_types`. The checkout asks
-for card and Revolut Pay through exactly that field (`lib/stripe-checkout.ts`),
-so taking 23 changes how a payment is requested, not just a version number.
-The stand-in (`tests/fake-stripe.ts`) and `tests/checkout-params.spec.ts` would
-have to learn the new field. What Stripe then offers is a question for the
-sandbox, not the stand-in: for instance, whether Revolut Pay comes to depend on
-the account's payment method settings. Make it its own change, tried in the
-sandbox, and move the webhook endpoint's API version in the same step
-(OVERHAUL.md has where both stand).
 
 ### `sharp` no longer needs an override
 
@@ -1989,14 +1980,32 @@ visitor back, so the page usually finds the booking paid already.
 
 ### Payment methods are listed in the code, not left to Stripe's settings
 
-`payment_method_types` names card (with Apple Pay and Link, which Stripe shows
-beside cards) and, for lei and euro, Revolut Pay. Leaving the choice to her
-Stripe Dashboard would let a method whose money arrives days later (SEPA
-debit, a bank transfer) appear at checkout. A seat cannot wait days for an
-answer: the hold would lapse and the seat be sold, and then the money would
-arrive. Both listed methods answer at once. The cost is that a new method
+`allowed_payment_method_types` names card (with Apple Pay and Link, which
+Stripe shows beside cards) and, for lei and euro, Revolut Pay. Leaving the
+choice to her Stripe Dashboard would let a method whose money arrives days
+later (SEPA debit, a bank transfer) appear at checkout. A seat cannot wait days
+for an answer: the hold would lapse and the seat be sold, and then the money
+would arrive. Both listed methods answer at once. The cost is that a new method
 needs a line of code; the benefit is that the booking rules never meet one
 they were not written for.
+
+Until 29 October 2026 the list went in `payment_method_types`. Stripe's API
+version `2026-09-30.endive`, which stripe-node 23 is pinned to, refuses that
+field with a 400 ("The `payment_method_types` parameter is no longer supported
+when creating a Checkout Session"), so the library and the field moved
+together. The new field filters rather than dictates: Stripe keeps from it what
+suits the price. Checked against the sandbox that day, old field against new:
+
+- a session in lei offers card and Revolut Pay under both, and Revolut Pay
+  stays although it is switched off in the Dashboard's payment method
+  settings: the list overrides them, as it did before;
+- one in dollars offers card alone;
+- the payment page itself is the same under both, Apple Pay and Link buttons
+  included.
+
+The stand-in (`tests/fake-stripe.ts`) refuses the old field with Stripe's own
+message, so a change that brings it back fails the suite rather than every
+paid booking.
 
 ### Every session names the database that made it
 

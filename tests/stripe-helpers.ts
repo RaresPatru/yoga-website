@@ -28,6 +28,7 @@ export interface FakeSession {
   metadata: Record<string, string>;
   success_url: string;
   cancel_url: string;
+  allowed_payment_method_types: string[] | null;
   payment_method_types: string[];
   allow_promotion_codes: boolean;
   params: Record<string, unknown>;

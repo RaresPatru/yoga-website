@@ -12,7 +12,9 @@ import Stripe from "stripe";
  * Stripe where the site depends on it:
  *
  *   - Checkout sessions: created, retrieved, listed by payment, expired (an
- *     expired one cannot be paid, a paid one cannot be expired).
+ *     expired one cannot be paid, a paid one cannot be expired). One asked
+ *     for with `payment_method_types` is refused, as API version
+ *     2026-09-30.endive refuses it.
  *   - A payment page at each session's `url`, with "Plătește" and the back
  *     link, which sends the signed webhooks Stripe would and then the visitor
  *     to success_url or cancel_url, with {CHECKOUT_SESSION_ID} written in.
@@ -50,6 +52,8 @@ interface Session {
   total_details: { amount_discount: number; amount_shipping: number; amount_tax: number };
   discounts: { coupon: string | null; promotion_code: string | null }[];
   payment_intent: string | null;
+  /** What the site allowed, and what Stripe offers of it. */
+  allowed_payment_method_types: string[] | null;
   payment_method_types: string[];
   allow_promotion_codes: boolean;
   metadata: Record<string, string>;
@@ -288,7 +292,10 @@ function createSession(params: Json): Session {
     total_details: { amount_discount: 0, amount_shipping: 0, amount_tax: 0 },
     discounts: [],
     payment_intent: null,
-    payment_method_types: (params.payment_method_types as string[]) ?? ["card"],
+    allowed_payment_method_types: (params.allowed_payment_method_types as string[]) ?? null,
+    // Stripe also drops what does not suit the price (Revolut Pay in dollars);
+    // the site never allows that (lib/payment-methods.ts), so all of it stays.
+    payment_method_types: (params.allowed_payment_method_types as string[]) ?? ["card"],
     allow_promotion_codes: params.allow_promotion_codes === "true",
     metadata: (params.metadata as Record<string, string>) ?? {},
     client_reference_id: (params.client_reference_id as string) ?? null,
@@ -422,6 +429,17 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL, pa
   let match: RegExpMatchArray | null;
 
   if (method === "POST" && path === "/v1/checkout/sessions") {
+    if (params.payment_method_types !== undefined) {
+      // Stripe's own answer since 2026-09-30.endive, word for word.
+      return send(res, 400, {
+        error: {
+          type: "invalid_request_error",
+          param: "payment_method_types",
+          message:
+            "The `payment_method_types` parameter is no longer supported when creating a Checkout Session. Payment methods are now managed from your Dashboard settings (https://dashboard.stripe.com/settings/payment_methods). For migration guidance, see https://docs.stripe.com/payments/payment-methods/dynamic-payment-methods.",
+        },
+      });
+    }
     return remember(200, sessionView(createSession(params)));
   }
   if (method === "GET" && path === "/v1/checkout/sessions") {
