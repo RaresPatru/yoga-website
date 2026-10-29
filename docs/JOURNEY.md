@@ -1819,6 +1819,42 @@ lawyer who reads the legal pages; PRIVACY.md says so. The privacy policy
 draft now says what is collected, why and for how long, and PostHog's data
 processing agreement waits to be signed in the business's name.
 
+### After the phases: four remarks from using it
+
+Rares went through the finished site and came back with four things on
+5 October. They were built on 27 October.
+
+**A card that ran off a phone, and the image was not the reason.** Seen on a
+Galaxy S22, in Instagram and in Chrome: the home page's event card hung off
+the right of the screen and could be dragged sideways. The suspicion was the
+photograph, pasted from the web. Measuring the live page at 360px found the
+event's place instead: a Google Maps link pasted into Locație, forty
+characters without a space. A flex item will not shrink below its content
+unless told it may, so the carousel's slide grew to fit the link, to 392px on
+that phone and on a 390px iPhone alike. The events list had the same fault
+and scrolled the whole page 17px. CLAUDE.md had said "`break-words` on
+anything the instructor types", which was wrong: `break-words` breaks a word
+only after the box has been sized to it. The slide is now held to its
+carousel's width, and her text wraps anywhere.
+
+**Discount codes, and a question about how they work.** Rares asked for
+codes that can be edited and deleted, with a warning whenever the people a
+code was emailed to would lose what their email promised. Before building it
+they asked why a code made through Stripe could not simply be changed. The
+answer is that Stripe never changes or deletes a promotion code, because a
+payment that used one has to keep pointing at what was charged. So an edit
+switches the old version off and makes a new one with one running count, and
+a deletion switches the code off and takes it off her list. Knowing that, they
+chose to have it built. Whether a code "was emailed to someone" comes from her
+announcements, since that is how she hands codes out: the site reads each one
+once it is sent and records which codes it carried, in capitals, so that the
+code VARA is not found in every sentence about summer. The warnings ask only
+when someone received the code and could still use it. Registrations shows
+who received a code and who paid with one.
+
+**Two smaller ones.** Tooltips now wait half a second under the pointer, and
+the code form's boxes sit on one line on a computer.
+
 ---
 
 ## Decisions worth defending

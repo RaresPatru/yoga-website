@@ -27,6 +27,7 @@ export type Database = {
                   Row: {
                     "created_at": string,"details": NonNullable<Json>,"event_id": string | null,"id": string,"kind": string,"registration_id": string | null,"seen_at": string | null,"source_id": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "created_at"?: string,"details"?: NonNullable<Json>,"event_id"?: string | null,"id"?: string,"kind": string,"registration_id"?: string | null,"seen_at"?: string | null,"source_id"?: string | null
                   }
@@ -64,6 +65,7 @@ isOneToOne: false
                   Row: {
                     "created_at": string,"email": string | null,"user_id": string
                   }
+                  ComputedFields: never
                   Insert: {
                     "created_at"?: string,"email"?: string | null,"user_id": string
                   }
@@ -73,10 +75,43 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"announcement_codes": {
+                  Row: {
+                    "announcement_id": string,"code": string,"in_en": boolean,"in_ro": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "announcement_id": string,"code": string,"in_en": boolean,"in_ro": boolean
+                  }
+                  Update: {
+                    "announcement_id"?: string,"code"?: string,"in_en"?: boolean,"in_ro"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "announcement_codes_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
+      referencedRelation: "admin_announcements"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "announcement_codes_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
+      referencedRelation: "admin_code_recipients"
+      referencedColumns: ["announcement_id"]
+    },{
+      foreignKeyName: "announcement_codes_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
+      referencedRelation: "announcements"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"announcement_recipients": {
                   Row: {
                     "announcement_id": string,"email": string,"full_name": string,"locale": string,"reason": string | null,"sent_at": string | null,"status": string,"unsubscribe_token_hash": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "announcement_id": string,"email": string,"full_name": string,"locale"?: string,"reason"?: string | null,"sent_at"?: string | null,"status": string,"unsubscribe_token_hash"?: string | null
                   }
@@ -94,19 +129,26 @@ isOneToOne: false
       foreignKeyName: "announcement_recipients_announcement_id_fkey"
       columns: ["announcement_id"]
 isOneToOne: false
+      referencedRelation: "admin_code_recipients"
+      referencedColumns: ["announcement_id"]
+    },{
+      foreignKeyName: "announcement_recipients_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
       referencedRelation: "announcements"
       referencedColumns: ["id"]
     }
                   ]
                 },"announcements": {
                   Row: {
-                    "audience": NonNullable<Json>,"body_en": string | null,"body_ro": string,"created_at": string,"id": string,"send_started_at": string | null,"sent_at": string | null,"status": string,"subject_en": string | null,"subject_ro": string,"updated_at": string
+                    "audience": NonNullable<Json>,"body_en": string | null,"body_ro": string,"codes_checked_at": string | null,"created_at": string,"id": string,"send_started_at": string | null,"sent_at": string | null,"status": string,"subject_en": string | null,"subject_ro": string,"updated_at": string
                   }
+                  ComputedFields: never
                   Insert: {
-                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
+                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"codes_checked_at"?: string | null,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
+                    "audience"?: NonNullable<Json>,"body_en"?: string | null,"body_ro"?: string,"codes_checked_at"?: string | null,"created_at"?: string,"id"?: string,"send_started_at"?: string | null,"sent_at"?: string | null,"status"?: string,"subject_en"?: string | null,"subject_ro"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -115,6 +157,7 @@ isOneToOne: false
                   Row: {
                     "author": string | null,"content_en": string | null,"content_ro": string | null,"cover_url": string | null,"created_at": string,"first_image": string | null,"hidden": boolean,"id": string,"published": boolean,"published_at": string | null,"reading_minutes_en": number | null,"reading_minutes_ro": number | null,"slug": string,"subtitle_en": string | null,"subtitle_ro": string | null,"title_en": string | null,"title_ro": string,"updated_at": string
                   }
+                  ComputedFields: never
                   Insert: {
                     "author"?: string | null,"content_en"?: string | null,"content_ro"?: string | null,"cover_url"?: string | null,"created_at"?: string,"first_image"?: never,"hidden"?: boolean,"id"?: string,"published"?: boolean,"published_at"?: string | null,"reading_minutes_en"?: never,"reading_minutes_ro"?: never,"slug": string,"subtitle_en"?: string | null,"subtitle_ro"?: string | null,"title_en"?: string | null,"title_ro": string,"updated_at"?: string
                   }
@@ -128,6 +171,7 @@ isOneToOne: false
                   Row: {
                     "archived_at": string | null,"created_at": string,"email": string,"id": string,"locale": string,"message": string,"name": string,"read_at": string | null,"search_text": string | null,"starred": boolean,"subject": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "archived_at"?: string | null,"created_at"?: string,"email": string,"id"?: string,"locale"?: string,"message": string,"name": string,"read_at"?: string | null,"search_text"?: never,"starred"?: boolean,"subject"?: string | null
                   }
@@ -141,6 +185,7 @@ isOneToOne: false
                   Row: {
                     "created_at": string,"data": NonNullable<Json>,"event_id": string | null,"id": string,"post_id": string | null,"updated_at": string
                   }
+                  ComputedFields: never
                   Insert: {
                     "created_at"?: string,"data"?: NonNullable<Json>,"event_id"?: string | null,"id"?: string,"post_id"?: string | null,"updated_at"?: string
                   }
@@ -178,6 +223,7 @@ isOneToOne: true
                   Row: {
                     "announcement_id": string | null,"created_at": string,"email": string,"reason": string
                   }
+                  ComputedFields: never
                   Insert: {
                     "announcement_id"?: string | null,"created_at"?: string,"email": string,"reason"?: string
                   }
@@ -195,6 +241,12 @@ isOneToOne: false
       foreignKeyName: "email_suppressions_announcement_id_fkey"
       columns: ["announcement_id"]
 isOneToOne: false
+      referencedRelation: "admin_code_recipients"
+      referencedColumns: ["announcement_id"]
+    },{
+      foreignKeyName: "email_suppressions_announcement_id_fkey"
+      columns: ["announcement_id"]
+isOneToOne: false
       referencedRelation: "announcements"
       referencedColumns: ["id"]
     }
@@ -203,6 +255,7 @@ isOneToOne: false
                   Row: {
                     "body_en": string | null,"body_ro": string,"id": string,"subject_en": string | null,"subject_ro": string,"type": string,"updated_at": string
                   }
+                  ComputedFields: never
                   Insert: {
                     "body_en"?: string | null,"body_ro": string,"id"?: string,"subject_en"?: string | null,"subject_ro": string,"type": string,"updated_at"?: string
                   }
@@ -216,6 +269,7 @@ isOneToOne: false
                   Row: {
                     "created_at": string,"currency": string,"date": string,"description_en": string | null,"description_ro": string | null,"end_date": string | null,"end_time": string | null,"ends_at": string,"id": string,"image_url": string | null,"location": string | null,"map_link": string | null,"max_participants": number | null,"price": number,"published": boolean,"show_in_archive": boolean,"slug": string,"starts_at": string,"time": string | null,"title_en": string | null,"title_ro": string,"updated_at": string,"whatsapp_group_link": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "created_at"?: string,"currency"?: string,"date": string,"description_en"?: string | null,"description_ro"?: string | null,"end_date"?: string | null,"end_time"?: string | null,"ends_at"?: never,"id"?: string,"image_url"?: string | null,"location"?: string | null,"map_link"?: string | null,"max_participants"?: number | null,"price"?: number,"published"?: boolean,"show_in_archive"?: boolean,"slug": string,"starts_at"?: never,"time"?: string | null,"title_en"?: string | null,"title_ro": string,"updated_at"?: string,"whatsapp_group_link"?: string | null
                   }
@@ -229,6 +283,7 @@ isOneToOne: false
                   Row: {
                     "answer_en": string | null,"answer_ro": string,"created_at": string,"id": string,"published": boolean,"question_en": string | null,"question_ro": string,"sort_order": number
                   }
+                  ComputedFields: never
                   Insert: {
                     "answer_en"?: string | null,"answer_ro": string,"created_at"?: string,"id"?: string,"published"?: boolean,"question_en"?: string | null,"question_ro": string,"sort_order"?: number
                   }
@@ -242,6 +297,7 @@ isOneToOne: false
                   Row: {
                     "avatar_url": string | null,"created_at": string | null,"full_name": string | null,"id": string,"phone": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "avatar_url"?: string | null,"created_at"?: string | null,"full_name"?: string | null,"id": string,"phone"?: string | null
                   }
@@ -255,6 +311,7 @@ isOneToOne: false
                   Row: {
                     "admin_note": string | null,"amount_paid": number | null,"cancel_token_hash": string | null,"cancelled_at": string | null,"checkout_started_at": string | null,"created_at": string,"discount_code": string | null,"email": string,"event_id": string,"full_name": string,"id": string,"locale": string,"marketing_consent_at": string | null,"note_consent_at": string | null,"paid_currency": string | null,"participant_note": string | null,"payment_status": string,"phone": string,"refund_failed_at": string | null,"refund_requested_at": string | null,"refunded_at": string | null,"removal_reason": string | null,"removed_at": string | null,"stripe_payment_intent_id": string | null,"stripe_session_id": string | null,"user_id": string | null,"holds_seat": boolean | null
                   }
+                  ComputedFields: "holds_seat"
                   Insert: {
                     "admin_note"?: string | null,"amount_paid"?: number | null,"cancel_token_hash"?: string | null,"cancelled_at"?: string | null,"checkout_started_at"?: string | null,"created_at"?: string,"discount_code"?: string | null,"email": string,"event_id": string,"full_name": string,"id"?: string,"locale"?: string,"marketing_consent_at"?: string | null,"note_consent_at"?: string | null,"paid_currency"?: string | null,"participant_note"?: string | null,"payment_status"?: string,"phone": string,"refund_failed_at"?: string | null,"refund_requested_at"?: string | null,"refunded_at"?: string | null,"removal_reason"?: string | null,"removed_at"?: string | null,"stripe_payment_intent_id"?: string | null,"stripe_session_id"?: string | null,"user_id"?: string | null
                   }
@@ -292,6 +349,7 @@ isOneToOne: false
                   Row: {
                     "created_at": string,"expires_at": string,"id": string,"registration_id": string,"token_hash": string,"used_at": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "created_at"?: string,"expires_at": string,"id"?: string,"registration_id": string,"token_hash": string,"used_at"?: string | null
                   }
@@ -311,6 +369,7 @@ isOneToOne: false
                   Row: {
                     "field_type": string,"key": string,"label_ro": string,"section": string,"sort_order": number,"updated_at": string,"value_en": string | null,"value_ro": string
                   }
+                  ComputedFields: never
                   Insert: {
                     "field_type"?: string,"key": string,"label_ro"?: string,"section"?: string,"sort_order"?: number,"updated_at"?: string,"value_en"?: string | null,"value_ro"?: string
                   }
@@ -324,6 +383,7 @@ isOneToOne: false
                   Row: {
                     "approved": boolean,"author_name": string | null,"consent_at": string | null,"content": string,"created_at": string,"event_date": string | null,"event_id": string | null,"event_title_en": string | null,"event_title_ro": string | null,"hidden": boolean,"home_order": number | null,"id": string,"locale": string | null,"on_home": boolean,"photo_url": string | null,"rating": number | null,"registration_id": string | null,"source": string,"type": string,"user_id": string | null,"video_url": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "approved"?: boolean,"author_name"?: string | null,"consent_at"?: string | null,"content": string,"created_at"?: string,"event_date"?: string | null,"event_id"?: string | null,"event_title_en"?: string | null,"event_title_ro"?: string | null,"hidden"?: boolean,"home_order"?: number | null,"id"?: string,"locale"?: string | null,"on_home"?: boolean,"photo_url"?: string | null,"rating"?: number | null,"registration_id"?: string | null,"source"?: string,"type": string,"user_id"?: string | null,"video_url"?: string | null
                   }
@@ -367,6 +427,7 @@ isOneToOne: false
                   Row: {
                     "admin_note": string | null,"claim_expires_at": string | null,"claimed_at": string | null,"claimed_registration_id": string | null,"created_at": string,"email": string,"event_id": string,"full_name": string,"id": string,"locale": string,"marketing_consent_at": string | null,"note_consent_at": string | null,"notified_at": string | null,"participant_note": string | null,"phone": string,"removal_reason": string | null,"removed_at": string | null
                   }
+                  ComputedFields: never
                   Insert: {
                     "admin_note"?: string | null,"claim_expires_at"?: string | null,"claimed_at"?: string | null,"claimed_registration_id"?: string | null,"created_at"?: string,"email": string,"event_id": string,"full_name": string,"id"?: string,"locale"?: string,"marketing_consent_at"?: string | null,"note_consent_at"?: string | null,"notified_at"?: string | null,"participant_note"?: string | null,"phone": string,"removal_reason"?: string | null,"removed_at"?: string | null
                   }
@@ -404,6 +465,7 @@ isOneToOne: false
                   Row: {
                     "batch_number": number,"created_at": string,"event_id": string,"expires_at": string,"id": string,"spots_opened": number
                   }
+                  ComputedFields: never
                   Insert: {
                     "batch_number": number,"created_at"?: string,"event_id": string,"expires_at": string,"id"?: string,"spots_opened"?: number
                   }
@@ -435,6 +497,7 @@ isOneToOne: false
                   Row: {
                     "created_at": string,"id": string,"is_default": boolean,"label": string,"url": string
                   }
+                  ComputedFields: never
                   Insert: {
                     "created_at"?: string,"id"?: string,"is_default"?: boolean,"label": string,"url": string
                   }
@@ -449,8 +512,17 @@ isOneToOne: false
           Views: {
             "admin_announcements": {
                   Row: {
-                    "audience": Json | null,"body_en": string | null,"body_ro": string | null,"created_at": string | null,"excluded_count": number | null,"failed_count": number | null,"id": string | null,"pending_count": number | null,"send_started_at": string | null,"sent_at": string | null,"sent_count": number | null,"status": string | null,"subject_en": string | null,"subject_ro": string | null,"updated_at": string | null
+                    "audience": NonNullable<Json>,"body_en": string | null,"body_ro": string,"created_at": string,"excluded_count": number | null,"failed_count": number | null,"id": string,"pending_count": number | null,"send_started_at": string | null,"sent_at": string | null,"sent_count": number | null,"status": string,"subject_en": string | null,"subject_ro": string,"updated_at": string
                   }
+                  ComputedFields: never
+                  Relationships: [
+                    
+                  ]
+                },"admin_code_recipients": {
+                  Row: {
+                    "announcement_id": string,"announcement_subject": string,"code": string,"email": string,"full_name": string,"locale": string,"sent_at": string | null
+                  }
+                  ComputedFields: never
                   Relationships: [
                     
                   ]
@@ -458,27 +530,31 @@ isOneToOne: false
                   Row: {
                     "active_events": number | null,"draft_posts": number | null,"pending_payments": number | null,"pending_testimonials": number | null,"refund_requests": number | null,"unread_messages": number | null,"unseen_notices": number | null
                   }
+                  ComputedFields: never
                   Relationships: [
                     
                   ]
                 },"admin_event_overview": {
                   Row: {
-                    "capacity": number | null,"event_id": string | null,"offers_open": number | null,"pending_payments": number | null,"refund_requested": number | null,"refunded": number | null,"status": string | null,"taken": number | null,"waiting": number | null
+                    "capacity": number | null,"event_id": string,"offers_open": number | null,"pending_payments": number | null,"refund_requested": number | null,"refunded": number | null,"status": string | null,"taken": number | null,"waiting": number | null
                   }
+                  ComputedFields: never
                   Relationships: [
                     
                   ]
                 },"admin_participants": {
                   Row: {
-                    "admin_note": string | null,"amount_paid": number | null,"archived": boolean | null,"cancelled_at": string | null,"created_at": string | null,"discount_code": string | null,"email": string | null,"email_key": string | null,"event_currency": string | null,"event_date": string | null,"event_ends_at": string | null,"event_id": string | null,"event_price": number | null,"event_starts_at": string | null,"event_title": string | null,"full_name": string | null,"id": string | null,"kind": string | null,"locale": string | null,"marketing_consent_at": string | null,"note_consent_at": string | null,"offer_expires_at": string | null,"paid_currency": string | null,"paid_online": boolean | null,"participant_note": string | null,"payment_status": string | null,"phone": string | null,"refund_failed_at": string | null,"refund_requested_at": string | null,"refunded_at": string | null,"removal_reason": string | null,"removed_at": string | null,"search_text": string | null,"status": string | null
+                    "admin_note": string | null,"amount_paid": number | null,"archived": boolean | null,"cancelled_at": string | null,"code_received": boolean | null,"code_used": boolean | null,"created_at": string | null,"discount_code": string | null,"email": string | null,"email_key": string | null,"event_currency": string,"event_date": string,"event_ends_at": string,"event_id": string | null,"event_price": number,"event_starts_at": string,"event_title": string,"full_name": string | null,"id": string | null,"kind": string | null,"locale": string | null,"marketing_consent_at": string | null,"note_consent_at": string | null,"offer_expires_at": string | null,"paid_currency": string | null,"paid_online": boolean | null,"participant_note": string | null,"payment_status": string | null,"phone": string | null,"received_codes": (string)[] | null,"refund_failed_at": string | null,"refund_requested_at": string | null,"refunded_at": string | null,"removal_reason": string | null,"removed_at": string | null,"search_text": string | null,"status": string | null
                   }
+                  ComputedFields: never
                   Relationships: [
                     
                   ]
                 },"event_availability": {
                   Row: {
-                    "capacity": number | null,"event_id": string | null,"taken": number | null
+                    "capacity": number | null,"event_id": string,"taken": number | null
                   }
+                  ComputedFields: never
                   Relationships: [
                     
                   ]
@@ -492,7 +568,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
 "holds_seat":
-{ Args: { "r": Database["public"]['Tables']["registrations"]['Row'] }; Returns: boolean
+{ Args: { "r": Omit<Database["public"]['Tables']["registrations"]['Row'], Database["public"]['Tables']["registrations"]['ComputedFields']> }; Returns: boolean
                            },
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean

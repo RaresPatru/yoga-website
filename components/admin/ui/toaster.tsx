@@ -20,6 +20,10 @@ import { cn } from "@/lib/utils";
  * in the corner of the admin panel. They replace `alert()`, which blocks the
  * whole page and looks like a browser fault.
  *
+ * A message can carry one action: a link ("Vezi articolul"), or a button
+ * that runs something and closes the message, such as Undo after a deletion
+ * that asked no question first.
+ *
  * Success and information messages disappear after a few seconds. Errors stay
  * until closed, so there is always time to read what went wrong.
  *
@@ -35,9 +39,13 @@ interface Toast {
   id: number;
   tone: ToastTone;
   message: string;
-  /** An optional link, such as "Vezi articolul" after publishing. */
-  action?: { label: string; href: string; external?: boolean };
+  /** An optional link, such as "Vezi articolul" after publishing, or a button, such as Undo. */
+  action?: ToastAction;
 }
+
+type ToastAction =
+  | { label: string; href: string; external?: boolean }
+  | { label: string; onSelect: () => void };
 
 type ShowToast = (message: string, action?: Toast["action"]) => void;
 
@@ -133,7 +141,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", className)} aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <p className="break-words">{toast.message}</p>
-                  {toast.action && (
+                  {toast.action && "onSelect" in toast.action ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dismiss(toast.id);
+                        (toast.action as { onSelect: () => void }).onSelect();
+                      }}
+                      className="mt-1 inline-flex min-h-8 items-center font-medium text-rose-deep underline-offset-2 hover:underline"
+                    >
+                      {toast.action.label}
+                    </button>
+                  ) : toast.action ? (
                     <Link
                       href={toast.action.href}
                       target={toast.action.external ? "_blank" : undefined}
@@ -142,7 +161,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     >
                       {toast.action.label}
                     </Link>
-                  )}
+                  ) : null}
                 </div>
                 <button
                   type="button"

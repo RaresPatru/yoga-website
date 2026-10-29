@@ -90,11 +90,13 @@ test("a session closes inside its seat's hold, and the code agrees with the data
 test("offers Revolut Pay for lei and euro, cards for everything, and immediate methods only", () => {
   for (const currency of ["RON", "EUR"]) {
     const params = checkoutSessionParams({ event: { ...event, currency }, registrationId: "r1", locale: "ro" });
-    expect(params.payment_method_types).toEqual(["card", "revolut_pay"]);
+    expect(params.allowed_payment_method_types).toEqual(["card", "revolut_pay"]);
+    // Refused outright by Stripe's API since 2026-09-30.endive.
+    expect(params).not.toHaveProperty("payment_method_types");
   }
   for (const currency of ["USD", "GBP"]) {
     const params = checkoutSessionParams({ event: { ...event, currency }, registrationId: "r1", locale: "ro" });
-    expect(params.payment_method_types, `Revolut Pay takes no ${currency} from an account in Romania`).toEqual(["card"]);
+    expect(params.allowed_payment_method_types, `Revolut Pay takes no ${currency} from an account in Romania`).toEqual(["card"]);
   }
   expect([...REVOLUT_PAY_CURRENCIES].sort()).toEqual(["EUR", "RON"]);
 });

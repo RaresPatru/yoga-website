@@ -90,7 +90,7 @@ export function EventCard({
         {phase !== "ended" && (
           // Stripped of markup: the column holds HTML, which the event page
           // renders and which this card would otherwise print.
-          <p className="mb-4 mt-2 line-clamp-2 text-sm text-charcoal-light">
+          <p className="mb-4 mt-2 line-clamp-2 text-sm text-charcoal-light wrap-anywhere">
             {toPlainText(locale === "ro" ? event.description_ro : event.description_en || event.description_ro)}
           </p>
         )}
@@ -105,10 +105,12 @@ export function EventCard({
             </span>
           )}
           {event.location && (
-            <span className="flex items-center gap-1">
+            <span className="flex min-w-0 items-center gap-1">
               {/* Optically matched to the h-3.5 icons beside it: see the
                   note on the same icon in the feature card. */}
-              <MapPin className="h-[16px] w-[16px]" aria-hidden="true" /> {event.location}
+              <MapPin className="h-[16px] w-[16px] shrink-0" aria-hidden="true" />
+              {/* Wraps anywhere, because she types it: see the feature card. */}
+              <span className="min-w-0 wrap-anywhere">{event.location}</span>
             </span>
           )}
         </div>

@@ -423,7 +423,12 @@ button does rather than reading out two letters.
 
 Everything else tracks the latest release. These four do not, and each has a
 reason that outlived the upgrade that produced it. Re-checking them is cheap;
-raising them because they look stale is how the site breaks.
+raising them because they look stale is how the site breaks. All four were
+re-checked on 28 October 2026, and every reason still held.
+
+A fifth, `stripe`, was held on 22 until 29 October 2026, when the checkout
+moved to the API version stripe-node 23 speaks ("Payment methods are listed
+in the code, not left to Stripe's settings").
 
 **`isomorphic-dompurify` stays on 2.x.** Every release after 2.26.0 runs on
 jsdom 27 or later, up to jsdom 30 in 4.x. jsdom loads its dependencies with
@@ -453,6 +458,9 @@ down fails CI first.
 
 This unblocks when either of these happens:
 - jsdom stops depending on an ES-module-only package, or ships CommonJS.
+  On 28 October 2026 isomorphic-dompurify 4.6.0 asked for jsdom 30.1, which
+  now requires `@exodus/bytes` directly as well as through
+  `html-encoding-sniffer` 7.
 - Vercel documents that its functions allow `require()` of an ES module.
 
 Either way, prove it on a preview before trusting it:
@@ -469,13 +477,28 @@ Previews sit behind Vercel Authentication. `vercel curl` gets past it with the
 project's "Protection Bypass for Automation" secret, and creates that secret
 if the project has none.
 
+Holding the wrapper does not hold the sanitizer. DOMPurify, the part that
+decides what HTML survives, has an override of its own (below) and stays on
+the newest 3.x.
+
 **`typescript` is `~6.0.3`, not `^6`.** `@typescript-eslint/parser` declares
 `typescript: ">=4.8.4 <6.1.0"` as a *required* peer. A caret would let
 `npm install` pick 6.1 the day it ships and break the lint chain — and Vercel
 runs `npm install`, not `npm ci`, so it is free to resolve differently from CI.
 The tilde keeps us inside the peer range no matter what is published. TypeScript
-7 is out for the same reason, one major further along. Re-checked 22 September
-2026: typescript-eslint 8.70 still declares `<6.1.0`.
+7 is out for the same reason, one major further along. Re-checked 28 October
+2026: typescript-eslint 8.72.1 still declares `<6.1.0`.
+
+TypeScript 7 has a second blocker, and it is Next.js itself. 7 is the compiler
+rewritten in Go, and its package is mostly a native `tsc`: the main entry
+exports only the version (`lib/version.cjs`), and the programming interface
+moved under `typescript/unstable/*`, in a new shape. `next build` type-checks
+through the old interface: `typescript.createProgram`,
+`createIncrementalProgram` and `getPreEmitDiagnostics`, in
+`next/dist/lib/typescript/runTypeCheck.js` (16.4.3). With TypeScript 7
+installed, the build would fail before lint is ever reached. So two things have
+to happen first: Next.js supporting TypeScript 7, and typescript-eslint widening
+its peer range. Found 28 October 2026.
 
 **`eslint` stays on 9.** ESLint 10 itself would be fine — the config is already
 flat, there are no `eslint-env` comments, and Node 24 satisfies its engines. The
@@ -483,25 +506,67 @@ blocker is Next's lint preset: `eslint-config-next` pulls
 `eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, and
 all three cap their peer at `^9`. Only `eslint-plugin-react-hooks` accepts `^10`.
 This unblocks when those three ship v10 support, which is not ours to do.
-Re-checked 22 September 2026: all three still cap at `^9`.
+Re-checked 28 October 2026: `eslint-plugin-react` 7.37.5 caps at `^9.7`,
+`eslint-plugin-import` 2.32.0 and `eslint-plugin-jsx-a11y` 6.10.2 at `^9`.
+ESLint 9 is now past its support window, and npm says so on every install.
+That costs nothing at runtime, because lint never ships; it is one more
+reason to move the day the plugins do.
 
 **`@types/node` tracks the runtime, not the registry.** `engines.node` pins
 Vercel to 24.x, so the types must describe Node 24. Taking `@types/node` 26
 would type APIs the deployed runtime does not have — a build that passes and a
 function that throws.
 
-### `sharp` is overridden to a floor, and the floor has to move
+### `sharp` no longer needs an override
 
-The override exists to force `sharp` *up* past some libvips CVEs, from whatever
-version Next asked for at the time. That made it a security floor. It then
-silently became a ceiling: Next moved to `sharp: "^0.35.4"` while the override
-still said `0.35.3`, so npm was holding the image optimiser *below* what Next
-declared — the opposite of the intent. When Next raises its own range past the
-floor, raise the override to match rather than leaving it pinned underneath.
+Until 28 October 2026 an override forced Next's copy of `sharp` *up* past
+advisories in the image libraries it bundles (libvips, libheif, librsvg), from
+whatever version Next asked for at the time. That made it a security floor,
+and it once silently became a ceiling: Next moved to `sharp: "^0.35.4"` while
+the override still said `0.35.3`, so npm was holding the image optimiser
+*below* what Next declared. Next 16.4.3 asks
+for `^0.35.5` itself, the release that fixed the last advisory
+(GHSA-wq5f-xc86-pv6w), so the override had nothing left to do and is gone. If
+a new advisory lands before Next raises its range, bring it back as a caret
+range, `"next": { "sharp": "^0.35.6" }`, never an exact version (CLAUDE.md, "An
+exact version in `overrides` freezes that package for good").
 
-The `allowScripts` key moves with it. Those keys are `name@version` on purpose:
+The site's own `sharp` dependency (it re-saves testimonial photos,
+`lib/review-photo.ts`) is an exact version, and its `allowScripts` key names
+that version: raise the two together. Those keys are `name@version` on purpose:
 an approval to run a build script is an approval for *that* build, so it expires
 when the version changes rather than carrying over to code nobody looked at.
+
+### What each override is for, and when it can go
+
+An override is a floor under a package that something else depends on. Each
+one here answers an advisory, and each should go once the packages that depend
+on it ask for a fixed version themselves. As of 28 October 2026:
+
+- **`dompurify` under `isomorphic-dompurify`, `^3.4.17`.** The wrapper is held
+  on 2.26.0 (above), and its own range would accept DOMPurify releases with
+  known bypasses. Raised from 3.4.13 for the advisories of 22 October 2026,
+  GHSA-cg2g-xh64-v4q7 (critical) and GHSA-mrv2-3pqr-j5jr (high). The site uses
+  neither `SAFE_FOR_TEMPLATES` nor `IN_PLACE`, the two options they concern.
+  Goes when the wrapper can move.
+- **`postcss-selector-parser` under `@tailwindcss/typography`, `^6.1.5`.** The
+  typography plugin pins 6.0.10 exactly; GHSA-rj75-hqrm-r3gf (moderate,
+  quadratic parsing) is fixed in 6.1.5. It only ever parses the site's own
+  stylesheet, at build time. `npm audit fix --force` offers to downgrade the
+  plugin to 0.5.4 instead; don't. Goes when the plugin's own pin passes 6.1.5.
+- **`nanoid`, `^3.3.18`.** Reached only through `postcss` since the unused
+  `ics` was removed (29 October 2026); GHSA-2v37-7h3g-55p8 is fixed in 3.3.18.
+  postcss asks for a fixed nanoid itself from 8.5.27, but the `postcss`
+  override below still allows 8.5.26, which asks for `^3.3.17`. Goes when that
+  floor reaches 8.5.27.
+- **`postcss`, `^8.5.26`.** Next pins one exact postcss and
+  `@tailwindcss/postcss` accepts anything from 8.5.16; the override holds both
+  to one current copy, above GHSA-fxqj-rqcc-2cmp (fixed in 8.5.23). Goes when
+  `@tailwindcss/postcss` asks for a fixed version itself.
+
+Removed on 28 October 2026 because the parents caught up: `sharp` (above), and
+`js-yaml`, which ESLint's `@eslint/eslintrc` now requires at `^4.3.2`, past
+GHSA-2883-xcg3-v3hh.
 
 ---
 
@@ -987,6 +1052,33 @@ Three implementation notes:
 `/events` is deliberately left as a plain chronological listing. It is an index,
 not a recommendation, and someone who opens it wants to see the calendar.
 
+### What she types wraps anywhere, and a slide is never wider than its carousel
+
+On 5 October 2026 the live home page's event card ran off the right of a
+Galaxy S22 and could be dragged sideways inside the carousel. The cause was the
+event's place: a Google Maps link pasted into Locație, forty characters without
+a space. A flex item will not shrink below its content unless told it may, so
+the carousel's slide (`flex: 0 0 100%`) grew to fit the link: 392px on a
+360px phone, and 392px on a 390px iPhone too. The events list had the same
+fault one level down: the card's meta row scrolled the whole page 17px.
+
+Two rules, both now in place:
+
+- **A slide is exactly the carousel's width** (`min-width: 0` on
+  `.event-carousel-track > li`), whatever is in it.
+- **Her title, description and place wrap anywhere** on the cards and the
+  event page (`wrap-anywhere`, with `min-w-0` on the flex and grid items
+  around them). `overflow-wrap: anywhere` and not `break-words`: only the
+  first lets the browser count a long string as breakable when it works out
+  how narrow the box can go. `break-words` still sizes the box to the whole
+  string and only then breaks what overflows, which is no help inside a flex
+  row or a carousel slide.
+
+`tests/public-home.spec.ts` and `tests/public-events.spec.ts` seed an event
+whose place is that same link and check the slide, the card and the page at
+360px. The page itself never scrolled on the home page, which is why the
+existing "does not scroll sideways" test passed throughout.
+
 ### One Playwright worker, measured rather than assumed
 
 This went 3 → 2 → 1, each step for the same reason: the suite drives two browser
@@ -1096,6 +1188,18 @@ three declarations under one name. The header wordmark had exactly that: the
 tooltip computed as fully opaque, would have passed any assertion on `opacity`
 or `content`, and painted nothing. It was found by looking at a screenshot, and
 `tests/public-events.spec.ts` now fails if any trigger hides its overflow.
+
+**Half a second under the pointer before it shows** (Rares, 5 October 2026).
+Shown at once, every tooltip a pointer merely passed over flashed up, and
+running along the editor's toolbar lit each label in turn. 500 ms is about
+where the browser's own `title` waits and Chrome's `interest-delay-start`
+defaults. The delay is a `transition-delay` on the hover rule only, so the
+tooltip leaves without waiting, and keyboard focus shows it at once. It holds
+under reduced motion too: a pause is not movement, so there the transition
+has no duration and the same delay. The two places that hide a tooltip when
+its menu opens (the calendar on an event's date, the editor's shortcuts)
+switch the transition off, or the label would sit over the menu for half a
+second.
 
 ### The map is a link, and the calendar is the date
 
@@ -1876,14 +1980,34 @@ visitor back, so the page usually finds the booking paid already.
 
 ### Payment methods are listed in the code, not left to Stripe's settings
 
-`payment_method_types` names card (with Apple Pay and Link, which Stripe shows
-beside cards) and, for lei and euro, Revolut Pay. Leaving the choice to her
-Stripe Dashboard would let a method whose money arrives days later (SEPA
-debit, a bank transfer) appear at checkout. A seat cannot wait days for an
-answer: the hold would lapse and the seat be sold, and then the money would
-arrive. Both listed methods answer at once. The cost is that a new method
+`allowed_payment_method_types` names card (with Apple Pay and Link, which
+Stripe shows beside cards) and, for lei and euro, Revolut Pay. Leaving the
+choice to her Stripe Dashboard would let a method whose money arrives days
+later (SEPA debit, a bank transfer) appear at checkout. A seat cannot wait days
+for an answer: the hold would lapse and the seat be sold, and then the money
+would arrive. Both listed methods answer at once. The cost is that a new method
 needs a line of code; the benefit is that the booking rules never meet one
 they were not written for.
+
+Until 29 October 2026 the list went in `payment_method_types`. Stripe's API
+version `2026-09-30.endive`, the one stripe-node 23.0 is pinned to, refuses
+that field with a 400 ("The `payment_method_types` parameter is no longer
+supported when creating a Checkout Session"), and every endive version after
+it does too, so the library and the field moved together. (23.1 moved to
+`2026-10-28.endive`, a monthly version that only adds; the sandbox answered it
+the same way.) The new field filters rather than dictates: Stripe keeps from it what
+suits the price. Checked against the sandbox that day, old field against new:
+
+- a session in lei offers card and Revolut Pay under both, and Revolut Pay
+  stays although it is switched off in the Dashboard's payment method
+  settings: the list overrides them, as it did before;
+- one in dollars offers card alone;
+- the payment page itself is the same under both, Apple Pay and Link buttons
+  included.
+
+The stand-in (`tests/fake-stripe.ts`) refuses the old field with Stripe's own
+message, so a change that brings it back fails the suite rather than every
+paid booking.
 
 ### Every session names the database that made it
 
@@ -1948,6 +2072,72 @@ page and counts its uses, so the site keeps no table of codes, only, on each
 booking, the amount actually charged and the code used. Every session allows
 codes. A code cannot be tied to one event, because each checkout names its own
 line rather than a stored Stripe product.
+
+### A changed code is a new code, and a deleted one is switched off
+
+Stripe never changes a promotion code once it is made, beyond switching it on
+or off and the notes it keeps on it (metadata), and has no way to delete one:
+a code may have been used, and the record of that payment must keep pointing
+at what was charged. A coupon's amount is just as fixed. Rares asked for
+editing and deleting on 5 October 2026, and on 27 October chose to have them
+built this way once it was explained:
+
+- **Editing** switches the old version off and makes a new one with the
+  word she wants, the same one unless she changed it (lib/stripe-codes.ts).
+  The old goes off first, because Stripe allows one active code per word and
+  because its count then stops moving; if the new one cannot be made, the old
+  one is switched back on and nothing has changed. The notes on the new version
+  carry the line on: the first version's id and date, a version number, how
+  often the earlier versions were used, and since when the word has been the
+  word. Her list shows the highest version of each line, with one running
+  count, and a limit she types is for all uses, so the new version is allowed
+  what is left of it. A limit at or below the uses already made is refused.
+  A new coupon is made when the amount or the word changes; the same one
+  serves when only the last day or the uses do.
+- **Deleting** switches the code off and notes when, which takes it off her
+  list. Stripe keeps it, off, as the record. Undo (in the message, for a few
+  seconds) takes the note away and switches it back on if it was on.
+- **Switching on** a code past its last day or out of uses is refused with a
+  pointer to Edit: Stripe would refuse it anyway, and an edit with a new day or
+  more uses is the way to bring it back.
+
+The cost: anyone looking in Stripe's own Dashboard sees every version, each
+replaced one switched off. Someone paying at the very second of an edit, with
+the old version already applied, may have to type the code again.
+
+### Who received a code is read from her announcements
+
+She hands codes out inside her announcements, so whether a code "was sent to
+someone" is a question about those (Rares chose this on 27 October 2026 over a
+separate "email this code" action, which would have spent emails from her
+allowance). When an announcement has gone out, the server records which of
+her codes its subject and text carried, and in which language's version
+(`announcement_codes`, from lib/announcement-codes.ts); a code made later is
+never counted as sent by an earlier announcement. A sent announcement not yet
+looked at (one from before this existed, or sent while Stripe could not be
+reached) is looked at when the codes screen next opens.
+
+**A code is recognised as a whole word, in capitals,** as the codes screen
+shows it, its copy button copies it and the editor's Cod menu inserts it.
+Capitals, because a code is often an ordinary word: VARA would otherwise be
+found in every announcement that says "vara", and YOGA in all of them. Only
+the text a reader sees is searched, so a code inside a link's address does
+not count.
+
+**When the screen asks first** (Rares, 5 and 27 October 2026): only when
+someone received the code and can still use it now (switched on, before its
+last day, uses left). Then deleting it, switching it off, or changing its
+word, amount or last day asks, and lists who received it. Changing only the
+number of uses never asks, and a code nobody can use any more asks nothing.
+Making or renaming a code with a word that was emailed before asks too,
+whatever became of that code, because the people who received it could use
+the new one. Counts start from when the word was given, so someone who
+received the word a code had before an edit is not counted for the new word.
+
+The same record gives Registrations its two extra choices in the status menu,
+"Cod primit" and "Cod folosit", and the participant panel its list of codes.
+They sit beside a booking's status rather than replacing it, because someone
+can have paid and used a code.
 
 ### The test suite talks to a stand-in for Stripe
 

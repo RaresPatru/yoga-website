@@ -143,6 +143,9 @@ function posthog(): Promise<PostHog | null> {
       capture_heatmaps: false,
       capture_exceptions: false,
       capture_performance: false,
+      // On by default since posthog-js 1.438: AI agents' calls to tools a page
+      // offers them. The site offers none, and it stays off like the rest.
+      capture_webmcp: false,
       disable_session_recording: true,
       disable_surveys: true,
       disable_product_tours: true,

@@ -3,24 +3,26 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Download, Megaphone, Search, Trash2, X } from "lucide-react";
+import { Download, Megaphone, Search, TicketPercent, Trash2, X } from "lucide-react";
 import { adminErrorKey, toAdminError } from "@/lib/admin/db";
 import { useAdminData } from "@/lib/admin/use-admin-data";
 import { useSelection } from "@/lib/admin/use-selection";
 import { countSentence } from "@/lib/admin/plural";
 import { slugify } from "@/lib/admin/blog";
 import {
+  CODE_FILTERS,
   PER_PAGE,
   STATUS_FILTERS,
   allParticipants,
+  isStatusFilter,
   deleteParticipants,
   eventChoices,
   listParticipants,
   participantsById,
   type Participant,
   type ParticipantFilters,
-  type ParticipantStatus,
   type ParticipantTab,
+  type StatusFilter,
 } from "@/lib/admin/participants";
 import { downloadBlob, toCsv, toXlsx, type ExportColumn, type ExportFormat } from "@/lib/admin/export";
 import { createAnnouncement, loadAnnouncement, setAnnouncementAudience } from "@/lib/admin/emails";
@@ -72,9 +74,8 @@ function Participants() {
   const confirm = useConfirm();
 
   const tab: ParticipantTab = params.get("tab") === "archive" ? "archive" : "active";
-  const status = (STATUS_FILTERS as readonly string[]).includes(params.get("status") ?? "")
-    ? (params.get("status") as ParticipantStatus)
-    : null;
+  const requestedStatus = params.get("status");
+  const status: StatusFilter | null = isStatusFilter(requestedStatus) ? requestedStatus : null;
   const eventId = params.get("event");
   const query = params.get("q") ?? "";
   const requestedPage = Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
@@ -136,7 +137,7 @@ function Participants() {
   const pageSelected = pageIds.filter((id) => selection.ids.has(id)).length;
   const selectedCount = selection.allMatching ? total : selection.ids.size;
   const filtered = Boolean(status || eventId || query);
-  const statusLabel = (s: ParticipantStatus) => t(`admin.participants.status_${s}`);
+  const statusLabel = (s: StatusFilter) => t(`admin.participants.status_${s}`);
 
   /** Everyone the next action applies to: the ticked rows, or all who match. */
   const chosen = async (): Promise<Participant[]> =>
@@ -156,6 +157,8 @@ function Participants() {
       value: (p) => t(p.marketingConsentAt ? "admin.participants.yes" : "admin.participants.no"),
       width: 13,
     },
+    { header: t("admin.participants.col_code_used"), value: (p) => p.discountCode ?? "", width: 14 },
+    { header: t("admin.participants.col_codes_received"), value: (p) => p.receivedCodes.join(", "), width: 22 },
   ];
 
   const exportAs = async (format: ExportFormat, fromSelection: boolean) => {
@@ -328,6 +331,13 @@ function Participants() {
                     {statusLabel(value)}
                   </option>
                 ))}
+                <optgroup label={t("admin.participants.codes_group")}>
+                  {CODE_FILTERS.map((value) => (
+                    <option key={value} value={value}>
+                      {statusLabel(value)}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </label>
             <label className="min-w-0">
@@ -539,6 +549,19 @@ function ParticipantRow({
         <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
           <StatusChip status={person.status} label={statusLabel} />
           <span className="text-xs text-charcoal-light">{when}</span>
+          {/* Codes beside the status, not instead of it: someone can have
+              paid and used a code. An outline, so the status stays the
+              first thing read. */}
+          {(person.discountCode || person.receivedCodes.length > 0) && (
+            <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-sage/40 px-2 py-0.5 text-xs text-charcoal-light">
+              <TicketPercent className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 break-words">
+                {person.discountCode
+                  ? t("admin.participants.chip_used").replace("{code}", person.discountCode)
+                  : t("admin.participants.chip_received").replace("{codes}", person.receivedCodes.join(", "))}
+              </span>
+            </span>
+          )}
         </div>
       </div>
     </li>

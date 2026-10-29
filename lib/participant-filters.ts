@@ -33,11 +33,29 @@ export const STATUS_FILTERS: readonly ParticipantStatus[] = [
   "abandoned",
 ];
 
+/**
+ * Two more choices in the status menu, about discount codes rather than the
+ * booking (Rares, 5 October 2026): people an announcement carried a code to,
+ * and bookings paid with one. Not statuses of a row — someone can have paid
+ * and used a code — so they sit beside the status rather than replacing it,
+ * in the menu and on the row.
+ */
+export type CodeFilter = "code_received" | "code_used";
+
+export const CODE_FILTERS: readonly CodeFilter[] = ["code_received", "code_used"];
+
+/** What the status menu can choose: a status, or one of the code filters. */
+export type StatusFilter = ParticipantStatus | CodeFilter;
+
+export const isStatusFilter = (value: unknown): value is StatusFilter =>
+  typeof value === "string" &&
+  ((STATUS_FILTERS as readonly string[]).includes(value) || (CODE_FILTERS as readonly string[]).includes(value));
+
 export type ParticipantTab = "active" | "archive";
 
 export interface ParticipantFilters {
   tab: ParticipantTab;
-  status: ParticipantStatus | null;
+  status: StatusFilter | null;
   eventId: string | null;
   q: string;
 }
@@ -67,7 +85,8 @@ export type Filterable<Q> = Q & {
 export function narrowed<Q>(query: Filterable<Q>, f: ParticipantFilters, tab: ParticipantTab | null): Filterable<Q> {
   let q = query;
   if (tab) q = q.eq("archived", tab === "archive");
-  if (f.status) q = q.eq("status", f.status);
+  if (f.status === "code_received" || f.status === "code_used") q = q.eq(f.status, true);
+  else if (f.status) q = q.eq("status", f.status);
   if (f.eventId) q = q.eq("event_id", f.eventId);
   const pattern = searchPattern(f.q);
   if (pattern) q = q.ilike("search_text", pattern);
@@ -79,9 +98,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Filters read back from stored JSON, with anything unexpected dropped. */
 export function parseFilters(value: unknown): ParticipantFilters {
   const raw = (value ?? {}) as Record<string, unknown>;
-  const status = typeof raw.status === "string" && (STATUS_FILTERS as readonly string[]).includes(raw.status)
-    ? (raw.status as ParticipantStatus)
-    : null;
+  const status = isStatusFilter(raw.status) ? raw.status : null;
   return {
     tab: raw.tab === "archive" ? "archive" : "active",
     status,

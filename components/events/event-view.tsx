@@ -146,13 +146,18 @@ export function EventView({
                 // by it: WCAG 2.5.3 wants the visible label in the accessible
                 // name, and somebody listening still needs to hear where it is.
                 aria-label={`${data.location} — ${t("vezi pe hartă", "view on the map")}`}
-                className={META_LINK}
+                // `min-w-0` and the wrapping inner span: she types the
+                // address, and a pasted map link has no space to break at
+                // (see the note in components/events/event-feature-card.tsx).
+                className={`${META_LINK} min-w-0`}
               >
-                <MapPin className="h-4 w-4" aria-hidden="true" /> {data.location}
+                <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 wrap-anywhere">{data.location}</span>
               </a>
             ) : (
-              <span className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" aria-hidden="true" /> {data.location}
+              <span className="flex min-w-0 items-center gap-2">
+                <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 wrap-anywhere">{data.location}</span>
               </span>
             ))}
           {/* NULL or 0 capacity reads as sold out; the fraction only ever runs

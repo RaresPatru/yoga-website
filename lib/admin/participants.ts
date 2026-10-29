@@ -26,11 +26,15 @@ import {
 
 // The filters live in lib/participant-filters.ts, which the server shares.
 export {
+  CODE_FILTERS,
   STATUS_FILTERS,
+  isStatusFilter,
   searchPattern,
+  type CodeFilter,
   type ParticipantFilters,
   type ParticipantStatus,
   type ParticipantTab,
+  type StatusFilter,
 } from "@/lib/participant-filters";
 
 export const PER_PAGE = 50;
@@ -69,6 +73,8 @@ export interface Participant {
   amountPaid: number | null;
   paidCurrency: string | null;
   discountCode: string | null;
+  /** Every discount code an announcement carried to their address, alphabetical. */
+  receivedCodes: string[];
   /** Paid through Stripe, so a refund can go back through Stripe. */
   paidOnline: boolean;
   eventPrice: number;
@@ -105,6 +111,7 @@ function participantOf(row: Partial<ViewRow>): Participant {
     amountPaid: row.amount_paid ?? null,
     paidCurrency: row.paid_currency ?? null,
     discountCode: row.discount_code ?? null,
+    receivedCodes: row.received_codes ?? [],
     paidOnline: Boolean(row.paid_online),
     eventPrice: row.event_price ?? 0,
     eventCurrency: row.event_currency ?? "RON",
@@ -113,7 +120,7 @@ function participantOf(row: Partial<ViewRow>): Participant {
 
 /** The columns the list and the export need; the notes stay in the panel. */
 const LIST_COLUMNS =
-  "kind, id, event_id, full_name, email, phone, locale, created_at, status, archived, event_title, event_date, event_starts_at, event_ends_at, offer_expires_at, refund_requested_at, removed_at, marketing_consent_at";
+  "kind, id, event_id, full_name, email, phone, locale, created_at, status, archived, event_title, event_date, event_starts_at, event_ends_at, offer_expires_at, refund_requested_at, removed_at, marketing_consent_at, discount_code, received_codes";
 
 export interface ParticipantPage {
   rows: Participant[];

@@ -1640,9 +1640,17 @@ retry; that page never loads the statistics.
     public business name, which shows on the payment page ("Yoga sandbox"
     now), turn on Stripe's receipt and refund emails if she wants them, and
     give the live webhook endpoint the same four events.
-  - the endpoint is on API version 2026-06-24 and the code's library on
-    2026-08-26. Fields the site reads are the same in both; moving the
-    endpoint up is tidy, not urgent.
+  - ~~move the webhook endpoint to the library's API version~~ done by Rares
+    on 29 October 2026. An endpoint's version cannot be edited ("This field
+    cannot be changed"), so Stripe moves one by creating another: the
+    sandbox's endpoint is now `production-endive` (Workbench → Webhooks; API
+    version `2026-09-30.endive`, "Snapshot" payloads, the same address and
+    four events), its signing secret replaced `STRIPE_WEBHOOK_SECRET` in
+    Vercel (Production and Preview) with a redeploy, and the old
+    `2026-06-24.dahlia` one was deleted. A payment event resent to it
+    reached the live site and was answered 200. The live endpoint, when she
+    creates it, should start on the version the code's library is pinned
+    to.
 - **The cancellation rules with her:** 48 hours, full refunds only, and her
   approval after that are Rares' assumptions of 3 October. They live in
   `lib/cancel-rules.ts` and in the terms draft.
@@ -1689,6 +1697,24 @@ Noted so far:
   Phase 7 emails stay for now. Then: count what one booking sends from start
   to finish, and check on a preview what an announcement larger than a day's
   allowance does.
+
+Rares' remarks of 5 October, built 27 October (DECISIONS.md has the
+reasoning for each):
+
+- [x] **Tooltips wait half a second** under the pointer, and leave at once.
+- [x] **Discount codes can be edited, deleted (with Undo) and copied.** Stripe
+  changes and deletes nothing, so an edit makes a new version and a deletion
+  switches the code off. Codes her announcements carried are recorded, and
+  deleting, switching off or changing one that someone received and can
+  still use asks first and lists who; so does reusing a word that was
+  emailed before. Registrations gained "Cod primit" and "Cod folosit", and
+  the announcement editor a Cod button. Its migration,
+  `20261027000000_discount_code_tracking.sql`, reached production on
+  27 October, ahead of the code: the live site's code reads nothing it adds,
+  and the code reads it from the moment it lands.
+- [x] **The code form's boxes line up** on a computer.
+- [x] **A long place no longer pushes an event card off a phone.** Her test
+  event's place was a map link; the carousel slide grew to fit it.
 
 ---
 

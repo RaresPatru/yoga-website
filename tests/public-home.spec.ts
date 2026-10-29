@@ -155,6 +155,14 @@ test.describe("home page (RO)", () => {
   });
 });
 
+/** How far the drawer panel's right edge still is from the right of the screen. */
+const gapFromEdge = (page: import("@playwright/test").Page) =>
+  page.evaluate(() => {
+    const sheet = document.querySelector(".nav-drawer-sheet");
+    if (!sheet) return -1;
+    return Math.round(window.innerWidth - sheet.getBoundingClientRect().right);
+  });
+
 test.describe("home page language switching", () => {
   // Below `lg` the switcher sits inside the drawer, so it has to be opened
   // first. Running this on both viewports is worth the extra few lines: an
@@ -189,7 +197,17 @@ test.describe("home page language switching", () => {
     // The switcher is scoped to #mobile-menu because the header still holds a
     // second, display:none copy; an unscoped locator matches that one first and
     // then times out clicking something invisible.
+    //
+    // And it is pressed only once the panel has arrived, as in the drawer's own
+    // tests below. Reached for straight away, it was still off-screen and not
+    // yet moving, so Playwright scrolled it into view itself, and that scroll
+    // reads to the drawer as the panel leaving: it shut. WebKit 27.2
+    // (Playwright 1.64) starts the slide a few frames later than 26.6, and
+    // the test then failed five times in six. A finger cannot hit a button that
+    // is not on screen yet; every tap on one that was switched the language.
+    await page.locator("next-route-announcer").waitFor({ state: "attached" });
     await page.locator('button[aria-controls="mobile-menu"]').click();
+    await expect.poll(() => gapFromEdge(page)).toBe(0);
     await page.locator("#mobile-menu").getByRole("button", { name: label }).click();
   };
 
@@ -269,14 +287,6 @@ test.describe("home page navigation drawer", () => {
   const drawer = (page: import("@playwright/test").Page) => page.locator("#mobile-menu");
   const trigger = (page: import("@playwright/test").Page) =>
     page.locator('button[aria-controls="mobile-menu"]');
-
-  /** How far the panel's right edge still is from the right of the screen. */
-  const gapFromEdge = (page: import("@playwright/test").Page) =>
-    page.evaluate(() => {
-      const sheet = document.querySelector(".nav-drawer-sheet");
-      if (!sheet) return -1;
-      return Math.round(window.innerWidth - sheet.getBoundingClientRect().right);
-    });
 
   // The panel slides, so "visible" arrives well before "arrived". Every test
   // here waits for it to be flush with the edge before touching anything.
@@ -1508,5 +1518,63 @@ test.describe("home page events carousel", () => {
         document.documentElement.scrollWidth > document.documentElement.clientWidth + 1
     );
     expect(overflows).toBe(false);
+  });
+
+  /**
+   * She pasted a map link as an event's place, and on a 360px Android phone
+   * the card ran off the right of the screen and could be dragged sideways
+   * inside the carousel (Rares, 5 October 2026). A link has no space to break
+   * at, a flex item will not shrink below its content unless told it may, so
+   * the slide grew to fit the link: 392px on that phone and on a 390px
+   * iPhone alike. The page itself never scrolled, so the test above passed
+   * throughout.
+   *
+   * Asserted as the invariant rather than the one card: every slide exactly
+   * as wide as the carousel's window, nothing in this card past its edge, and
+   * the link on more than one line.
+   */
+  test("a place with no spaces in it wraps, and never widens the card", async ({ page }) => {
+    const link = "https://maps.app.goo.gl/hWYCG64kYRnPuv9z5";
+    const event = await seedEvent({
+      date: inDays(1),
+      location: link,
+      title_ro: "Retragere-de-yoga-cu-drumeție-și-scris-creativ",
+    });
+    try {
+      for (const width of [360, 390]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto("/ro");
+        await expect(slides(page).first()).toBeVisible();
+
+        const fit = await track(page).evaluate(
+          (el, { slug, place }) => {
+            const style = getComputedStyle(el);
+            const port = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+            const slide = [...el.children].find((li) => li.querySelector(`a[href$="/events/${slug}"]`));
+            if (!slide) return null;
+            const edge = slide.querySelector("a")!.getBoundingClientRect().right;
+            const pin = [...slide.querySelectorAll("span")].reverse().find((span) => span.textContent?.trim() === place);
+            return {
+              port,
+              widths: [...el.children].map((li) => li.getBoundingClientRect().width),
+              past: [...slide.querySelectorAll("*")]
+                .filter((child) => child.getBoundingClientRect().right > edge + 0.5)
+                .map((child) => `${child.tagName.toLowerCase()} "${(child.textContent ?? "").trim().slice(0, 30)}"`),
+              lines: pin ? Math.round(pin.getBoundingClientRect().height / parseFloat(getComputedStyle(pin).lineHeight)) : 0,
+            };
+          },
+          { slug: event.slug, place: link }
+        );
+
+        expect(fit, `the card is not in the carousel at ${width}px`).not.toBeNull();
+        for (const slideWidth of fit!.widths) {
+          expect(Math.abs(slideWidth - fit!.port), `a slide is wider than the carousel at ${width}px`).toBeLessThanOrEqual(1);
+        }
+        expect(fit!.past, `these reach past the card's edge at ${width}px`).toEqual([]);
+        expect(fit!.lines, `the link did not wrap at ${width}px`).toBeGreaterThan(1);
+      }
+    } finally {
+      await deleteEventBySlug(event.slug);
+    }
   });
 });

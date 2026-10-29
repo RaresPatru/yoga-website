@@ -149,8 +149,8 @@ export async function EventFeatureCard({
               </div>
             </PhotoTransition>
           )}
-          <div className={`text-center ${event.image_url ? "md:col-span-3" : "md:col-span-5"}`}>
-            <h3 className="font-serif text-2xl text-charcoal md:text-3xl">{title}</h3>
+          <div className={`min-w-0 text-center ${event.image_url ? "md:col-span-3" : "md:col-span-5"}`}>
+            <h3 className="font-serif text-2xl text-charcoal wrap-anywhere md:text-3xl">{title}</h3>
 
             {/*
               Three lines and then it stops.
@@ -166,7 +166,7 @@ export async function EventFeatureCard({
               be expressed as a height. The ellipsis is the browser's.
             */}
             {description && (
-              <p className="mt-3 line-clamp-3 text-charcoal-light">{description}</p>
+              <p className="mt-3 line-clamp-3 text-charcoal-light wrap-anywhere">{description}</p>
             )}
 
             {/*
@@ -199,8 +199,18 @@ export async function EventFeatureCard({
                   </span>
                 )}
               </div>
+              {/*
+                Her words, so they wrap anywhere. She once pasted a map link
+                here — forty characters without a space — and on a 360px
+                phone the slide grew to fit it and the card ran off the
+                screen (5 October 2026). `overflow-wrap: anywhere` rather
+                than `break-words` because only the first lets the browser
+                count the string as breakable when it works out how narrow
+                the text can go; `break-words` still sizes the box to the
+                whole string and only then breaks what overflows.
+              */}
               {event.location && (
-                <span className="flex items-center gap-2">
+                <span className="flex min-w-0 items-center gap-2">
                   {/*
                     A shade larger than the calendar and the clock above it,
                     which are `h-4`. Not an inconsistency: those two fill their
@@ -209,8 +219,8 @@ export async function EventFeatureCard({
                     carries visibly less ink and reads as smaller. Two pixels
                     evens out what the eye sees rather than what the numbers say.
                   */}
-                  <MapPin className="h-[18px] w-[18px]" aria-hidden="true" />
-                  {event.location}
+                  <MapPin className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 wrap-anywhere">{event.location}</span>
                 </span>
               )}
             </div>

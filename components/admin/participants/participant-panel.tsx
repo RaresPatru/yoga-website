@@ -19,6 +19,7 @@ import {
   type ParticipantDetails,
 } from "@/lib/admin/participant-actions";
 import { announcementVerdict, stopAnnouncements } from "@/lib/admin/emails";
+import { codesReceivedBy } from "@/lib/admin/promotion-codes";
 import { formatPaid, formatPrice } from "@/lib/money";
 import { useAdminLocale } from "@/components/admin/locale-provider";
 import { useConfirm } from "@/components/admin/ui/confirm-dialog";
@@ -71,6 +72,12 @@ export function ParticipantPanel({
   const email = person?.email ?? "";
   const { data: verdict, reload: reloadVerdict } = useAdminData(
     () => (email ? announcementVerdict(email) : Promise.resolve(undefined)),
+    email
+  );
+
+  // The discount codes her announcements carried to this address.
+  const { data: codesReceived } = useAdminData(
+    () => (email ? codesReceivedBy(email) : Promise.resolve([])),
     email
   );
 
@@ -421,6 +428,47 @@ export function ParticipantPanel({
                 </button>
               )}
             </section>
+
+            {/*
+              Codes they paid with, on any of their bookings, and codes her
+              announcements carried to them (Rares, 5 October 2026). Only
+              when there is one: an empty heading on every person would be
+              noise.
+            */}
+            {(() => {
+              const used = data.history.filter((h) => h.discountCode);
+              const received = codesReceived ?? [];
+              if (!used.length && !received.length) return null;
+              return (
+                <section className={section} aria-labelledby={`${titleId}-codes`}>
+                  <h3 id={`${titleId}-codes`} className={heading}>
+                    {t("admin.participant.codes_title")}
+                  </h3>
+                  <ul className="space-y-1.5 text-sm text-charcoal">
+                    {used.map((h) => (
+                      <li key={`used-${h.id}`} className="break-words">
+                        {t("admin.participant.code_used")
+                          .replace("{code}", h.discountCode ?? "")
+                          .replace("{event}", `${h.eventTitle}, ${eventDay(h.eventDate, lang)}`)}
+                      </li>
+                    ))}
+                    {received.map((r) => (
+                      <li key={`received-${r.code}-${r.announcementId}`}>
+                        <Link
+                          href={`/admin/emails/announcements/${r.announcementId}`}
+                          className="break-words underline decoration-sage/50 underline-offset-2 hover:text-rose-deep"
+                        >
+                          {t("admin.participant.code_received")
+                            .replace("{code}", r.code)
+                            .replace("{subject}", r.subject || t("admin.announce.untitled"))
+                            .replace("{date}", shortDay(r.sentAt, lang))}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })()}
 
             {person.participantNote && (
               <section className={section} aria-labelledby={`${titleId}-their-note`}>

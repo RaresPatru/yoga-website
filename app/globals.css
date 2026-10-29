@@ -468,6 +468,8 @@ body {
    */
   [data-tooltip] {
     position: relative;
+    /* How long a pointer rests on it before its label shows (see below). */
+    --tooltip-delay: 500ms;
   }
 
   [data-tooltip]::after {
@@ -541,10 +543,30 @@ body {
    * Pointers only. Without this the tooltip appears on the tap that also
    * follows the link, so it flashes up as the page changes under it — which is
    * noise, not information.
+   *
+   * After a pause, and gone without one. Shown the instant the pointer
+   * arrived, a tooltip flashed up over everything the pointer only passed
+   * on its way somewhere else: running the mouse along the editor's toolbar
+   * lit each button's label in turn. Half a second is about where the browser's
+   * own `title` tooltip waits, and where Chrome's `interest-delay-start`
+   * defaults, so it is what a hovering hand already expects. The delay is
+   * on the hover rule alone, so leaving uses the rule below and fades it
+   * straight away, and a keyboard user who tabs to a control gets its label
+   * at once: they arrived on purpose.
+   *
+   * A delay is not motion, so it holds for anyone who asked for less of it:
+   * the transition there has no duration and the same wait.
    */
   @media (hover: hover) {
     [data-tooltip]:hover::after {
       opacity: 1;
+      transition: opacity 0s linear var(--tooltip-delay);
+    }
+  }
+
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    [data-tooltip]:hover::after {
+      transition: opacity 150ms ease var(--tooltip-delay);
     }
   }
 
@@ -565,6 +587,9 @@ body {
    */
   .event-calendar[open] > summary::after {
     opacity: 0;
+    /* At once: the pointer is still on the date, so the hover rule's delay
+       would otherwise leave the label over the menu for half a second. */
+    transition: none;
   }
 
   /*
@@ -708,6 +733,20 @@ body {
    */
   .event-carousel-track > li {
     flex: 0 0 100%;
+    /*
+     * Never wider than that, whatever is inside.
+     *
+     * A flex item will not shrink below its content's narrowest width unless
+     * told it may, so `100%` was a floor rather than a width: when she
+     * pasted a forty-character map link as an event's place, the slide grew
+     * to fit it — 392px on a 360px phone, and still 392px on a 390px iPhone
+     * — and the card could be dragged sideways inside the carousel, its
+     * right edge off the screen (Rares, on a Galaxy S22, 5 October 2026).
+     * The card's text now wraps anywhere as well
+     * (components/events/event-feature-card.tsx); this is the rule that
+     * holds even if something else in a card one day cannot.
+     */
+    min-width: 0;
     scroll-snap-align: start;
   }
 
@@ -867,6 +906,7 @@ body {
      the same rule as the calendar menu above. */
   .editor-shortcuts-trigger:has(+ .editor-shortcuts:popover-open)::after {
     opacity: 0;
+    transition: none;
   }
 
   /*

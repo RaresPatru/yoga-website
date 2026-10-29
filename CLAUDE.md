@@ -38,7 +38,9 @@ wrong.
   `tests/rpc-exposure.spec.ts` enumerates everything the publishable key can
   reach and fails on anything unlisted; `docs/DATABASE.md` has the template.
 
-  **Migrations reach production with `npx supabase db push`.** The remote has
+  **Migrations reach production with `npx supabase db push --linked`.** Name
+  the target: the CLI's next major version sends a bare `db push` to the
+  local database, and 2.122 already warns about it. The remote has
   kept a migration ledger since 11 September 2026, when the migrations existing
   at the time were adopted with `migration repair --status applied` after
   diffing both schemas to prove they matched. `npx supabase migration list
@@ -127,7 +129,7 @@ identical in both shells — only environment variables and deleting files diffe
 ```powershell
 npx supabase start                # local database (needs Docker Desktop)
 npx supabase db reset --local     # replay every migration + seed.sql. LOCAL — never --linked
-npx supabase db push              # send new migrations to production
+npx supabase db push --linked     # send new migrations to production
 npm run dev                       # local database — prints which one on startup
 npm run dev:prod                  # the live database; everything you do there is live
 npm run mock:images               # rebuild /public/mock from ./mock-images
@@ -223,8 +225,11 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   below their content's minimum — and an `<input>` claims about 20 characters.
   The overflow therefore does not stay local: the column grows, then the grid,
   then the document, and the whole page scrolls sideways on a phone. Put
-  `min-w-0` on flex/grid children that hold text or inputs, and `break-words` on
-  anything the instructor types.
+  `min-w-0` on flex/grid children that hold text or inputs, and `wrap-anywhere`
+  on anything the instructor types. `break-words` is not enough there: it
+  breaks a long word only after the box has been sized to it, so a map link
+  she pasted as an event's place still widened its flex row and the home
+  page's carousel slide, and the card ran off a 360px phone (5 October 2026).
 - **Public pages must not use `lib/supabase/server.ts`.** It reads the visitor's
   cookies, so a visitor carrying an expired session makes Supabase refresh it
   mid-render — which writes a cookie, which a Server Component may not do. The
@@ -352,6 +357,12 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   (`ON DELETE SET NULL`). Code that must find who claimed a booking reads them
   before the delete; reading after it found nobody, which left anyone whose
   claimed checkout expired off the waiting list for good until 3 October 2026.
+- **Stripe never changes or deletes a promotion code.** An edit on Coduri de
+  reducere switches the old version off and makes a new one; a deletion
+  switches the code off and notes it. Notes on each code (metadata, `META` in
+  `lib/promotion-codes.ts`) tie the versions into one code with one count, so
+  read her codes through `currentCodes()` (`lib/stripe-codes.ts`), never
+  straight from Stripe's list, or every version shows.
 - **Every Stripe session carries `metadata.db`**, the database that made it,
   because the sandbox is one account and Stripe sends every copy of the site's
   events to every endpoint. The webhook ignores sessions from another
@@ -511,6 +522,14 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   the `mcr.microsoft.com/playwright:v<version>-noble` image with
   `baseURL: "http://host.docker.internal:3100"`. Log what the page actually did
   before trusting a theory about why it failed.
+- **Never press anything inside the navigation drawer before it has
+  arrived.** Wait for `gapFromEdge` to reach 0, as `tests/public-home.spec.ts`
+  does. A control reached for mid-slide is off-screen, and Playwright scrolls
+  it into view itself; the drawer reads that scroll as the panel leaving, and
+  shuts. The WebKit in Playwright 1.64 (27.2) starts the slide a few frames
+  later than 26.6 did, and the language test that skipped the wait then failed
+  five times in six (28 October 2026). A finger tap on the visible button
+  always worked.
 - **Escape never leaves the TipTap editor.** ProseMirror cancels every Escape
   pressed inside it (`captureKeyDown` in prosemirror-view), and a cancelled
   Escape is not a close request, so a popover opened while the caret stays in

@@ -81,6 +81,14 @@ export function checkoutBaseUrl(): string {
  * paid. Cards (with Apple Pay and Link, which Stripe shows beside them) and
  * Revolut Pay both answer at once.
  *
+ * The list goes in `allowed_payment_method_types`. API version
+ * 2026-09-30.endive refuses the older `payment_method_types` with a 400, so
+ * every paid booking would fail on it. Stripe keeps from the list what suits
+ * the price: Revolut Pay drops out of a session in dollars, and stays in one
+ * in lei although it is switched off in the Dashboard's own payment method
+ * settings, which the list overrides (both checked against the sandbox,
+ * 29 October 2026).
+ *
  * Both return addresses carry the session's id, which Stripe writes in for
  * `{CHECKOUT_SESSION_ID}`: the event page asks the server what became of that
  * session, and someone who turned back can resume it.
@@ -102,7 +110,7 @@ export function checkoutSessionParams(
 
   return {
     mode: "payment",
-    payment_method_types: paymentMethodsFor(currency),
+    allowed_payment_method_types: paymentMethodsFor(currency),
     line_items: [
       {
         price_data: {
