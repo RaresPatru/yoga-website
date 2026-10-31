@@ -1634,17 +1634,17 @@ retry; that page never loads the statistics.
     send to your own email address"), and 422 for addresses at
     `example.com`. Verifying a domain means adding records to its DNS, so
     this waits for her own domain; a `vercel.app` address cannot be one.
-  - **Before the sanitizer upgrade reaches `main`** (isomorphic-dompurify
-    4.6.0 on Node 26, on `feature` since 30 October 2026): give
-    `NODE_OPTIONS` = `--experimental-require-module` to Production as well.
-    Rares added it for Preview on 30 October (Environment Variables, type
-    Config). A variable reaches only deployments built after it is saved, so
-    it has to be there before `main` is pushed: without it every page that
-    renders stored HTML answers 500 from the moment the merge deploys
-    (DECISIONS.md, "`isomorphic-dompurify` needs a switch in Vercel").
-    Optional, the same day: Settings → Build and Deployment → Node.js
-    Version → 26.x. `engines` in package.json already decides, so this only
-    brings the setting in line.
+  - ~~**Before the sanitizer upgrade reaches `main`** (isomorphic-dompurify
+    4.6.0 on Node 26): give `NODE_OPTIONS` = `--experimental-require-module`
+    to Production as well.~~ Done by Rares on 31 October 2026 (Preview had it
+    since 30 October; Environment Variables, type Config), with Settings →
+    Build and Deployment → Node.js Version set to 26.x the same day and
+    production redeployed. It had to come first because a variable reaches
+    only deployments built after it is saved: without it every page that
+    renders stored HTML would have answered 500 from the moment the merge
+    deployed (DECISIONS.md, "`isomorphic-dompurify` needs a switch in
+    Vercel"). `engines` in package.json still decides the Node version; the
+    setting now agrees with it.
 - **Her address for replies** in Conținut site → Email-uri (or the address
   for personal data requests in Pagini legale). Until one is filled in,
   replies go to the sending address.
@@ -1665,17 +1665,23 @@ retry; that page never loads the statistics.
     public business name, which shows on the payment page ("Yoga sandbox"
     now), turn on Stripe's receipt and refund emails if she wants them, and
     give the live webhook endpoint the same four events.
-  - ~~move the webhook endpoint to the library's API version~~ done by Rares
-    on 29 October 2026. An endpoint's version cannot be edited ("This field
-    cannot be changed"), so Stripe moves one by creating another: the
-    sandbox's endpoint is now `production-endive` (Workbench → Webhooks; API
-    version `2026-09-30.endive`, "Snapshot" payloads, the same address and
-    four events), its signing secret replaced `STRIPE_WEBHOOK_SECRET` in
-    Vercel (Production and Preview) with a redeploy, and the old
-    `2026-06-24.dahlia` one was deleted. A payment event resent to it
-    reached the live site and was answered 200. The live endpoint, when she
-    creates it, should start on the version the code's library is pinned
-    to.
+  - ~~move the webhook endpoint to the library's API version~~ done by Rares,
+    twice. An endpoint's version cannot be edited ("This field cannot be
+    changed"), so Stripe moves one by creating another. On 29 October 2026
+    `production-endive`, on `2026-09-30.endive`, replaced the
+    `2026-06-24.dahlia` one, and a payment event resent to it reached the
+    live site and was answered 200. On 31 October, stripe-node 23.1 being on
+    `2026-10-28.endive`, an endpoint on that version replaced it ("Live site,
+    API version 2026-10-28.endive" in Workbench → Webhooks: "Snapshot"
+    payloads, the same address and four events, and the only endpoint,
+    checked through the API), with its signing secret in
+    `STRIPE_WEBHOOK_SECRET` (Production and Preview) and production
+    redeployed. The account's default API version moved to
+    `2026-10-28.endive` the same day. No event of those four kinds has
+    happened since, so its first delivery is still to be seen (the
+    endpoint's page in Workbench → Webhooks lists them). The live endpoint,
+    when she creates it, should start on the version the code's library is
+    pinned to (DECISIONS.md, "Stripe's API version is set in three places").
 - **The cancellation rules with her:** 48 hours, full refunds only, and her
   approval after that are Rares' assumptions of 3 October. They live in
   `lib/cancel-rules.ts` and in the terms draft.

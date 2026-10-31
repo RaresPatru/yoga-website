@@ -79,7 +79,7 @@ The suite is separate and builds its own server (stop `serve.mjs` first):
 
 ```bash
 npx playwright test tests/analytics.spec.ts --project=chromium
-npm run test:e2e        # the whole suite: about 23 minutes, one worker
+npm run test:e2e        # the whole suite: about 20 minutes, one worker
 ```
 
 ## Flows worth driving
@@ -105,6 +105,12 @@ npm run test:e2e        # the whole suite: about 23 minutes, one worker
   `load` came at 250 ms. The driver uses `load`, then waits for
   `<next-route-announcer>`, which exists only once React has hydrated; a click
   before that is silently lost (WebKit hydrates later than Chromium).
+- **The first `--admin` run after the test suite logs a 400** (`POST
+  /auth/v1/token`, on `/admin/login`). The suite's last test signs the seed's
+  admin out everywhere, so the session saved in
+  `.playwright/verify/admin-state.json` is dead: the sign-in page's Supabase
+  client tries to refresh it once and is refused, then the driver signs in
+  again and saves a fresh one. Every run after that is clean.
 - **Admin pages fetch their data after hydrating** and show a spinner until
   then: the first admin screenshot showed only the spinner. The driver also
   waits for `.animate-spin` and `aria-busy` to clear.

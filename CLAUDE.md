@@ -134,7 +134,7 @@ npm run dev                       # local database — prints which one on start
 npm run dev:prod                  # the live database; everything you do there is live
 npm run mock:images               # rebuild /public/mock from ./mock-images
 npm run lint && npx tsc --noEmit
-npm run test:e2e                  # production build, one worker, 10+ minutes
+npm run test:e2e                  # production build, one worker, about 20 minutes
 $env:PW_DEV = "1"; npm run test:e2e; Remove-Item Env:PW_DEV   # the faster dev-server loop
 Remove-Item -Recurse -Force .next                              # see "A stale .next" below
 ```
@@ -307,10 +307,12 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   the window on them. Measured on 28 September 2026: closing the window 50 to
   100 ms after the prefetches start logs it, while closing sooner (the
   requests never arrive) or later (they have finished) does not. Every full
-  run since Phase 0 printed it between 42 and 109 times (the count grows with
-  the suite), always with digest `3080431700`, and every one of those runs was
-  green. A visitor who closes a
-  page a moment after opening it would print the same line in Vercel's logs.
+  run from Phase 0 to early October printed it, 42 to 109 times here and 181
+  times in CI on 4 October, always with digest `3080431700`, and every one of
+  those runs was green. None has printed it since Next 16.4.3 and React 19.3.1
+  (`a333924`, 29 October 2026), here or in CI. If it returns, it means the
+  same thing. A visitor who closes a page a moment after opening it would
+  print the same line in Vercel's logs.
 - **Pin `next` exactly and keep `@next/swc-*` in step with it.** Vercel runs
   `npm install`, not `npm ci`, so a floating range can resolve there to a version
   CI never saw. A caret on `next` beside literal `optionalDependencies` pins
@@ -376,7 +378,9 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
   Card `4242 4242 4242 4242`, any future date and CVC; Revolut Pay opens
   Stripe's test page with an Authorize button. Without `stripe listen` it still
   works: the event page confirms the payment when Stripe sends the visitor
-  back.
+  back. `stripe listen` forwards events in the account's default API version,
+  not the library's, so keep that default on the version `stripe` is pinned
+  to (DECISIONS.md, "Stripe's API version is set in three places").
 - **`npm run dev` reads the *local* database; `npm run dev:prod` reads
   production.** `.env` holds the production values and `.env.local` overrides the
   three Supabase ones with the Docker stack, which Next resolves in that order.
@@ -510,10 +514,10 @@ Remove-Item -Recurse -Force .next                              # see "A stale .n
 - **Vercel's functions will not `require()` an ES module unless
   `NODE_OPTIONS` says so.** The sanitizer's jsdom needs it, so Vercel must
   hold `NODE_OPTIONS` = `--experimental-require-module` wherever the site
-  runs (Preview since 30 October 2026; Production before that work reaches
-  `main`, OVERHAUL.md). Without it every page that renders stored HTML
-  answers 500 with `ERR_REQUIRE_ESM`, as production did in August 2026, while
-  `next start` here serves the same build without complaint: a local
+  runs (Preview since 30 October 2026, Production since 31 October). Without
+  it every page that renders stored HTML answers 500 with `ERR_REQUIRE_ESM`,
+  as production did in August 2026, while `next start` here serves the same
+  build without complaint: a local
   production build is no evidence, so deploy a preview and load a page that
   uses the package. The switch is a Vercel setting, not code; DECISIONS.md
   ("`isomorphic-dompurify` needs a switch in Vercel") has what keeps it

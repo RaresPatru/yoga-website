@@ -7,8 +7,8 @@ announcements to the people who opted in, and an admin panel she runs herself
 without a developer.
 
 **Stack:** Next.js 16 (App Router) · Supabase (Postgres, Auth, Storage) ·
-Stripe Checkout · Resend · Cloudflare Turnstile · Tailwind CSS 4 · Playwright ·
-deployed on Vercel.
+Stripe Checkout · Resend · Cloudflare Turnstile · PostHog (EU cloud) ·
+Tailwind CSS 4 · Playwright · deployed on Vercel.
 
 ---
 
@@ -19,6 +19,7 @@ deployed on Vercel.
 | [docs/JOURNEY.md](docs/JOURNEY.md) | What was wrong with this codebase and how each problem was found and fixed. The most interesting document here. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Why things are built the way they are. |
 | [docs/DATABASE.md](docs/DATABASE.md) | The schema map: what exists, who may touch it, and how a change reaches production. |
+| [docs/OVERHAUL.md](docs/OVERHAUL.md) | The September 2026 overhaul: its twelve phases, the production steps still waiting, and the polish list. |
 | [docs/ADMIN-GUIDE.md](docs/ADMIN-GUIDE.md) | Guide for the instructor, in Romanian. |
 | [docs/CONTENT-NEEDED.md](docs/CONTENT-NEEDED.md) | Content still to be supplied. |
 | [PLAN.md](PLAN.md) | What is left to do. |
@@ -55,9 +56,12 @@ content, so `/admin` is usable immediately.
 separate configuration the test suite uses — it points at the local database and
 uses Cloudflare's published Turnstile test keys.
 
-`NEXT_PUBLIC_SITE_URL` must be set in production. It is what makes canonical
-URLs, share images and the links in waiting-list emails absolute; without it
-those emails are built as `undefined/ro/events/...`.
+`NEXT_PUBLIC_SITE_URL` is the site's public address, set in Vercel for
+Production only. Canonical URLs, share images and the links in emails are
+built from it (without it, from the production address Vercel provides, or
+localhost off Vercel), and visitor statistics are counted only on pages
+served from it. `.env.example` says which variables Vercel holds where, and
+why.
 
 ---
 
@@ -69,11 +73,13 @@ $env:PW_DEV = "1"; npm run test:e2e; Remove-Item Env:PW_DEV   # faster loop whil
 npx playwright test --project=mobile
 ```
 
-About 400 test runs — 392 passed and 11 skipped on 22 September 2026 — across
-five Playwright projects: `setup` (signs in once), `chromium` (public pages),
-`admin` (authenticated, sharing that one signed-in session), `admin-auth`
-(sign-in and sign-out, run last), and `mobile` (WebKit on an iPhone viewport).
-Public specs run on both engines, which is why runs outnumber tests.
+About 820 test runs — 812 passed and 12 skipped on 31 October 2026, in about
+21 minutes — across six Playwright projects: `setup` (signs in once),
+`chromium` (public pages), `admin` (authenticated, sharing that one signed-in
+session), `admin-mobile` (the admin panel on an iPhone, in WebKit),
+`admin-auth` (sign-in and sign-out, run last), and `mobile` (WebKit on an
+iPhone viewport). Public specs run on both engines, which is why runs
+outnumber tests.
 
 Two things worth knowing:
 

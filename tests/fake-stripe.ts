@@ -233,7 +233,8 @@ export function signedEvent(type: string, object: unknown): { payload: string; s
   const payload = JSON.stringify({
     id: nextId("evt"),
     object: "event",
-    api_version: "2026-06-24.dahlia",
+    // The version the live endpoint is on: the library's own (OVERHAUL.md).
+    api_version: Stripe.API_VERSION,
     created: now(),
     type,
     livemode: false,

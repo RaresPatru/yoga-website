@@ -424,7 +424,7 @@ button does rather than reading out two letters.
 Everything else tracks the latest release. These three do not, and each has a
 reason that outlived the upgrade that produced it. Re-checking them is cheap;
 raising them because they look stale is how the site breaks. All three were
-re-checked on 28 October 2026, and every reason still held.
+re-checked on 31 October 2026, and every reason still held.
 
 Two more were held until recently: `stripe` on 22 until 29 October 2026, when
 the checkout moved to the API version stripe-node 23 speaks ("Payment methods
@@ -437,8 +437,9 @@ Vercel let it move ("`isomorphic-dompurify` needs a switch in Vercel", below).
 `npm install` pick 6.1 the day it ships and break the lint chain — and Vercel
 runs `npm install`, not `npm ci`, so it is free to resolve differently from CI.
 The tilde keeps us inside the peer range no matter what is published. TypeScript
-7 is out for the same reason, one major further along. Re-checked 28 October
-2026: typescript-eslint 8.72.1 still declares `<6.1.0`.
+7 is out for the same reason, one major further along. Re-checked 31 October
+2026, with TypeScript 7.0.2 out: typescript-eslint 8.72.1 still declares
+`<6.1.0`.
 
 TypeScript 7 has a second blocker, and it is Next.js itself. 7 is the compiler
 rewritten in Go, and its package is mostly a native `tsc`: the main entry
@@ -457,8 +458,10 @@ blocker is Next's lint preset: `eslint-config-next` pulls
 `eslint-plugin-react`, `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, and
 all three cap their peer at `^9`. Only `eslint-plugin-react-hooks` accepts `^10`.
 This unblocks when those three ship v10 support, which is not ours to do.
-Re-checked 28 October 2026: `eslint-plugin-react` 7.37.5 caps at `^9.7`,
-`eslint-plugin-import` 2.32.0 and `eslint-plugin-jsx-a11y` 6.10.2 at `^9`.
+Re-checked 31 October 2026, with ESLint at 10.14.0: `eslint-plugin-react`
+7.37.5 still caps at `^9.7`, `eslint-plugin-import` 2.32.0 and
+`eslint-plugin-jsx-a11y` 6.10.2 at `^9`. None of the three has had a release
+since June 2025, and Next's canary (16.5.0-canary.35) still pulls them.
 ESLint 9 is now past its support window, and npm says so on every install.
 That costs nothing at runtime, because lint never ships; it is one more
 reason to move the day the plugins do.
@@ -492,22 +495,25 @@ jsdom 26, which needs no ES module.
 
 **The switch.** Vercel's "Advanced Node.js Usage" page (updated 27 April 2026)
 documents it: `NODE_OPTIONS=--experimental-require-module` in the project's
-Environment Variables. It is set for Preview since 30 October 2026, as a
-Config variable, and is added for Production before the upgrade reaches
-`main` (OVERHAUL.md). With it the site runs isomorphic-dompurify 4.6.0 on
-jsdom 30.1.3. DOMPurify's makers ask for the newest jsdom, because older ones
+Environment Variables. It is set, as a Config variable, for Preview since
+30 October 2026 and for Production since 31 October. With it the site runs
+isomorphic-dompurify 4.6.0 on jsdom 30.1.3. DOMPurify's makers ask for the
+newest jsdom, because older ones
 have bugs that let XSS through even when DOMPurify does everything right, and
 the site's security policy allows inline scripts (`'unsafe-inline'` in
 `next.config.ts`), so the sanitizer is the only defence against a script in
 stored HTML.
 
-Checked on 30 October 2026, before the preview:
+Checked on 30 October 2026:
 - with the feature off the package fails with the error above, and with
   exactly the value set in Vercel it loads;
 - 95 inputs, every value with HTML in the seeded local database and 46 known
   attack and edge cases, each sanitized the three ways `lib/sanitize.ts`
   does, gave identical output on 2.26.0 with jsdom 26 and on 4.6.0 with jsdom
-  30. Both run DOMPurify 3.4.17; only jsdom changed.
+  30. Both run DOMPurify 3.4.17; only jsdom changed;
+- on the preview of that change (Node 26.x, against production's data),
+  twelve pages answered 200, a post and an event among them with their
+  sanitized text, and its logs held no error and no `ERR_REQUIRE_ESM`.
 
 **Removing the switch brings the 500s back.** `tests/sanitize.spec.ts` checks
 both halves. One test loads the package through `NODE_OPTIONS` with the value
@@ -594,6 +600,18 @@ GHSA-2883-xcg3-v3hh. And on 30 October 2026, `dompurify` under
 `isomorphic-dompurify`. It lifted DOMPurify past the advisories of 22 October
 2026 (GHSA-cg2g-xh64-v4q7, critical; GHSA-mrv2-3pqr-j5jr, high) while the
 wrapper was held on 2.26.0; 4.6.0 asks for `^3.4.17` itself.
+
+**One advisory no override can answer: minimatch, GHSA-g3hv-75wg-m249**
+(moderate, published 30 October 2026). `npm audit` counts it 16 times, all in
+the lint tools, and `npm audit --omit=dev` says 0. The fix is minimatch 11,
+while ESLint asks for 3.x and typescript-eslint for 10.x. ESLint calls the
+package as a function, which 11 no longer exports, so forcing 11 would stop
+lint rather than protect it. Nothing here reaches the flaw anyway: 3.1.5 does
+not contain the code the advisory describes, in 10.2.6 it needs
+`optimizationLevel` 2 or more, which typescript-eslint (the only user of that
+copy) never sets, and every pattern comes from this repository. `npm audit
+fix --force` offers ESLint 4 for it; don't. It clears when the lint tools
+accept a fixed minimatch, or the advisory narrows its range.
 
 ---
 
@@ -2035,6 +2053,37 @@ suits the price. Checked against the sandbox that day, old field against new:
 The stand-in (`tests/fake-stripe.ts`) refuses the old field with Stripe's own
 message, so a change that brings it back fails the suite rather than every
 paid booking.
+
+### Stripe's API version is set in three places
+
+Stripe reshapes what it sends from one API version to the next, and the site
+meets a version in three places:
+
+- **The site's own calls** (checkouts, refunds, codes) carry the version the
+  `stripe` library is pinned to, `Stripe.API_VERSION`: `2026-10-28.endive` for
+  23.1. `lib/stripe.ts` names none, so it moves only with the library.
+- **The webhook endpoint** has a version of its own, chosen when it is created
+  and never editable. Stripe writes every event it sends there in that
+  version, whatever the library or the account says. Moving it takes a new
+  endpoint, its signing secret in `STRIPE_WEBHOOK_SECRET` and a redeploy, and
+  then the old endpoint deleted: left on, it keeps sending events signed with
+  a secret the site no longer has, and every one is refused with a 400.
+- **The account's default** (set in Workbench) is only for calls that name no
+  version: the Stripe CLI's own requests unless given `--stripe-version`,
+  `stripe listen`, which forwards events in it unless told `--latest`, a bare
+  `curl`, and an endpoint created without choosing one.
+
+The live site depends on the first two alone, and they have to agree: the
+webhook reads each event through the library's types. The default never
+reaches it, but a laptop's `stripe listen` hands the local site events in the
+default's shape while production gets the endpoint's, so a test there could
+pass on shapes production never sends. Versions within one release (all the
+endive ones) only add, so a month apart is harmless; between releases
+(dahlia to endive) shapes break, so all three move together. Stripe lets the
+default be rolled back for 72 hours after an upgrade. The stand-in stamps its
+events with `Stripe.API_VERSION`, the version the endpoint has to be on.
+
+On 31 October 2026 all three are `2026-10-28.endive`.
 
 ### Every session names the database that made it
 

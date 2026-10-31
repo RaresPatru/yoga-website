@@ -21,10 +21,11 @@ What is left to do. Forward-looking only.
 
 ## Now: the September 2026 overhaul
 
-A rebuild of the admin panel and several public pages, in twelve phases, is
-under way. Its plan, its decisions and its progress live in
-[docs/OVERHAUL.md](docs/OVERHAUL.md). Items below that the overhaul covers are
-marked there rather than here.
+A rebuild of the admin panel and several public pages, in twelve phases. All
+twelve were built and went live on 5 October 2026; what is left is a polish
+pass with her and the production steps that wait for Rares. Its plan, its
+decisions and both lists live in [docs/OVERHAUL.md](docs/OVERHAUL.md). Items
+below that the overhaul covers are marked there rather than here.
 
 ---
 
@@ -32,7 +33,7 @@ marked there rather than here.
 
 | | |
 |---|---|
-| Tests | 392 passing, 11 skipped (22 September 2026, local, one worker) |
+| Tests | 812 passing, 12 skipped (31 October 2026, local, one worker) |
 | Critical vulnerabilities | 0 open |
 | Deployed | production is public; preview deployments require Vercel login |
 | Blocking launch | real content from the instructor |
@@ -43,26 +44,30 @@ marked there rather than here.
 
 ### Content — the actual blocker
 
-What is missing is mostly her: no photograph, no bio, no About text, no FAQs,
-and the live site still shows the placeholder name "Yoga Flow". The real name,
-**flow4ward**, only needs typing into `/admin/content`.
+What is missing is mostly her: no photograph, no bio, no About text, no FAQs.
+The real name, **flow4ward**, is in `/admin/content`, and the live site shows
+it (checked 31 October 2026).
 
 Full prioritised list: [docs/CONTENT-NEEDED.md](docs/CONTENT-NEEDED.md).
 She fills it in herself at `/admin/content` — no developer needed.
 
 - [ ] Photograph, intro, and About story (the three that matter most)
-- [ ] Business name: type **flow4ward** into `/admin/content` → "Numele
-      site-ului". It has been an admin field since
+- [x] Business name: **flow4ward** is in `/admin/content` → "Numele
+      site-ului", and the live site's title and structured data carry it
+      (checked 31 October 2026). It has been an admin field since
       `20260915000000_editable_site_name.sql`; `SITE_NAME` in
       `lib/site-config.ts` is only the fallback.
-- [ ] Take the hardcoded location and name out of the structured data.
-      `SITE_LOCALITY = "Cluj-Napoca"` is published as the business's town on
-      every page, but she hosts events all over Romania; `INSTRUCTOR_NAME` is
-      still the placeholder "Yoga Flow". Both live in `lib/site-config.ts`.
+- [x] The hardcoded town and name are out of the structured data (25
+      September 2026). `SITE_LOCALITY = "Cluj-Napoca"` and `INSTRUCTOR_NAME`
+      are gone; her name as search engines should show it and the area she
+      serves, if any, are fields in `/admin/content` that she fills in
+      herself (OVERHAUL.md, "Needs Rares").
 - [ ] 4–5 FAQs
-- [ ] Instagram and Facebook addresses → `/admin/content`, under "Footer". Both
-      fields accept a full address or just `@nume`; an icon with nothing behind
-      it is not rendered, so the footer is honest while they are empty.
+- [ ] Her social networks → `/admin/content`, under "Rețele sociale"
+      (Instagram, Facebook, TikTok, LinkedIn). Each field takes a full
+      address, one without `https://`, or just `@nume`; an icon with nothing
+      behind it is not rendered, so the footer is honest while they are empty
+      (none is filled in on the live site, 31 October 2026).
 
 ### Verification that has never run against production
 
@@ -71,14 +76,16 @@ She fills it in herself at `/admin/content` — no developer needed.
       Revolut Pay through Stripe's real payment page, turning back, resuming,
       giving the place up, and the cancel link's automatic refund for both),
       and the suite now drives the webhook with signed events. What has not
-      run is a payment on a deployment, which needs Phase 10's migration in
-      production first.
-- [x] **The webhook endpoint is subscribed to `charge.refunded`** (checked
-      through the API on 3 October 2026, beside `checkout.session.completed`
-      and `.expired`), and to `refund.failed` since 3 October 2026.
+      run is a payment on a deployment. Phase 10's migration has been in
+      production since 5 October 2026, so nothing blocks it now but this: it
+      writes a booking into the live database, which is Rares' call.
+- [x] **The webhook endpoint is subscribed to `charge.refunded`**, beside
+      `checkout.session.completed`, `.expired` and, since 3 October 2026,
+      `refund.failed`. Checked through the API on 3 October 2026, and on 31
+      October on the endpoint that replaced it (`2026-10-28.endive`).
 - [x] The Stripe webhook endpoint points at the production deployment
-      (`yoga-website-nine-psi.vercel.app/api/stripe/webhook`, checked 3
-      October 2026). It moves when a custom domain arrives.
+      (`yoga-website-nine-psi.vercel.app/api/stripe/webhook`, checked 3 and
+      31 October 2026). It moves when a custom domain arrives.
 - [ ] Check the site in Instagram's in-app browser on a real iPhone. WebKit is
       covered by the test suite; the webview itself is not.
 
